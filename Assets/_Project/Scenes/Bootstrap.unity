@@ -168,6 +168,8 @@ MonoBehaviour:
   randomSeed: 1
   playerPrefab: {fileID: 1147097502830870678, guid: 30bde8d64e42f4a09b12b46f3d556621, type: 3}
   spawnHeightOffset: 5
+  dinosaurPrefab: {fileID: 8111642577107567443, guid: d44a5510cd6c544f8a00428db9100985, type: 3}
+  dinosaursPerSpawnZone: 2
 --- !u!1 &1530223051
 GameObject:
   m_ObjectHideFlags: 0

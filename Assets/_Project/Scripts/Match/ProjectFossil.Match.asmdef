@@ -5,7 +5,9 @@
         "ProjectFossil.Core",
         "ProjectFossil.Generation",
         "ProjectFossil.Director",
-        "ProjectFossil.Economy"
+        "ProjectFossil.Economy",
+        "ProjectFossil.Dinosaurs",
+        "Unity.AI.Navigation"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
