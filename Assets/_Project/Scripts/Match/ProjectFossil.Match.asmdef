@@ -3,6 +3,7 @@
     "rootNamespace": "ProjectFossil.Match",
     "references": [
         "ProjectFossil.Core",
+        "ProjectFossil.Generation",
         "ProjectFossil.Director",
         "ProjectFossil.Economy"
     ],
