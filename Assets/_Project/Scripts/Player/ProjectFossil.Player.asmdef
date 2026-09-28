@@ -1,0 +1,17 @@
+{
+    "name": "ProjectFossil.Player",
+    "rootNamespace": "ProjectFossil.Player",
+    "references": [
+        "ProjectFossil.Core",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

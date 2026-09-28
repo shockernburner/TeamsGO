@@ -1,0 +1,16 @@
+{
+    "name": "ProjectFossil.Generation",
+    "rootNamespace": "ProjectFossil.Generation",
+    "references": [
+        "ProjectFossil.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

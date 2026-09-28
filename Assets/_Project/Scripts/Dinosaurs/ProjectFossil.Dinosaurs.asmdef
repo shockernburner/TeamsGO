@@ -1,0 +1,17 @@
+{
+    "name": "ProjectFossil.Dinosaurs",
+    "rootNamespace": "ProjectFossil.Dinosaurs",
+    "references": [
+        "ProjectFossil.Core",
+        "Unity.AI.Navigation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

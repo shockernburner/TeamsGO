@@ -1,0 +1,19 @@
+{
+    "name": "ProjectFossil.Editor",
+    "rootNamespace": "ProjectFossil.Editor",
+    "references": [
+        "ProjectFossil.Core",
+        "ProjectFossil.Generation"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
