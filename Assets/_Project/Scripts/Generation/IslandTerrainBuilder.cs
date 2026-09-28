@@ -16,6 +16,8 @@ namespace ProjectFossil.Generation
             td.size = new Vector3(s.worldSize, s.maxHeight, s.worldSize);
             td.SetHeights(0, 0, data.Heightmap);
 
+            AddDefaultTerrainLayer(td);
+
             var go      = Terrain.CreateTerrainGameObject(td);
             go.name     = $"Island_{data.Seed}";
             if (parent != null) go.transform.SetParent(parent, false);
@@ -42,6 +44,26 @@ namespace ProjectFossil.Generation
             }
 
             return go;
+        }
+
+        // Creates a single solid-color terrain layer so the terrain isn't checkerboard.
+        // Replace with proper splat textures when art is ready.
+        private static void AddDefaultTerrainLayer(TerrainData td)
+        {
+            const int size = 4;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px  = new Color32[size * size];
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(100, 130, 70, 255); // earthy green
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var layer = new TerrainLayer
+            {
+                diffuseTexture = tex,
+                tileSize       = new Vector2(20f, 20f)
+            };
+
+            td.terrainLayers = new[] { layer };
         }
 
         public static void DestroyExisting(string namePrefix = "Island_")
