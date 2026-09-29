@@ -26,6 +26,7 @@ MonoBehaviour:
   treeShape: 2
   plantsPerHectare: 3
   plantScale: {x: 0.6, y: 1.2}
+  groveContrast: 0
   treeModels: []
   rockModels: []
   plantModels: []

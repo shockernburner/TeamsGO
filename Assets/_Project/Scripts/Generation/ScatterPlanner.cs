@@ -17,10 +17,13 @@ namespace ProjectFossil.Generation
     }
 
     // Decides where trees and rocks go. Pure and deterministic: same island data and seed, same result.
-    // Jittered grid (one candidate per cell) keeps things evenly spread without clumping into walls.
+    // Jittered grid (one candidate per cell) keeps things evenly spread without clumping into walls. Biomes with
+    // grove contrast then modulate the chance with a slow noise field, so forests come as thick groves (cover)
+    // separated by clearings (danger) instead of an even orchard.
     public static class ScatterPlanner
     {
-        private const int SaltSeed = 0x5CA7;
+        private const int   SaltSeed   = 0x5CA7;
+        private const float GroveScale = 70f; // metres across a typical grove or clearing
 
         public static List<ScatterInstance> Plan(IslandData data)
         {
@@ -38,6 +41,9 @@ namespace ProjectFossil.Generation
             float minHeight = Mathf.Max(s.seaLevel, 0.05f) + 0.01f; // keep off the waterline
 
             // Clearings: every point of interest plus the player spawn (spawn zone 0).
+            var groveRng = new RNGService(unchecked(data.Seed * 31 + SaltSeed + 1));
+            float groveX = groveRng.NextFloat() * 1000f, groveZ = groveRng.NextFloat() * 1000f;
+
             var clearings = new List<Vector3>();
             foreach (var poi in data.PointsOfInterest) clearings.Add(poi.WorldPos);
             if (data.SpawnZones.Count > 0) clearings.Add(data.SpawnZones[0].WorldCenter);
@@ -62,9 +68,10 @@ namespace ProjectFossil.Generation
                     var b = biome >= 0 && biome < biomes.Count ? biomes[biome] : null;
                     if (b == null) continue;
 
-                    float pTree = b.treesPerHectare * cellArea / 10000f;
+                    float grove = b.groveContrast > 0f ? GroveDensity(x, z, groveX, groveZ, b.groveContrast) : 1f;
+                    float pTree = b.treesPerHectare * cellArea / 10000f * grove;
                     float pRock = b.rocksPerHectare * cellArea / 10000f;
-                    float pPlant = b.plantsPerHectare * cellArea / 10000f;
+                    float pPlant = b.plantsPerHectare * cellArea / 10000f * Mathf.Lerp(1f, grove, 0.5f);
                     ScatterKind kind;
                     if (roll < pTree) kind = ScatterKind.Tree;
                     else if (roll < pTree + pRock) kind = ScatterKind.Rock;
@@ -96,6 +103,14 @@ namespace ProjectFossil.Generation
                 }
             }
             return result;
+        }
+
+        // Density multiplier around 1 on average: up to ~2x inside groves, ~0.15x in clearings at full contrast.
+        public static float GroveDensity(float x, float z, float offX, float offZ, float contrast)
+        {
+            float n = Mathf.PerlinNoise(x / GroveScale + offX, z / GroveScale + offZ);
+            float t = Mathf.Clamp01((n - 0.35f) / 0.3f);
+            return Mathf.Lerp(1f, Mathf.Lerp(0.15f, 2f, t), Mathf.Clamp01(contrast));
         }
 
         // Stable, non-negative hash of a cell, so model choice doesn't consume RNG draws.

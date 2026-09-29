@@ -26,6 +26,10 @@ namespace ProjectFossil.Dinosaurs
         public static event Action<DinosaurAI> PickedUpScent;
 
         public bool IsTrackingScent { get; private set; }
+        // Nose down: following a trail, or standing where it went cold and casting about for it.
+        public bool IsSniffing => IsTrackingScent || _castTimer > 0f;
+        // The person this predator was sent to stalk (null for ordinary wildlife).
+        public Transform Quarry => _quarry;
 
         // Presentation hooks (DinosaurFeedback listens). Windup passes its duration in seconds.
         public event Action<float> AttackWindupStarted;
@@ -53,6 +57,7 @@ namespace ProjectFossil.Dinosaurs
         private Transform    _quarry;        // set by Track: roams toward this person and follows their scent
         private float        _scentCheck;
         private float        _scentTime = float.NegativeInfinity; // time stamp of the last mark it followed
+        private float        _castTimer;     // > 0 while it stands where the trail went cold, sniffing around
 
         private static readonly Dictionary<Transform, List<DinosaurAI>> Attackers =
             new Dictionary<Transform, List<DinosaurAI>>();
@@ -72,6 +77,42 @@ namespace ProjectFossil.Dinosaurs
                 if (ai == null || (ai.transform.position - position).sqrMagnitude > r2) continue;
                 ai.HearNoise(position);
             }
+        }
+
+        // How much danger someone at `position` is in, 0..1, from the predators around them: one charging nearby
+        // is 1, one following a scent trail is felt from further out, a big one wandering close is a warning.
+        // Presentation (heartbeat, screen edges) reads this; the simulation doesn't.
+        public static float DangerAt(Vector3 position)
+        {
+            float danger = 0f;
+            for (int i = Living.Count - 1; i >= 0; i--)
+            {
+                var ai = Living[i];
+                if (ai == null || ai.species == null || ai.CurrentState == State.Dead) continue;
+                if (ai.species.temperament != Temperament.Predator) continue;
+                float d = Vector3.Distance(ai.transform.position, position);
+                float level;
+                if (ai.CurrentState == State.Chase || ai.CurrentState == State.Alert) level = 1f - d / 45f;
+                else if (ai.IsSniffing)                                                level = 0.75f * (1f - d / 70f);
+                else if (ai.species.maxHealth >= 200f)                                 level = 0.45f * (1f - d / 40f);
+                else                                                                   level = 0.25f * (1f - d / 20f);
+                if (level > danger) danger = level;
+            }
+            return Mathf.Clamp01(danger);
+        }
+
+        // True while a predator is sniffing out `quarry`'s trail, or sniffing within `near` metres of them.
+        public static bool IsBeingTracked(Transform quarry, float near = 35f)
+        {
+            if (quarry == null) return false;
+            float n2 = near * near;
+            for (int i = Living.Count - 1; i >= 0; i--)
+            {
+                var ai = Living[i];
+                if (ai == null || !ai.IsSniffing) continue;
+                if (ai._quarry == quarry || (ai.transform.position - quarry.position).sqrMagnitude < n2) return true;
+            }
+            return false;
         }
 
         public void HearNoise(Vector3 position)
@@ -282,6 +323,15 @@ namespace ProjectFossil.Dinosaurs
 
             if (FollowScent()) return;
 
+            if (_castTimer > 0f)
+            {
+                // Where the trail went cold: stop, head low, swing around testing the air.
+                _castTimer -= Time.deltaTime;
+                transform.Rotate(0f, Mathf.Sin(_castTimer * 1.7f) * 50f * Time.deltaTime, 0f);
+                if (_castTimer <= 0f) SetRandomWanderDestination();
+                return;
+            }
+
             if (!_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance)
             {
                 _waitTimer -= Time.deltaTime;
@@ -304,6 +354,7 @@ namespace ProjectFossil.Dinosaurs
             if (trail.TryFindFreshest(transform.position, species.smellRange, _scentTime, out var mark, out float time))
             {
                 _scentTime = time;
+                _castTimer = 0f;
                 _agent.speed = species.walkSpeed * 1.3f; // purposeful, but a walk: it's sniffing, not charging
                 _agent.SetDestination(mark);
                 if (!IsTrackingScent)
@@ -320,6 +371,8 @@ namespace ProjectFossil.Dinosaurs
                 IsTrackingScent = false;
                 _scentTime = float.NegativeInfinity;
                 _agent.speed = species.walkSpeed;
+                _agent.ResetPath();
+                _castTimer = 5f;
                 _waitTimer = 1.5f;
             }
             return IsTrackingScent;
@@ -364,6 +417,7 @@ namespace ProjectFossil.Dinosaurs
         {
             CurrentState = State.Chase;
             IsTrackingScent = false;
+            _castTimer = 0f;
             _scentTime = float.NegativeInfinity;
             _agent.speed = species.runSpeed;
         }

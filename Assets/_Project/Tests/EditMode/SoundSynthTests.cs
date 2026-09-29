@@ -21,6 +21,11 @@ namespace ProjectFossil.Tests.EditMode
             yield return new TestCaseData(SoundSynth.ThreatSting(), 1.5f, 4f).SetName("ThreatSting");
             yield return new TestCaseData(SoundSynth.Chime(), 0.8f, 2f).SetName("Chime");
             yield return new TestCaseData(SoundSynth.Ambience(), 8f, 14f).SetName("Ambience");
+            yield return new TestCaseData(SoundSynth.Sniff(0), 0.5f, 1.5f).SetName("Sniff");
+            yield return new TestCaseData(SoundSynth.Sniff(1), 0.5f, 1.5f).SetName("SniffLong");
+            yield return new TestCaseData(SoundSynth.Heartbeat(), 0.3f, 0.8f).SetName("Heartbeat");
+            yield return new TestCaseData(SoundSynth.Rotor(), 1.5f, 2.5f).SetName("Rotor");
+            yield return new TestCaseData(SoundSynth.Victory(), 2f, 4f).SetName("Victory");
         }
 
         [TestCaseSource(nameof(AllSounds))]
@@ -43,7 +48,8 @@ namespace ProjectFossil.Tests.EditMode
         public void OneShots_EndInSilence()
         {
             // A non-zero last sample makes an audible click when the clip stops.
-            foreach (var clip in new[] { SoundSynth.Bite(0), SoundSynth.Screech(0), SoundSynth.Roar(0), SoundSynth.Coin() })
+            foreach (var clip in new[] { SoundSynth.Bite(0), SoundSynth.Screech(0), SoundSynth.Roar(0), SoundSynth.Coin(),
+                                         SoundSynth.Sniff(0), SoundSynth.Heartbeat(), SoundSynth.Victory() })
                 Assert.That(Math.Abs(clip[clip.Length - 1]), Is.LessThan(0.01f));
         }
 

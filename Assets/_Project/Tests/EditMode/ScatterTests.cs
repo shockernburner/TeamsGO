@@ -161,5 +161,49 @@ namespace ProjectFossil.Tests.EditMode
                 Assert.That(b[i].Variant, Is.EqualTo(a[i].Variant));
             }
         }
+
+        [Test]
+        public void GroveContrast_ClumpsTreesIntoGrovesAndClearings()
+        {
+            // Same average density; with contrast the trees gather into groves, leaving open ground between.
+            var even = Settings(trees: 60f, rocks: 0f);
+            var clumped = Settings(trees: 60f, rocks: 0f);
+            clumped.biomes[0].groveContrast = 1f;
+
+            float evenSpread = 0f, clumpedSpread = 0f;
+            int evenTrees = 0, clumpedTrees = 0;
+            for (int seed = 1; seed <= 6; seed++)
+            {
+                evenSpread    += BlockSpread(ScatterPlanner.Plan(Island(even, seed)), out int a);
+                clumpedSpread += BlockSpread(ScatterPlanner.Plan(Island(clumped, seed)), out int b);
+                evenTrees += a; clumpedTrees += b;
+            }
+            Assert.Greater(clumpedSpread, evenSpread * 1.5f, "groves and clearings, not an even orchard");
+            Assert.That(clumpedTrees, Is.InRange(evenTrees * 0.6f, evenTrees * 1.6f), "roughly as many trees overall");
+        }
+
+        // Variance of the tree count per 40 m block: high when trees clump together.
+        private static float BlockSpread(List<ScatterInstance> plan, out int trees)
+        {
+            var counts = new Dictionary<(int, int), int>();
+            trees = 0;
+            foreach (var p in plan)
+            {
+                if (p.Kind != ScatterKind.Tree) continue;
+                var key = (Mathf.FloorToInt(p.WorldPos.x / 40f), Mathf.FloorToInt(p.WorldPos.z / 40f));
+                counts[key] = counts.TryGetValue(key, out int c) ? c + 1 : 1;
+                trees++;
+            }
+            // Blocks well inside the plateau (sea border is 4 cells of 10 m).
+            float sum = 0f, sq = 0f; int n = 0;
+            for (int x = 1; x < 7; x++)
+            for (int z = 1; z < 7; z++)
+            {
+                counts.TryGetValue((x, z), out int c);
+                sum += c; sq += c * c; n++;
+            }
+            float mean = sum / n;
+            return sq / n - mean * mean;
+        }
     }
 }

@@ -30,6 +30,9 @@ namespace ProjectFossil.Generation
         [Min(0f)] public float plantsPerHectare = 0f; // ferns, bushes, tall grass; cosmetic, no collision
         [Tooltip("Plant size range (uniform scale; 1 = about 1.2 m tall).")]
         public Vector2 plantScale = new Vector2(0.8f, 1.6f);
+        [Tooltip("0 = trees spread evenly. 1 = packed into thick groves with open clearings between them, at the same "
+               + "average count. Groves are where players hide; clearings are what they have to cross.")]
+        [Range(0f, 1f)] public float groveContrast = 0f;
 
         [Header("Models (empty = placeholder primitives; plants need models)")]
         public GameObject[] treeModels;

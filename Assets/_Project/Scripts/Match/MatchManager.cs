@@ -39,6 +39,13 @@ namespace ProjectFossil.Match
 
         public event Action<string>     Announced;
         public event Action<MatchStats> MatchEnded;
+        // The stalker is loose (where it starts), and the last fight at the helicopter has begun.
+        public event Action<Vector3>    StalkerReleased;
+        public event Action             FinalStandStarted;
+
+        public bool IsFinalStand { get; private set; }
+        // The helicopter that took the player off the island (null until they extract).
+        public ExtractionZone RescuedBy { get; private set; }
 
         private readonly List<ExtractionZone> _zones = new List<ExtractionZone>();
         private const float FallOutOfWorldY = -20f;
@@ -56,6 +63,8 @@ namespace ProjectFossil.Match
         private float      _lastScentWarning;
         private RNGService _flareRng;
         private Vector3 _playerSpawn;
+        private bool    _stalkerSent;
+        private readonly List<DinosaurAI> _stalkers = new List<DinosaurAI>();
         private PlayerMenuInput _menuInput;
 
         // ── Setup ──────────────────────────────────────────────────────────────
@@ -223,13 +232,18 @@ namespace ProjectFossil.Match
             State.Tick(Time.deltaTime, inZone);
             if (!IsRunning) return;
 
+            if (!_stalkerSent && State.Elapsed >= Content.matchRules.stalkerAt) ReleaseStalker();
+            if (!IsFinalStand && State.IsExtracting) BeginFinalStand();
+
             RescueIfFallenThroughWorld();
 
-            // The player's scent: a mark every couple of seconds, none while wading (water breaks the trail).
+            // The player's scent: a mark every couple of seconds, none while wading (water breaks the trail) or
+            // while hidden low in thick forest (the undergrowth smothers it).
             if (_scent != null && Player != null && PlayerHealth != null && PlayerHealth.IsAlive)
             {
                 Vector3 p = Player.transform.position;
-                _scent.Tick(p, State.Elapsed, !ViewBlockers.InWater(p));
+                bool hidden = PlayerController != null && PlayerController.IsHidden;
+                _scent.Tick(p, State.Elapsed, !hidden && !ViewBlockers.InWater(p));
             }
 
             ThreatTarget? target = null;
@@ -270,12 +284,57 @@ namespace ProjectFossil.Match
             Announce(e.Threat.announcement);
         }
 
+        // ── Scripted beats ─────────────────────────────────────────────────────
+
+        private ThreatEvent? ScriptedThreat(string threatId)
+        {
+            var threat = Director != null ? Director.Find(threatId) : null;
+            if (threat == null || Player == null || PlayerHealth == null || !PlayerHealth.IsAlive) return null;
+            return new ThreatEvent
+            {
+                Threat = threat,
+                Target = new ThreatTarget(PlayerTeam, Player.transform.position, Player.transform),
+                Time   = State.Elapsed,
+            };
+        }
+
+        // Early on, the island's apex predator starts working toward the player by scent, long before the director
+        // can afford to send one. It's heard, then smelled, and only then seen.
+        private void ReleaseStalker()
+        {
+            _stalkerSent = true;
+            var e = ScriptedThreat(Content.matchRules.stalkerThreatId);
+            if (e == null) return;
+            var spawned = _executor.Execute(e.Value, 1, Content.matchRules.stalkerDistance);
+            _stalkers.AddRange(spawned);
+            if (spawned.Count == 0) return;
+            StalkerReleased?.Invoke(spawned[0].transform.position);
+            Announce("A roar, far off. Something big has started sniffing the air.");
+        }
+
+        // Boarding takes a while and the rotors are loud: everything nearby comes for the pad. Hold it.
+        private void BeginFinalStand()
+        {
+            IsFinalStand = true;
+            var rules = Content.matchRules;
+            var e = ScriptedThreat(rules.finalWaveThreatId);
+            if (e != null)
+            {
+                int count = Content.directorSettings.ScaledSpawnCount(e.Value.Threat.spawnCount, Difficulty.Intensity);
+                _executor.Execute(e.Value, count, rules.finalWaveDistance, forceHunt: true);
+            }
+            foreach (var s in _stalkers)
+                if (s != null && s.CurrentState != DinosaurAI.State.Dead) s.Hunt(Player.transform);
+            FinalStandStarted?.Invoke();
+            Announce("They heard the rotors. HOLD THE PAD until you're aboard!");
+        }
+
         private void OnPickedUpScent(DinosaurAI dino)
         {
             if (dino == null || dino.species == null || State == null) return;
             if (State.Elapsed - _lastScentWarning < 30f) return; // one warning per stalk, not per sniff
             _lastScentWarning = State.Elapsed;
-            Announce("Something has your scent. Hide, or wade through water.");
+            Announce("Something has your scent. Get low in thick forest, or wade through water.");
         }
 
         private void OnExtractionOpened()
@@ -364,6 +423,15 @@ namespace ProjectFossil.Match
             if (PlayerController != null && PlayerController.enabled)
                 PlayerController.InputBlocked = true;
 
+            if (result == MatchResult.Extracted && Player != null)
+                foreach (var zone in _zones)
+                    if (zone != null && zone.HelicopterLanded && zone.Contains(Player.transform.position))
+                    {
+                        RescuedBy = zone;
+                        zone.LiftOff(Player.transform);
+                        break;
+                    }
+
             MatchEnded?.Invoke(Stats);
         }
 
@@ -411,6 +479,10 @@ namespace ProjectFossil.Match
             }
 
             _zones.Clear(); // the zone objects live under the island root and die with it
+            _stalkers.Clear();
+            _stalkerSent = false;
+            IsFinalStand = false;
+            RescuedBy    = null;
             State = null;
         }
 

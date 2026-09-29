@@ -20,12 +20,13 @@ MonoBehaviour:
   groundColor: {r: 0.25, g: 0.28, b: 0.17, a: 1}
   foliageColor: {r: 0.25, g: 0.33, b: 0.15, a: 1}
   rockColor: {r: 0.33, g: 0.33, b: 0.28, a: 1}
-  treesPerHectare: 35
+  treesPerHectare: 70
   rocksPerHectare: 4
   treeScale: {x: 0.7, y: 1.1}
   treeShape: 2
-  plantsPerHectare: 140
+  plantsPerHectare: 180
   plantScale: {x: 0.8, y: 2.0}
+  groveContrast: 0.6
   treeModels: []
   rockModels: []
   plantModels: []

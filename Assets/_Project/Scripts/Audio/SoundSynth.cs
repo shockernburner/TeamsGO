@@ -196,6 +196,102 @@ namespace ProjectFossil.Audio
             return Finish(s, 0.5f);
         }
 
+        // A big animal sniffing: two or three quick wet inhales, then a snort out through the nose.
+        public static float[] Sniff(int variant)
+        {
+            var rng = new Random(10000 + variant);
+            int pulls = 2 + variant % 2;
+            float len = pulls * 0.2f + 0.45f;
+            var s = Buffer(len);
+            var bp = new Bandpass(900f, 2.5f);
+            var lp = new OnePole(500f);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i), v = 0f;
+                for (int p = 0; p < pulls; p++)
+                {
+                    float tp = t - p * 0.2f;
+                    if (tp < 0f || tp > 0.16f) continue;
+                    bp.SetFrequency(Lerp(700f, 1500f + variant * 80f, tp / 0.16f)); // rises as the breath is drawn
+                    v += bp.Next(Noise(rng)) * (float)Math.Sin(Math.PI * tp / 0.16f) * 1.6f;
+                }
+                float ts = t - pulls * 0.2f - 0.05f; // the snort
+                if (ts > 0f) v += lp.Next(Noise(rng)) * Exp(ts, 0.01f, 0.09f) * 3f
+                                 + (float)Math.Sin(Tau * 70f * ts) * Exp(ts, 0.005f, 0.07f) * 0.6f;
+                s[i] = v;
+            }
+            return Finish(s, 0.8f);
+        }
+
+        // One heartbeat: lub-dub, low and felt more than heard.
+        public static float[] Heartbeat()
+        {
+            var s = Buffer(0.5f);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i);
+                float lub = (float)Math.Sin(Tau * 55f * t) * Exp(t, 0.008f, 0.05f);
+                float dub = (float)Math.Sin(Tau * 68f * (t - 0.2f)) * Exp(t - 0.2f, 0.008f, 0.04f) * 0.7f;
+                // A little upper harmonic so laptop speakers carry it.
+                s[i] = lub + dub + (float)Math.Sin(Tau * 165f * t) * Exp(t, 0.005f, 0.03f) * 0.25f;
+            }
+            return Finish(s, 0.9f);
+        }
+
+        // Helicopter loop: blade slaps (whole number per loop so it repeats seamlessly) over a turbine whine.
+        public static float[] Rotor(float seconds = 2f)
+        {
+            var rng = new Random(11000);
+            var s = Buffer(seconds);
+            const float slaps = 11f; // per second
+            var bp = new Bandpass(420f, 1.5f);
+            var lp = new OnePole(250f);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i);
+                float phase = t * slaps - (float)Math.Floor(t * slaps);
+                float slap = bp.Next(Noise(rng)) * Exp(phase / slaps, 0.002f, 0.018f) * 2.2f;
+                float thump = (float)Math.Sin(Tau * 60f * phase / slaps) * Exp(phase / slaps, 0.002f, 0.025f);
+                float wash = lp.Next(Noise(rng)) * 0.9f;
+                float whine = (float)Math.Sin(Tau * 1800f * t) * 0.04f + (float)Math.Sin(Tau * 3600f * t) * 0.015f;
+                s[i] = slap + thump * 0.8f + wash + whine;
+            }
+            return Finish(s, 0.7f);
+        }
+
+        // Made it out: a bright rising fanfare that lands on a big major chord.
+        public static float[] Victory()
+        {
+            const float len = 3.2f;
+            var s = Buffer(len);
+            float[] notes = { 523f, 659f, 784f, 1047f };     // C E G C, one after another
+            float[] chord = { 523f, 659f, 784f, 1047f, 1319f }; // then all together
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i), v = 0f;
+                for (int n = 0; n < notes.Length; n++)
+                {
+                    float tn = t - n * 0.13f;
+                    if (tn < 0f || tn > 0.5f) continue;
+                    v += Brass(notes[n], tn) * Exp(tn, 0.01f, 0.18f);
+                }
+                float tc = t - 0.6f;
+                if (tc > 0f)
+                    foreach (var f in chord)
+                        v += Brass(f, tc) * Adsr(tc, 0.03f, 0.3f, 0.6f, len - 0.6f, 1.2f) * 0.55f;
+                s[i] = v;
+            }
+            return Finish(s, 0.85f);
+        }
+
+        // A brassy tone: a few harmonics with a touch of vibrato.
+        private static float Brass(float f, float t)
+        {
+            float vib = 1f + 0.004f * (float)Math.Sin(Tau * 5.5f * t);
+            double w = Tau * f * vib * t;
+            return (float)(Math.Sin(w) + 0.5 * Math.Sin(2 * w) + 0.3 * Math.Sin(3 * w) + 0.15 * Math.Sin(4 * w)) * 0.5f;
+        }
+
         // Seamless background loop: gusting wind plus scattered bird chirps.
         public static float[] Ambience(float seconds = 12f, int seed = 9000)
         {

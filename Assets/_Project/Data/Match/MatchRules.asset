@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: ProjectFossil.Match::ProjectFossil.Match.MatchRules
   matchDuration: 1500
   extractionOpensAt: 300
-  extractionHoldTime: 8
+  extractionHoldTime: 15
   extractionRadius: 8
   survivalPayoutInterval: 60
   survivalPayoutAmount: 10

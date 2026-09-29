@@ -69,8 +69,8 @@ MonoBehaviour:
   minPOISpacing: 120
   spawnZoneCount: 6
   seaLevel: 0.045
-  scatterCellSize: 5
-  maxScatterInstances: 5000
-  maxPlantInstances: 12000
+  scatterCellSize: 4
+  maxScatterInstances: 9000
+  maxPlantInstances: 16000
   scatterClearance: 14
   maxTreeSlope: 0.7
