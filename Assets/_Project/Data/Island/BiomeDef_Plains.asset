@@ -17,10 +17,10 @@ MonoBehaviour:
   maxHeight: 0.45
   minMoisture: 0
   maxMoisture: 0.52
-  groundColor: {r: 0.5, g: 0.6, b: 0.28, a: 1}
+  groundColor: {r: 0.55, g: 0.63, b: 0.32, a: 1}
   foliageColor: {r: 0.33, g: 0.5, b: 0.18, a: 1}
   rockColor: {r: 0.55, g: 0.53, b: 0.48, a: 1}
-  treesPerHectare: 4
+  treesPerHectare: 8
   rocksPerHectare: 5
   treeScale: {x: 0.8, y: 1.2}
   treeShape: 0
