@@ -51,6 +51,9 @@ namespace ProjectFossil.Editor
             { "MI_Superhero_Female", ("T_Superhero_Female_Dark_BaseColor", "T_Superhero_Female_Normal", false) },
             { "MI_Eyes",             ("T_Eye_Brown",        "T_Eye_Normal",    false) },
             { "MI_Hair_1",           ("T_Hair_1_BaseColor", "T_Hair_1_Normal", false) },
+            { "MI_Ranger",           ("T_Ranger_BaseColor", "T_Ranger_Normal", false) },
+            { "MI_Regular_Male",     ("T_Regular_Male_Dark_BaseColor", "T_Regular_Male_Normal", false) },
+            { "Atlas",               ("Atlas_Pirate", null, false) }, // pirate kit props: one shared colour atlas
         };
 
         // Plant_7 is left out: its leaves sit on the purple part of the atlas.
@@ -163,10 +166,11 @@ namespace ProjectFossil.Editor
                 imp.animationType   = ModelImporterAnimationType.Human;
                 imp.avatarSetup     = ModelImporterAvatarSetup.CreateFromThisModel;
                 imp.importAnimation = false;
+                imp.isReadable      = true; // ModelFit trims the body down to the head under the outfit
                 imp.SaveAndReimport();
                 RemapMaterials(path, "Characters/");
             }
-            foreach (var path in Files("Characters/Hair", "*.fbx"))
+            foreach (var path in Files("Characters/Hair", "*.fbx").Concat(Files("Characters/Outfit", "*.fbx")))
             {
                 // Hair and beards are skinned to the same skeleton; ModelFit binds them to the body by bone name.
                 var imp = (ModelImporter)AssetImporter.GetAtPath(path);
@@ -206,9 +210,15 @@ namespace ProjectFossil.Editor
             Assign(def, $"{Pack}/{Models["Model_Survivor"]}", ctrl);
             def.yawOffset       = 180f;  // the pack's characters face -Z in Unity
             def.faceHeadForward = false;
-            def.attachments = new[] { "Hair_SimpleParted", "Hair_Beard" }
-                .Select(n => AssetDatabase.LoadAssetAtPath<GameObject>($"{Pack}/Characters/Hair/{n}.fbx"))
+            // Ranger outfit (without its hood, so the hair shows) over the base character's head.
+            def.attachments = new[] { "Hair/Hair_SimpleParted", "Hair/Hair_Beard",
+                                      "Outfit/Male_Ranger_Body", "Outfit/Male_Ranger_Arms",
+                                      "Outfit/Male_Ranger_Legs", "Outfit/Male_Ranger_Feet_Boots" }
+                .Select(n => AssetDatabase.LoadAssetAtPath<GameObject>($"{Pack}/Characters/{n}.fbx"))
                 .Where(g => g != null).ToArray();
+            bool dressed = def.attachments.Any(a => a.name.Contains("Ranger"));
+            def.trimMeshes = dressed ? new[] { "SuperHero_Male" } : new string[0];
+            def.keepBones  = new[] { "head", "neck_01", "neck_02" };
         }
 
         private static AnimatorController BuildSurvivorController(Dictionary<string, AnimationClip> clips,
@@ -330,11 +340,37 @@ namespace ProjectFossil.Editor
             var dead    = Series("DeadTree");
             var pines   = Series("Pine");
 
+            foreach (var path in Files("Props", "*.fbx"))
+            {
+                var imp = (ModelImporter)AssetImporter.GetAtPath(path);
+                imp.animationType   = ModelImporterAnimationType.None;
+                imp.importAnimation = false;
+                imp.addCollider     = false;
+                imp.SaveAndReimport();
+                RemapMaterials(path, "Props/");
+                models[System.IO.Path.GetFileNameWithoutExtension(path)] = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            }
+            AssignStatic("Model_SupplyCache", "Props/Prop_Chest_Closed.fbx");
+            AssignStatic("Model_RuinStash",   "Props/Prop_Chest_Gold.fbx");
+
+            var palms = new[] { "Environment_PalmTree_1", "Environment_PalmTree_2", "Environment_PalmTree_3" };
+            var bones = Rocks.Append("Environment_LargeBones").ToArray();
+
             SetBiome("BiomeDef_Jungle",   Get(common.Concat(twisted).ToArray()), Get(Rocks), Get(Ferns.Append("Bush_Common").ToArray()));
-            SetBiome("BiomeDef_Plains",   Get(common),                            Get(Rocks), Get("Grass_Common_Tall", "Grass_Wispy_Tall", "Bush_Common", "Bush_Common_Flowers"));
+            SetBiome("BiomeDef_Plains",   Get(common),                            Get(bones), Get("Grass_Common_Tall", "Grass_Wispy_Tall", "Bush_Common", "Bush_Common_Flowers"));
             SetBiome("BiomeDef_Swamp",    Get(dead.Concat(twisted).ToArray()),    Get(Rocks), Get("Fern_1", "Plant_1", "Grass_Wispy_Tall", "Mushroom_Common"));
-            SetBiome("BiomeDef_Beach",    Get(pines),                             Get(Rocks), Get("Grass_Wispy_Tall"));
-            SetBiome("BiomeDef_Volcanic", Get(dead),                              Get(Rocks), Get("Mushroom_Common"));
+            SetBiome("BiomeDef_Beach",    Get(models.ContainsKey(palms[0]) ? palms : pines), Get(Rocks), Get("Grass_Wispy_Tall"));
+            SetBiome("BiomeDef_Volcanic", Get(dead),                              Get(bones.Append("Environment_Skulls").ToArray()), Get("Mushroom_Common"));
+        }
+
+        private static void AssignStatic(string defName, string modelFile)
+        {
+            var def = AssetDatabase.LoadAssetAtPath<ModelDefinition>($"{ModelData}/{defName}.asset");
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{Pack}/{modelFile}");
+            if (def == null || model == null) { Debug.LogWarning($"[ModelPackSetup] Can't set {defName} to {modelFile}."); return; }
+            def.model = model;
+            def.animator = null;
+            EditorUtility.SetDirty(def);
         }
 
         private static void SetBiome(string asset, GameObject[] trees, GameObject[] rocks, GameObject[] plants)
@@ -378,6 +414,9 @@ namespace ProjectFossil.Editor
                     {
                         if (src.HasProperty("_BaseColor"))  mat.SetColor("_BaseColor", src.GetColor("_BaseColor"));
                         else if (src.HasProperty("_Color")) mat.SetColor("_BaseColor", src.GetColor("_Color"));
+                        var embeddedTex = src.HasProperty("_BaseMap") ? src.GetTexture("_BaseMap")
+                                        : src.HasProperty("_MainTex") ? src.GetTexture("_MainTex") : null;
+                        if (embeddedTex != null) mat.SetTexture("_BaseMap", embeddedTex);
                     }
                     AssetDatabase.CreateAsset(mat, matPath);
                 }
