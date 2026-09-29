@@ -30,6 +30,7 @@ namespace ProjectFossil.Match
         private static readonly Color OpenColor   = new Color(0.2f, 0.9f, 0.3f);
 
         private Renderer[] _beaconRenderers;
+        private Renderer   _pad;
         private bool?     _open;
         private Transform _heli;
         private Transform _rotor;
@@ -72,7 +73,8 @@ namespace ProjectFossil.Match
 
             var zone = root.AddComponent<ExtractionZone>();
             zone.radius = radius;
-            zone._beaconRenderers = new[] { disc.GetComponent<Renderer>(), pillar.GetComponent<Renderer>() };
+            zone._beaconRenderers = new[] { pillar.GetComponent<Renderer>() };
+            zone._pad = disc.GetComponent<Renderer>();
             zone.BuildHelicopter();
             zone.SetOpen(false);
             return zone;
@@ -92,6 +94,8 @@ namespace ProjectFossil.Match
             if (_beaconRenderers != null)
                 foreach (var r in _beaconRenderers)
                     r.material.color = open ? OpenColor : ClosedColor;
+            // The pad fills the view while boarding: a muted tint of the beacon colour, not a glowing floor.
+            if (_pad != null) _pad.material.color = Color.Lerp(open ? OpenColor : ClosedColor, new Color(0.3f, 0.3f, 0.28f), 0.6f);
             if (_heli != null) _heli.gameObject.SetActive(open);
         }
 
