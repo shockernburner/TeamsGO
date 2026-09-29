@@ -42,7 +42,8 @@ namespace ProjectFossil.UI
         private int   _coinBurst;
         private float _coinBurstUntil;
 
-        private GUIStyle _big, _center, _box, _slot, _panel, _small, _hint, _barText;
+        private GUIStyle _big, _center, _box, _slot, _panel, _small, _hint, _barText, _marker;
+        private Texture2D _arrow;
 
         // Auto-create alongside any MatchBootstrap so no scene edits are needed.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -201,6 +202,7 @@ namespace ProjectFossil.UI
                 DrawHealthBars();
                 DrawDamageFlash();
                 if (!_shopOpen) DrawCrosshair();
+                if (!_shopOpen) DrawBeaconMarker();
                 DrawHud();
                 DrawPrompt();
                 if (_shopOpen) DrawShop();
@@ -242,7 +244,7 @@ namespace ProjectFossil.UI
             else if (state.IsExtracting)
                 GUILayout.Label($"EXTRACTING {Mathf.CeilToInt(state.ExtractionHoldTime - state.ExtractionProgress)}s", _small);
             else
-                GUILayout.Label("Extraction OPEN: find a green beacon", _small);
+                GUILayout.Label("Extraction OPEN: follow the green marker", _small);
 
             string weapon = _combat != null ? _combat.CurrentWeapon.Name : "";
             string move   = controller != null ? MovementLabel(controller) : "";
@@ -304,7 +306,8 @@ namespace ProjectFossil.UI
                 GUILayout.BeginHorizontal();
                 GUILayout.Label($"{offer.displayName}", GUILayout.Width(250));
                 GUI.enabled = check == ShopResult.Success;
-                if (GUILayout.Button($"Buy ({offer.price})", GUILayout.Width(120)))
+                string buy = check == ShopResult.AlreadyOwned ? "Owned" : $"Buy ({offer.price})";
+                if (GUILayout.Button(buy, GUILayout.Width(120)))
                 {
                     var result = ShopService.TryBuy(offer, inv.Wallet, inv.Inventory);
                     _shopMessage = result == ShopResult.Success ? $"Bought {offer.displayName}" : Describe(result);
@@ -400,6 +403,72 @@ namespace ProjectFossil.UI
             GUI.color = old;
         }
 
+        // Once extraction opens: the nearest green beacon, marked on screen with its distance. Off screen, the marker
+        // sits on the edge with an arrow pointing the way to turn.
+        private void DrawBeaconMarker()
+        {
+            var cam = Camera.main;
+            var state = _match.State;
+            if (cam == null || !state.IsExtractionOpen || _match.PlayerController == null) return;
+
+            Vector3 player = _match.PlayerController.transform.position;
+            ExtractionZone nearest = null;
+            float best = float.MaxValue;
+            foreach (var zone in _match.ExtractionZones)
+            {
+                if (zone == null) continue;
+                float d = Vector3.Distance(player, zone.transform.position);
+                if (d < best) { best = d; nearest = zone; }
+            }
+            if (nearest == null) return;
+
+            Vector3 sp = cam.WorldToScreenPoint(nearest.transform.position + Vector3.up * 3f);
+            Vector2 at = ScreenMarker.Place(sp, Screen.width, Screen.height, 48f, out bool onScreen);
+            float gx = at.x, gy = Screen.height - at.y; // GUI space: origin top-left
+
+            var old = GUI.color;
+            var green = new Color(0.35f, 1f, 0.45f);
+            if (!onScreen)
+            {
+                Vector2 dir = at - new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                float angle = Mathf.Atan2(-dir.y, dir.x) * Mathf.Rad2Deg + 90f; // arrow texture points up
+                var m = GUI.matrix;
+                GUIUtility.RotateAroundPivot(angle, new Vector2(gx, gy));
+                GUI.color = green;
+                GUI.DrawTexture(new Rect(gx - 14f, gy - 14f, 28f, 28f), ArrowTexture());
+                GUI.matrix = m;
+                // Label sits on the inside of the arrow so it never runs off screen.
+                gx -= Mathf.Sign(dir.x) * 46f * Mathf.Abs(dir.normalized.x);
+                gy += Mathf.Sign(dir.y) * 30f * Mathf.Abs(dir.normalized.y);
+            }
+            else
+            {
+                GUI.color = green;
+                GUI.DrawTexture(new Rect(gx - 6f, gy - 6f, 12f, 12f), Texture2D.whiteTexture);
+                gy -= 22f;
+            }
+            GUI.color = old;
+            GUI.Label(new Rect(gx - 60f, gy - 11f, 120f, 22f), $"BEACON {Mathf.RoundToInt(best)} m", _marker);
+        }
+
+        private Texture2D ArrowTexture()
+        {
+            if (_arrow != null) return _arrow;
+            const int n = 32;
+            _arrow = new Texture2D(n, n, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                float half = (n - 1 - y) * 0.5f * 0.9f; // row 0 is the bottom: wide base, point at the top
+                for (int x = 0; x < n; x++)
+                    px[y * n + x] = Mathf.Abs(x - (n - 1) * 0.5f) <= half ? new Color32(255, 255, 255, 255)
+                                                                          : new Color32(255, 255, 255, 0);
+            }
+            _arrow.SetPixels32(px);
+            _arrow.Apply();
+            return _arrow;
+        }
+
         // Small bars over dinosaurs the player hit recently.
         private void DrawHealthBars()
         {
@@ -465,6 +534,8 @@ namespace ProjectFossil.UI
             _hint.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
             _barText = new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter,
                                                       padding = new RectOffset(0, 0, 0, 0) };
+            _marker = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _marker.normal.textColor = new Color(0.55f, 1f, 0.6f);
         }
 
         private static string MovementLabel(PlayerController c)
@@ -503,6 +574,7 @@ namespace ProjectFossil.UI
                 case ShopResult.CannotAfford:    return "Not enough coins.";
                 case ShopResult.InventoryFull:   return "Inventory full.";
                 case ShopResult.MaxSlotsReached: return "Already at max slots.";
+                case ShopResult.AlreadyOwned:    return "You already carry one.";
                 default:                         return "Can't buy that.";
             }
         }

@@ -45,6 +45,10 @@ namespace ProjectFossil.Player
         public float verticalClampMin = -80f;
         public float verticalClampMax = 75f;
 
+        [Header("Water")]
+        [Tooltip("How deep into the sea the player can wade before the seabed stops them")]
+        public float maxWadeDepth = 1.1f;
+
         // ── State ─────────────────────────────────────────────────────────────
         public StaminaModel StaminaModel { get; private set; }
         public float  Stamina     => StaminaModel.Current;
@@ -101,7 +105,17 @@ namespace ProjectFossil.Player
                 _bodyStandPos   = _body.localPosition;
                 _bodyStandScale = _body.localScale;
             }
-            if (cameraTarget != null) _cameraStandY = cameraTarget.localPosition.y;
+            if (cameraTarget != null)
+            {
+                _cameraStandY = cameraTarget.localPosition.y;
+                var cam = cameraTarget.GetComponentInChildren<Camera>();
+                if (cam != null)
+                {
+                    var rig = cam.GetComponent<CameraRig>();
+                    if (rig == null) rig = cam.gameObject.AddComponent<CameraRig>();
+                    rig.Init(cameraTarget, transform);
+                }
+            }
 
             StaminaModel = new StaminaModel(maxStamina)
             {
@@ -226,7 +240,18 @@ namespace ProjectFossil.Player
             _verticalVelocity += gravity * Time.deltaTime;
             _jumpPressed        = false;
 
+            Vector3 before = transform.position;
             _cc.Move((HorizontalMove() + Vector3.up * _verticalVelocity) * Time.deltaTime);
+            StayInShallowWater(before);
+        }
+
+        // The sea floor keeps going down; stop at chest depth instead of walking along the bottom.
+        private void StayInShallowWater(Vector3 before)
+        {
+            Vector3 now = transform.position;
+            float limit = ViewBlockers.WaterHeight - maxWadeDepth;
+            if (now.y >= limit || now.y >= before.y) return;
+            _cc.Move(new Vector3(before.x - now.x, 0f, before.z - now.z));
         }
 
         private Vector3 HorizontalMove()

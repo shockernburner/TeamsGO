@@ -1,6 +1,6 @@
 namespace ProjectFossil.Economy
 {
-    public enum ShopResult { Success, UnknownOffer, CannotAfford, InventoryFull, MaxSlotsReached }
+    public enum ShopResult { Success, UnknownOffer, CannotAfford, InventoryFull, MaxSlotsReached, AlreadyOwned }
 
     // Pure purchase rules. Checks everything before taking money, so a failed buy never costs anything.
     public static class ShopService
@@ -13,6 +13,7 @@ namespace ProjectFossil.Economy
             {
                 case ShopOfferKind.Item:
                     if (offer.item == null) return ShopResult.UnknownOffer;
+                    if (offer.item.IsWeapon && inventory.Count(offer.item) > 0) return ShopResult.AlreadyOwned; // one of each is enough
                     if (!inventory.CanAdd(offer.item, offer.amount)) return ShopResult.InventoryFull;
                     break;
                 case ShopOfferKind.InventorySlots:

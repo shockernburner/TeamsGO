@@ -35,6 +35,18 @@ namespace ProjectFossil.Economy
                 return 0;
             }
 
+            // A second copy of a weapon is no use; it's scrapped for coins instead of taking a slot.
+            if (drop.Item.IsWeapon && Inventory.Count(drop.Item) > 0)
+            {
+                int coins = Mathf.Max(0, drop.Item.scrapValue) * drop.Amount;
+                if (coins > 0)
+                {
+                    Wallet.Earn(coins);
+                    PickedUp?.Invoke(null, coins);
+                }
+                return 0;
+            }
+
             int leftover = Inventory.Add(drop.Item, drop.Amount);
             int taken    = drop.Amount - leftover;
             if (taken > 0) PickedUp?.Invoke(drop.Item, taken);

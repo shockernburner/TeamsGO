@@ -19,6 +19,8 @@ namespace ProjectFossil.Economy
         public float range    = 2f;
         public float cooldown = 0.6f;
         public HeldLook heldLook = HeldLook.None; // what the character shows in hand
+        [Tooltip("Coins paid instead when you find a weapon you already carry")]
+        public int scrapValue = 10;
 
         [Header("Consumable")]
         public float healAmount = 0f;
