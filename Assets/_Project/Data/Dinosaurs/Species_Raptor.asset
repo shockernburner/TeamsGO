@@ -16,7 +16,7 @@ MonoBehaviour:
   debugColor: {r: 0.2, g: 0.8, b: 0.2, a: 1}
   bodyScale: 1
   walkSpeed: 4
-  runSpeed: 10
+  runSpeed: 8.5
   turnSpeed: 200
   wanderRadius: 25
   wanderWaitMin: 2
@@ -28,6 +28,8 @@ MonoBehaviour:
   attackRange: 2
   attackDamage: 15
   attackCooldown: 1.5
+  attackWindup: 0.45
+  hitStagger: 0.35
   maxHealth: 60
   fleeHealthFraction: 0.25
   fleeDistance: 30

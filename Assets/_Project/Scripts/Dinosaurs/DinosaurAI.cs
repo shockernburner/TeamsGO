@@ -13,6 +13,10 @@ namespace ProjectFossil.Dinosaurs
         // Raised when any dinosaur dies. Killer may be null (hazards, unknown source).
         public static event Action<DinosaurAI, GameObject> Killed;
 
+        // Presentation hooks (DinosaurFeedback listens). Windup passes its duration in seconds.
+        public event Action<float> AttackWindupStarted;
+        public event Action        AttackLanded;
+
         // ── State machine ──────────────────────────────────────────────────────
         public enum State { Wander, Alert, Chase, Flee, Dead }
         public State CurrentState { get; private set; } = State.Wander;
@@ -24,6 +28,8 @@ namespace ProjectFossil.Dinosaurs
         private float        _waitTimer;
         private float        _attackTimer;
         private float        _fleeTimer;
+        private float        _windupTimer;  // > 0 while a telegraphed attack is charging
+        private float        _staggerTimer; // > 0 right after being hit
         private bool         _hunting; // sent by the Threat Director: never gives up the chase
 
         // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -31,6 +37,7 @@ namespace ProjectFossil.Dinosaurs
         private void Awake()
         {
             _agent = GetComponent<NavMeshAgent>();
+            if (GetComponent<DinosaurFeedback>() == null) gameObject.AddComponent<DinosaurFeedback>();
 
             Health = GetComponent<Health>();
             if (Health == null) Health = gameObject.AddComponent<Health>();
@@ -164,21 +171,47 @@ namespace ProjectFossil.Dinosaurs
                 return;
             }
 
+            _attackTimer -= Time.deltaTime;
+
+            if (_staggerTimer > 0f)
+            {
+                _staggerTimer -= Time.deltaTime;
+                _windupTimer   = 0f; // a hit interrupts the bite
+                if (_agent.hasPath) _agent.ResetPath();
+                return;
+            }
+
+            // A charging bite finishes even if the target stepped back; it only lands if they're still in reach.
+            if (_windupTimer > 0f)
+            {
+                FaceTowards(_target.position);
+                _windupTimer -= Time.deltaTime;
+                if (_windupTimer <= 0f)
+                {
+                    _attackTimer = species.attackCooldown;
+                    if (dist <= species.attackRange * 1.25f)
+                    {
+                        var victim = _target.GetComponentInParent<IDamageable>();
+                        victim?.TakeDamage(new DamageInfo(species.attackDamage, gameObject, _target.position));
+                        AttackLanded?.Invoke();
+                    }
+                }
+                return;
+            }
+
             if (dist > species.attackRange)
             {
                 _agent.SetDestination(_target.position);
                 return;
             }
 
-            // Attack when in range
+            // In range: stop, face the target and telegraph the bite.
             _agent.ResetPath();
             FaceTowards(_target.position);
-            _attackTimer -= Time.deltaTime;
             if (_attackTimer <= 0f)
             {
-                _attackTimer = species.attackCooldown;
-                var victim = _target.GetComponentInParent<IDamageable>();
-                victim?.TakeDamage(new DamageInfo(species.attackDamage, gameObject, _target.position));
+                _windupTimer = Mathf.Max(0.01f, species.attackWindup);
+                AttackWindupStarted?.Invoke(species.attackWindup);
             }
         }
 
@@ -193,6 +226,7 @@ namespace ProjectFossil.Dinosaurs
             _hunting     = false;
             _target      = null;
             _fleeTimer   = species.fleeDuration;
+            _windupTimer = 0f;
             _agent.speed = species.runSpeed;
 
             Vector3 away = transform.position - threatPosition;
@@ -215,6 +249,8 @@ namespace ProjectFossil.Dinosaurs
         private void OnDamaged(DamageInfo info)
         {
             if (!Health.IsAlive || info.Source == null) return;
+
+            _staggerTimer = species.hitStagger;
 
             if (ShouldFlee())
             {

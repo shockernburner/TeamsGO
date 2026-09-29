@@ -31,6 +31,8 @@ namespace ProjectFossil.Dinosaurs
         public float attackRange  = 2.5f;
         public float attackDamage = 20f;
         public float attackCooldown = 1.5f;
+        public float attackWindup   = 0.45f; // telegraph before the bite lands; stepping out of reach dodges it
+        public float hitStagger     = 0.35f; // pause after taking a hit, so fighting back buys time
 
         [Header("Health / Flee")]
         public float maxHealth          = 60f;
