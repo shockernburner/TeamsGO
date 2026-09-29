@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using ProjectFossil.Core;
 using ProjectFossil.Director;
 using ProjectFossil.Dinosaurs;
@@ -50,6 +51,8 @@ namespace ProjectFossil.Match
         private CoinTrickle     _hitCoins;
 
         private ThreatExecutor _executor;
+        private Transform  _islandRoot;
+        private RNGService _flareRng;
         private Vector3 _playerSpawn;
         private PlayerMenuInput _menuInput;
 
@@ -75,6 +78,8 @@ namespace ProjectFossil.Match
             State.Ended            += OnEnded;
 
             BindPlayer(player);
+            _islandRoot = islandRoot;
+            _flareRng   = new RNGService(unchecked(island.Seed * 41 + 11));
             SpawnPointsOfInterest(island, islandRoot);
 
             Director  = new ThreatDirector(content.threatCatalog.threats);
@@ -251,7 +256,43 @@ namespace ProjectFossil.Match
             Announce(e.Threat.announcement);
         }
 
-        private void OnExtractionOpened() => Announce("Extraction is open. Reach a green beacon and hold position.");
+        private void OnExtractionOpened()
+        {
+            Announce("Extraction is open. Reach a green beacon and hold position.");
+            if (TryDropRescueFlare(out float distance))
+                Announce($"The beacons are far off. A rescue flare landed {Mathf.RoundToInt(distance)} m away.");
+        }
+
+        // Two beacons on a big island can both be a long run away; add one within reach of where the player is.
+        private bool TryDropRescueFlare(out float distance)
+        {
+            distance = 0f;
+            var rules = Content.matchRules;
+            if (Player == null || _flareRng == null || rules.flareIfFartherThan <= 0f) return false;
+
+            Vector3 p = Player.transform.position;
+            foreach (var zone in _zones)
+                if (zone != null && Flat(zone.transform.position - p).magnitude <= rules.flareIfFartherThan) return false;
+
+            float waterY = ViewBlockers.WaterHeight;
+            for (int tries = 0; tries < 16; tries++)
+            {
+                float angle = _flareRng.NextFloat() * Mathf.PI * 2f;
+                float dist  = Mathf.Lerp(rules.flareDistance.x, rules.flareDistance.y, _flareRng.NextFloat());
+                Vector3 c = p + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * dist;
+                if (!NavMesh.SamplePosition(c, out var hit, 12f, NavMesh.AllAreas)) continue;
+                if (hit.position.y < waterY + 0.5f) continue; // not in the shallows
+
+                var zone = ExtractionZone.Create(hit.position, rules.extractionRadius, _islandRoot);
+                zone.SetOpen(true);
+                _zones.Add(zone);
+                distance = Flat(hit.position - p).magnitude;
+                return true;
+            }
+            return false;
+        }
+
+        private static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
 
         private void OnSurvivalPayout(int amount)
         {

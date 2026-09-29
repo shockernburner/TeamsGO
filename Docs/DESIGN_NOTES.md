@@ -210,3 +210,10 @@ Playtest: the player couldn't find a beacon once extraction opened, big plants f
 - **Camera rig.** `CameraRig` (Player, added by `PlayerController` at start) sphere-casts from the head to the shoulder camera and slides in front of terrain, trunks and rocks (not the player, animals or moving bodies), easing back out when clear. Plants have no colliders, so the decorator registers each plant's rough sphere in `ViewBlockers` (Core, a small grid rebuilt per island); plants near the line of sight stop rendering until the view clears.
 - **Water.** `ViewBlockers.WaterHeight` is the sea surface. The camera stays above it, and the player can wade to `PlayerController.maxWadeDepth` (1.1 m) but no deeper, instead of walking along the seabed.
 - **One of each weapon.** The shop answers `AlreadyOwned` for a weapon you carry and shows "Owned". A duplicate weapon found in a cache is scrapped for its `ItemDefinition.scrapValue` in coins (default 10) instead of taking a slot.
+
+## Rescue flare (2026-09-29)
+
+Playtest: extraction opened with the nearest of the two beacons 313 m away and a raptor pack on top of the player.
+
+- When extraction opens and no beacon is within `MatchRules.flareIfFartherThan` (150 m), a rescue flare adds an open beacon 70 to 110 m from the player (`flareDistance`) on NavMesh ground above the waterline. The spot comes from its own seeded RNG stream (seed x 41 + 11). The HUD marker already points at the nearest beacon, so it picks the flare up.
+- `CameraRig` also hides plants within 1.2 m of the camera, which were filling the edges of the frame.
