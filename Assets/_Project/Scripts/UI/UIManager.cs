@@ -479,7 +479,7 @@ namespace ProjectFossil.UI
             if (_danger <= 0.02f) return;
             float pulse = _danger > 0.6f ? 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * Mathf.Lerp(7f, 15f, _danger)) : 1f;
             var old = GUI.color;
-            GUI.color = new Color(0.35f, 0f, 0f, Mathf.Clamp01(_danger * 0.55f * pulse));
+            GUI.color = new Color(0.35f, 0f, 0f, Mathf.Clamp01(_danger * 0.28f * pulse));
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), VignetteTexture(), ScaleMode.StretchToFill);
             GUI.color = old;
         }

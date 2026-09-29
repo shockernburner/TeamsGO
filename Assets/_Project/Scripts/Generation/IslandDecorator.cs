@@ -476,9 +476,10 @@ namespace ProjectFossil.Generation
 
             // Soft three-colour ambient so shaded sides aren't black (the scene has no baked lighting).
             RenderSettings.ambientMode         = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor     = new Color(0.52f, 0.6f, 0.62f);
-            RenderSettings.ambientEquatorColor = new Color(0.42f, 0.46f, 0.38f);
-            RenderSettings.ambientGroundColor  = new Color(0.22f, 0.21f, 0.16f);
+            // Bright enough that the floor of a dense forest, lit by ambient alone, still reads.
+            RenderSettings.ambientSkyColor     = new Color(0.64f, 0.72f, 0.74f);
+            RenderSettings.ambientEquatorColor = new Color(0.54f, 0.58f, 0.48f);
+            RenderSettings.ambientGroundColor  = new Color(0.32f, 0.3f, 0.23f);
 
             // Humid, green-grey haze: far hills fade out and the jungle feels deep.
             RenderSettings.fog        = true;
