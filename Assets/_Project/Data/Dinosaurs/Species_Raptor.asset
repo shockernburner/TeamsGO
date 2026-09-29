@@ -26,8 +26,8 @@ MonoBehaviour:
   hearingRange: 18
   chaseRange: 50
   attackRange: 2
-  attackDamage: 25
-  attackCooldown: 1.2
+  attackDamage: 15
+  attackCooldown: 1.5
   maxHealth: 60
   fleeHealthFraction: 0.25
   fleeDistance: 30

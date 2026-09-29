@@ -35,7 +35,10 @@ namespace ProjectFossil.Match
         public event Action<MatchStats> MatchEnded;
 
         private readonly List<ExtractionZone> _zones = new List<ExtractionZone>();
+        private const float FallOutOfWorldY = -20f;
+
         private ThreatExecutor _executor;
+        private Vector3 _playerSpawn;
         private PlayerMenuInput _menuInput;
 
         // ── Setup ──────────────────────────────────────────────────────────────
@@ -74,6 +77,7 @@ namespace ProjectFossil.Match
         private void BindPlayer(GameObject player)
         {
             Player           = player;
+            _playerSpawn     = player.transform.position;
             PlayerController = player.GetComponent<PlayerController>();
             PlayerInventory  = player.GetComponent<PlayerInventory>();
             PlayerHealth     = PlayerController != null ? PlayerController.Health : player.GetComponent<Health>();
@@ -146,11 +150,25 @@ namespace ProjectFossil.Match
             State.Tick(Time.deltaTime, inZone);
             if (!IsRunning) return;
 
+            RescueIfFallenThroughWorld();
+
             ThreatTarget? target = null;
             if (Player != null && PlayerHealth != null && PlayerHealth.IsAlive)
                 target = new ThreatTarget(PlayerTeam, Player.transform.position, Player.transform);
 
             Brain.Tick(Time.deltaTime, State.Elapsed, target);
+        }
+
+        // Safety net: if the player ever drops through the terrain, put them back at their drop point.
+        private void RescueIfFallenThroughWorld()
+        {
+            if (Player == null || Player.transform.position.y > FallOutOfWorldY) return;
+
+            var cc = Player.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false; // CharacterController overrides direct position changes
+            Player.transform.position = _playerSpawn;
+            if (cc != null) cc.enabled = true;
+            Announce("You fell out of the world and were put back at your drop point.");
         }
 
         public void Announce(string message)

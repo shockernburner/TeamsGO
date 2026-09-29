@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using ProjectFossil.Core;
 using ProjectFossil.Economy;
 using ProjectFossil.Match;
 using ProjectFossil.Player;
@@ -68,6 +69,7 @@ namespace ProjectFossil.UI
         {
             if (_menuInput != null)   _menuInput.ShopToggled -= ToggleShop;
             if (_boundWallet != null) _boundWallet.BalanceChanged -= OnBalanceChanged;
+            if (_combat != null)      _combat.Attacked -= OnAttacked;
 
             _boundPlayer = player;
             _menuInput   = player != null ? player.GetComponent<PlayerMenuInput>() : null;
@@ -79,6 +81,7 @@ namespace ProjectFossil.UI
 
             if (_menuInput != null)   _menuInput.ShopToggled += ToggleShop;
             if (_boundWallet != null) _boundWallet.BalanceChanged += OnBalanceChanged;
+            if (_combat != null)      _combat.Attacked += OnAttacked;
         }
 
         private void OnDestroy()
@@ -90,6 +93,17 @@ namespace ProjectFossil.UI
             }
             if (_menuInput != null)   _menuInput.ShopToggled -= ToggleShop;
             if (_boundWallet != null) _boundWallet.BalanceChanged -= OnBalanceChanged;
+            if (_combat != null)      _combat.Attacked -= OnAttacked;
+        }
+
+        private void OnAttacked(WeaponStats weapon, Health target)
+        {
+            if (target == null)
+                Push($"{weapon.Name}: missed");
+            else if (!target.IsAlive)
+                Push($"{weapon.Name}: killed it!");
+            else
+                Push($"{weapon.Name}: hit for {Mathf.RoundToInt(weapon.Damage)} (target {Mathf.CeilToInt(target.Current)}/{Mathf.CeilToInt(target.Max)})");
         }
 
         private void Push(string text) => _messages.Add((text, Time.unscaledTime + announcementSeconds));
@@ -161,7 +175,7 @@ namespace ProjectFossil.UI
                 GUILayout.Label("Extraction OPEN: reach a green beacon");
 
             if (_combat != null) GUILayout.Label($"Weapon: {_combat.CurrentWeapon.Name}");
-            GUILayout.Label("[Tab] Shop   [Q] Heal   [LMB] Attack   [E] Interact");
+            GUILayout.Label("[Tab] Shop   [Q] Heal   [LMB/F] Attack   [E] Interact");
             GUILayout.EndArea();
 
             if (inv != null) DrawInventory(inv.Inventory);
