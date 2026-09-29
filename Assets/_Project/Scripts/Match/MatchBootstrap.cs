@@ -138,6 +138,7 @@ namespace ProjectFossil.Match
             EnsureComponent<PlayerCombat>(player);
             EnsureComponent<PlayerInteractor>(player);
             EnsureComponent<PlayerMenuInput>(player);
+            PlayerVisual.Attach(player, content != null ? content.playerModel : null);
             return player;
         }
 

@@ -167,3 +167,13 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - Distant roars: from 1:15, every 60–110 s, a roar plays ~140 m from the player in a random direction, unless a big dinosaur is already being tracked. Foreshadowing only; nothing spawns.
 - When a threat whose species is big (maxHealth ≥ 200) is bought, a roar follows the sting from where it will come.
 - Ironjaw unlock time is unchanged (economy call, not audio).
+
+## Low-poly models (2026-09-29)
+
+- Chose the free CC0 Quaternius packs over the paid polyperfect dinosaurs: same art style for dinosaurs, player and nature, and swapping later is cheap because looks are data.
+- New `ModelDefinition` asset (model, animator, target height, facing). Species, the player (via `GameContent.playerModel`) and biomes point at data, never at code. An empty model keeps the placeholder primitives, so the game still runs before the art is set up.
+- `ModelFit` sizes any model by its measured bounds (feet on the ground, target height), so export units don't matter. Dinosaur models are turned so their head bone points forward.
+- `DinosaurVisual` / `PlayerVisual` are presentation only. They read the NavMeshAgent / controller and drive Animator parameters: dinosaurs `Speed`, `Attack` (on bite windup), `Dead`; player `Speed`, `Crouch`, `Attack` + `Armed`, `Hit`, `Dead`. Player attacks and flinches play on an upper-body layer so running continues. Prone reuses the crouch animations (the free library has no crawl).
+- Scatter gained a cosmetic `Plant` kind (ferns, bushes, grass) with its own cap, drawn from the same roll so trees and rocks are unchanged for a given seed. `Variant` (a cell hash) picks which model of a biome's list to use. Trees get a trunk capsule, rocks a box collider, plants none.
+- `Project Fossil ▸ Art ▸ Set Up Model Packs` (Editor) configures importers, makes URP materials (cutout, double-sided foliage), builds the Animator controllers and fills the ModelDefinitions and biome model lists. Needs running once in Unity after pulling; safe to rerun.
+- Real-world trademark rule: the source files named after a famous theropod are renamed `Dino_Ironjaw`; clip names are shortened to `Idle/Walk/Run/Attack/Death`.

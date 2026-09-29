@@ -37,7 +37,8 @@ namespace ProjectFossil.Generation
         [Header("Scatter (trees and rocks)")]
         [Tooltip("One candidate per cell; smaller cells = denser possible placement.")]
         public float scatterCellSize = 7f;
-        public int   maxScatterInstances = 2000;
+        public int   maxScatterInstances = 2000; // trees and rocks
+        public int   maxPlantInstances   = 3000; // cosmetic ground cover, counted separately
         [Tooltip("Metres kept clear around points of interest and the player spawn.")]
         public float scatterClearance = 14f;
         [Tooltip("Max rise over run for trees (0.7 is about 35 degrees). Rocks allow twice this.")]

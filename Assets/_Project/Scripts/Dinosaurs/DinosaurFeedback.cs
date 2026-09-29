@@ -1,9 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 using ProjectFossil.Core;
 
 namespace ProjectFossil.Dinosaurs
 {
-    // Placeholder combat readability: the body glows red while a bite charges, rears up slightly,
+    // Combat readability: the body glows red while a bite charges, rears up slightly,
     // and flashes white when hit. Presentation only; DinosaurAI works without it.
     public class DinosaurFeedback : MonoBehaviour
     {
@@ -13,7 +14,7 @@ namespace ProjectFossil.Dinosaurs
         public float rearHeight      = 0.25f;
 
         private DinosaurAI _ai;
-        private Renderer[] _renderers;
+        private Material[] _materials;
         private Color[]    _baseColors;
         private float _windupTotal, _windupLeft, _hitLeft;
         private Transform _visual;
@@ -26,26 +27,38 @@ namespace ProjectFossil.Dinosaurs
 
         private void Start()
         {
-            _renderers  = GetComponentsInChildren<Renderer>();
-            _baseColors = new Color[_renderers.Length];
-            // Placeholder bodies take the species colour so each kind reads at a distance.
-            bool useSpecies = _ai != null && _ai.species != null;
-            for (int i = 0; i < _renderers.Length; i++)
+            var visual = GetComponent<DinosaurVisual>();
+            if (visual != null) visual.Build(); // so the imported model's renderers are the ones we tint
+            bool hasModel = visual != null && visual.ModelRoot != null;
+
+            var mats = new List<Material>();
+            foreach (var r in GetComponentsInChildren<Renderer>())
+                if (r.enabled) mats.AddRange(r.materials); // instances the materials, per dinosaur
+            _materials  = mats.ToArray();
+            _baseColors = new Color[_materials.Length];
+            // Placeholder bodies take the species colour so each kind reads at a distance; models keep their own.
+            bool useSpecies = !hasModel && _ai != null && _ai.species != null;
+            for (int i = 0; i < _materials.Length; i++)
             {
-                _baseColors[i] = useSpecies ? _ai.species.debugColor
-                                            : _renderers[i].material.color; // instances the material; fine for placeholders
-                _renderers[i].material.color = _baseColors[i];
+                _baseColors[i] = useSpecies ? _ai.species.debugColor : _materials[i].color;
+                _materials[i].color = _baseColors[i];
             }
 
-            // Rear the first child mesh rather than the root, so the NavMeshAgent keeps control of the root.
-            var r = _renderers.Length > 0 ? _renderers[0].transform : null;
-            if (r != null && r != transform) { _visual = r; _visualBasePos = r.localPosition; }
+            // Rear the visual rather than the root, so the NavMeshAgent keeps control of the root.
+            var v = hasModel ? visual.ModelRoot : FirstChildRenderer();
+            if (v != null && v != transform) { _visual = v; _visualBasePos = v.localPosition; }
 
             if (_ai != null)
             {
                 _ai.AttackWindupStarted += OnWindup;
                 if (_ai.Health != null) _ai.Health.Damaged += OnDamaged;
             }
+        }
+
+        private Transform FirstChildRenderer()
+        {
+            var r = GetComponentInChildren<Renderer>();
+            return r != null ? r.transform : null;
         }
 
         private void OnDestroy()
@@ -69,7 +82,7 @@ namespace ProjectFossil.Dinosaurs
 
         private void Update()
         {
-            if (_renderers == null) return;
+            if (_materials == null) return;
             if (_ai != null && _ai.CurrentState == DinosaurAI.State.Dead) { Apply(0f, Color.clear, 0f); enabled = false; return; }
 
             float windup = 0f;
@@ -86,9 +99,8 @@ namespace ProjectFossil.Dinosaurs
 
         private void Apply(float t, Color tint, float rear)
         {
-            for (int i = 0; i < _renderers.Length; i++)
-                if (_renderers[i] != null)
-                    _renderers[i].material.color = Color.Lerp(_baseColors[i], tint, t);
+            for (int i = 0; i < _materials.Length; i++)
+                _materials[i].color = Color.Lerp(_baseColors[i], tint, t);
 
             if (_visual != null)
                 _visual.localPosition = _visualBasePos + Vector3.up * (rearHeight * rear);

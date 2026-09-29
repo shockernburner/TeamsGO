@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Generation
 {
     // Presentation for a generated island: biome-coloured ground, sea, trees, rocks and haze.
-    // Placeholder art made from primitives and flat colours; swap the Make* methods for real prefabs later.
+    // Uses the biome's imported models where it has them, and primitives with flat colours otherwise.
     public static class IslandDecorator
     {
         private static readonly Color TrunkColor     = new Color(0.33f, 0.24f, 0.16f);
@@ -128,6 +129,13 @@ namespace ProjectFossil.Generation
                 Vector3 pos = inst.WorldPos;
                 pos.y = terrain.SampleHeight(parent.TransformPoint(pos)) + terrain.transform.position.y;
 
+                // Imported models when the biome has them; primitives otherwise.
+                var models = inst.Kind == ScatterKind.Tree ? b.treeModels
+                           : inst.Kind == ScatterKind.Rock ? b.rockModels
+                           : b.plantModels;
+                var prefab = Pick(models, inst.Variant);
+                if (prefab != null) { PlaceModel(prefab, root, pos, inst); continue; }
+
                 if (inst.Kind == ScatterKind.Tree)
                 {
                     if (!foliage.TryGetValue(inst.BiomeIndex, out var leaf))
@@ -137,13 +145,59 @@ namespace ProjectFossil.Generation
                            : MakeRoundTree(trunk, leaf);
                     Place(go, root, pos, inst);
                 }
-                else
+                else if (inst.Kind == ScatterKind.Rock)
                 {
                     if (!rocks.TryGetValue(inst.BiomeIndex, out var stone))
                         rocks[inst.BiomeIndex] = stone = NewLit(b.rockColor, 0.15f);
                     var go = MakeRock(stone, inst);
                     Place(go, root, pos + Vector3.down * 0.25f * inst.Scale, inst);
                 }
+                // Plants have no primitive stand-in: bare ground reads better than blobs.
+            }
+        }
+
+        private static GameObject Pick(GameObject[] models, int variant)
+        {
+            if (models == null || models.Length == 0) return null;
+            return models[variant % models.Length];
+        }
+
+        // Sizes match the primitives they replace: trees ~7 m, rocks ~1.5 m across, plants ~1.2 m, at scale 1.
+        private const float TreeHeight = 7f, RockWidth = 1.5f, PlantHeight = 1.2f;
+
+        private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst)
+        {
+            var b = ModelFit.PrefabBounds(prefab);
+            float s = inst.Kind == ScatterKind.Rock
+                ? RockWidth * inst.Scale / Mathf.Max(0.01f, Mathf.Max(b.size.x, b.size.z))
+                : (inst.Kind == ScatterKind.Tree ? TreeHeight : PlantHeight) * inst.Scale / Mathf.Max(0.01f, b.size.y);
+
+            var go = Object.Instantiate(prefab, root, false);
+            go.name = prefab.name;
+            go.transform.localRotation = Quaternion.Euler(0f, inst.Yaw, 0f);
+            go.transform.localScale    = Vector3.one * s;
+            // Sink rocks a little so they sit in the ground rather than on it.
+            float sink = inst.Kind == ScatterKind.Rock ? b.size.y * s * 0.2f : 0.05f;
+            go.transform.localPosition = pos + Vector3.up * (-b.min.y * s - sink);
+
+            // Collision (and NavMesh carving) for trunks and rocks only; plants are walk-through.
+            if (inst.Kind == ScatterKind.Tree)
+            {
+                var col = go.AddComponent<CapsuleCollider>();
+                col.radius = 0.35f / s * inst.Scale;
+                col.height = b.size.y * 0.5f;
+                col.center = new Vector3(0f, b.min.y + col.height * 0.5f, 0f);
+            }
+            else if (inst.Kind == ScatterKind.Rock)
+            {
+                var col = go.AddComponent<BoxCollider>();
+                col.center = b.center;
+                col.size   = b.size;
+            }
+            else
+            {
+                foreach (var r in go.GetComponentsInChildren<Renderer>())
+                    r.shadowCastingMode = ShadowCastingMode.Off; // thousands of small shadows cost more than they add
             }
         }
 

@@ -55,5 +55,6 @@ MonoBehaviour:
   seaLevel: 0.045
   scatterCellSize: 7
   maxScatterInstances: 2000
+  maxPlantInstances: 6000
   scatterClearance: 14
   maxTreeSlope: 0.7

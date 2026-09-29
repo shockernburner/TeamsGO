@@ -1,4 +1,5 @@
 using UnityEngine;
+using ProjectFossil.Core;
 using ProjectFossil.Director;
 using ProjectFossil.Economy;
 
@@ -16,6 +17,7 @@ namespace ProjectFossil.Match
         public ShopCatalog      shopCatalog;
         public LootTable        cacheLoot;
         public LootTable        ruinsLoot;
+        public ModelDefinition  playerModel; // empty = placeholder capsule
 
         public static GameContent LoadDefault() => Resources.Load<GameContent>(ResourcePath);
     }

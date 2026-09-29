@@ -27,6 +27,14 @@ namespace ProjectFossil.Generation
         public Vector2 treeScale = new Vector2(0.8f, 1.3f);
         [Tooltip("Tall thin trees (plains/volcanic) vs round bushy crowns (jungle/swamp).")]
         public TreeShape treeShape = TreeShape.Round;
+        [Min(0f)] public float plantsPerHectare = 0f; // ferns, bushes, tall grass; cosmetic, no collision
+        [Tooltip("Plant size range (uniform scale; 1 = about 1.2 m tall).")]
+        public Vector2 plantScale = new Vector2(0.8f, 1.6f);
+
+        [Header("Models (empty = placeholder primitives; plants need models)")]
+        public GameObject[] treeModels;
+        public GameObject[] rockModels;
+        public GameObject[] plantModels;
 
         [Header("Debug")]
         public Color debugColor = Color.green;
