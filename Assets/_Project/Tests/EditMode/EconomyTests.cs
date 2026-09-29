@@ -115,6 +115,27 @@ namespace ProjectFossil.Tests.EditMode
         }
 
         [Test]
+        public void Shop_WeaponAlreadyCarried_IsNotSoldAgain()
+        {
+            var axe    = MakeItem("axe", category: ItemCategory.Weapon, damage: 25f);
+            var bandage = MakeItem("bandage", maxStack: 5, category: ItemCategory.Consumable, heal: 20f);
+            var axeOffer     = new ShopCatalog.Offer { offerId = "axe", kind = ShopOfferKind.Item, price = 10, item = axe, amount = 1 };
+            var bandageOffer = new ShopCatalog.Offer { offerId = "bandage", kind = ShopOfferKind.Item, price = 5, item = bandage, amount = 1 };
+            var wallet = new CurrencySystem(100);
+            var inv    = new Inventory(4, 4);
+
+            Assert.AreEqual(ShopResult.Success, ShopService.TryBuy(axeOffer, wallet, inv));
+            Assert.AreEqual(ShopResult.AlreadyOwned, ShopService.TryBuy(axeOffer, wallet, inv));
+            Assert.AreEqual(90, wallet.Balance);
+            Assert.AreEqual(1, inv.Count(axe));
+
+            // Consumables still stack.
+            Assert.AreEqual(ShopResult.Success, ShopService.TryBuy(bandageOffer, wallet, inv));
+            Assert.AreEqual(ShopResult.Success, ShopService.TryBuy(bandageOffer, wallet, inv));
+            Assert.AreEqual(2, inv.Count(bandage));
+        }
+
+        [Test]
         public void Shop_SlotUpgrade_StopsAtMax()
         {
             var offer  = new ShopCatalog.Offer { offerId = "slots", kind = ShopOfferKind.InventorySlots, price = 10, amount = 2 };

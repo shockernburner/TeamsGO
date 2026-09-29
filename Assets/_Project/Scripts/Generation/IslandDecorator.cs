@@ -20,6 +20,10 @@ namespace ProjectFossil.Generation
             var terrain = islandGO.GetComponent<Terrain>();
             if (terrain != null) PaintTerrain(terrain.terrainData, data);
 
+            var s = data.Settings;
+            ViewBlockers.Clear();
+            ViewBlockers.SetWaterHeight(islandGO.transform.TransformPoint(new Vector3(0f, s.seaLevel * s.maxHeight, 0f)).y);
+
             AddWater(islandGO.transform, data);
             AddInlandWater(islandGO.transform, data);
             if (terrain != null) AddScatter(islandGO.transform, terrain, data, ScatterPlanner.Plan(data));
@@ -286,8 +290,17 @@ namespace ProjectFossil.Generation
             }
             else
             {
-                foreach (var r in go.GetComponentsInChildren<Renderer>())
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                foreach (var r in renderers)
                     r.shadowCastingMode = ShadowCastingMode.Off; // thousands of small shadows cost more than they add
+
+                // Walk-through plants hide when they get between the camera and the player.
+                if (Application.isPlaying && renderers.Length > 0)
+                {
+                    var wb = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++) wb.Encapsulate(renderers[i].bounds);
+                    ViewBlockers.Register(wb.center, Mathf.Max(wb.extents.x, wb.extents.z), renderers);
+                }
             }
 
             // Stop drawing small things once they're a few pixels tall; the haze hides the pop.
