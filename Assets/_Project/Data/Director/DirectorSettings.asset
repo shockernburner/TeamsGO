@@ -16,7 +16,7 @@ MonoBehaviour:
   startIncomePerSecond: 0.4
   endIncomePerSecond: 2.5
   escalationExponent: 1.5
-  gracePeriod: 60
+  gracePeriod: 90
   minSecondsBetween: 50
   decisionInterval: 5
   saveUpChance: 0.5

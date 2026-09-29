@@ -4,13 +4,13 @@ using ProjectFossil.Core;
 
 namespace ProjectFossil.Player
 {
-    // Placeholder melee: a short sphere-cast from the camera. Uses the equipped weapon if an
+    // Placeholder melee: hits the nearest damageable thing in front of the body. Uses the equipped weapon if an
     // IWeaponProvider (the inventory) is present, otherwise bare hands.
     [RequireComponent(typeof(PlayerController))]
     public class PlayerCombat : MonoBehaviour
     {
         [Header("Bare hands")]
-        public float unarmedDamage   = 8f;
+        public float unarmedDamage   = 12f;
         public float unarmedRange    = 2f;
         public float unarmedCooldown = 0.6f;
 
@@ -21,12 +21,14 @@ namespace ProjectFossil.Player
 
         private PlayerController _controller;
         private IWeaponProvider  _weapons;
-        private Camera           _camera;
+        private readonly Collider[] _buffer = new Collider[32];
+
+        // (weapon used, health of what was hit; null target = miss or something without Health)
+        public event System.Action<WeaponStats, Health> Attacked;
 
         private void Awake()
         {
             _controller = GetComponent<PlayerController>();
-            _camera     = GetComponentInChildren<Camera>();
         }
 
         private void Update()
@@ -48,34 +50,45 @@ namespace ProjectFossil.Player
             var weapon = GetWeapon();
             CooldownRemaining = weapon.Cooldown;
 
-            Transform origin = _camera != null ? _camera.transform : transform;
-            var hits = Physics.SphereCastAll(origin.position, hitRadius, origin.forward,
-                                             weapon.Range + 1.5f, // camera sits behind/above the body
-                                             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            // Swing from the body (the third-person camera sits ~4 m behind it) in the direction the player faces.
+            Vector3 origin = transform.position + Vector3.up * 1f;
+            Vector3 center = origin + transform.forward * (weapon.Range * 0.5f);
+            int count = Physics.OverlapSphereNonAlloc(center, weapon.Range * 0.5f + hitRadius, _buffer,
+                                                      Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
 
             IDamageable best = null;
+            Collider bestCollider = null;
             float bestDist = float.MaxValue;
-            Vector3 bestPoint = Vector3.zero;
-            foreach (var hit in hits)
+            for (int i = 0; i < count; i++)
             {
-                if (hit.collider.transform.IsChildOf(transform)) continue;
+                var col = _buffer[i];
+                if (col.transform.IsChildOf(transform)) continue;
 
-                // Measure reach from the body, not the camera
-                float bodyDist = Vector3.Distance(transform.position, hit.collider.ClosestPoint(transform.position));
-                if (bodyDist > weapon.Range) continue;
-
-                var target = hit.collider.GetComponentInParent<IDamageable>();
+                var target = col.GetComponentInParent<IDamageable>();
                 if (target == null || !target.IsAlive) continue;
-                if (hit.distance < bestDist)
+
+                Vector3 closest = col.ClosestPoint(origin);
+                Vector3 to = closest - origin;
+                to.y = 0f;
+                if (to.sqrMagnitude > 0.01f && Vector3.Dot(transform.forward, to.normalized) < 0.2f) continue; // behind us
+
+                float dist = to.magnitude;
+                if (dist < bestDist)
                 {
-                    best      = target;
-                    bestDist  = hit.distance;
-                    bestPoint = hit.point;
+                    best         = target;
+                    bestCollider = col;
+                    bestDist     = dist;
                 }
             }
 
-            if (best == null) return false;
-            best.TakeDamage(new DamageInfo(weapon.Damage, gameObject, bestPoint));
+            if (best == null)
+            {
+                Attacked?.Invoke(weapon, null);
+                return false;
+            }
+
+            best.TakeDamage(new DamageInfo(weapon.Damage, gameObject, bestCollider.ClosestPoint(origin)));
+            Attacked?.Invoke(weapon, best as Health);
             return true;
         }
 

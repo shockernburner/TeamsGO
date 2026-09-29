@@ -23,4 +23,4 @@ MonoBehaviour:
   spawnPrefab: {fileID: 0}
   speciesOverride: {fileID: 0}
   spawnCount: 1
-  spawnDistance: 40
+  spawnDistance: 55

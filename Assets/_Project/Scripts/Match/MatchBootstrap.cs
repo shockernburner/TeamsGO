@@ -72,6 +72,7 @@ namespace ProjectFossil.Match
             var generator = new IslandGenerator(usedSeed, islandSettings);
             LastData = generator.Generate();
             var islandGO = IslandTerrainBuilder.Build(LastData);
+            Physics.SyncTransforms(); // make the new terrain collider solid before anything is placed on it
 
             BakeNavMesh(islandGO);
             SpawnDinosaurs(LastData, islandGO.transform);
