@@ -166,6 +166,16 @@ namespace ProjectFossil.Editor
                 imp.SaveAndReimport();
                 RemapMaterials(path, "Characters/");
             }
+            foreach (var path in Files("Characters/Hair", "*.fbx"))
+            {
+                // Hair and beards are skinned to the same skeleton; ModelFit binds them to the body by bone name.
+                var imp = (ModelImporter)AssetImporter.GetAtPath(path);
+                imp.animationType   = ModelImporterAnimationType.Generic;
+                imp.avatarSetup     = ModelImporterAvatarSetup.NoAvatar;
+                imp.importAnimation = false;
+                imp.SaveAndReimport();
+                RemapMaterials(path, "Characters/");
+            }
 
             string animPath = $"{Pack}/Animations/UAL1_Standard.fbx";
             var animImp = AssetImporter.GetAtPath(animPath) as ModelImporter;
@@ -194,6 +204,11 @@ namespace ProjectFossil.Editor
 
             var ctrl = BuildSurvivorController(clips, walk, run, crouch);
             Assign(def, $"{Pack}/{Models["Model_Survivor"]}", ctrl);
+            def.yawOffset       = 180f;  // the pack's characters face -Z in Unity
+            def.faceHeadForward = false;
+            def.attachments = new[] { "Hair_SimpleParted", "Hair_Beard" }
+                .Select(n => AssetDatabase.LoadAssetAtPath<GameObject>($"{Pack}/Characters/Hair/{n}.fbx"))
+                .Where(g => g != null).ToArray();
         }
 
         private static AnimatorController BuildSurvivorController(Dictionary<string, AnimationClip> clips,

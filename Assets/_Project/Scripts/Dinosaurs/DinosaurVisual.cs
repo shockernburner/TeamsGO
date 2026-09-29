@@ -39,6 +39,7 @@ namespace ProjectFossil.Dinosaurs
 
             var model = ModelFit.Spawn(def, transform);
             ModelRoot = model.transform;
+            FitBodyToModel(model);
 
             if (def.animator != null)
             {
@@ -51,6 +52,24 @@ namespace ProjectFossil.Dinosaurs
 
             _ai.AttackWindupStarted += OnWindup;
             if (_ai.Health != null) _ai.Health.Died += OnDied;
+        }
+
+        // The placeholder capsule is a person-sized pill; a raptor is long and low. Swap it for a box around the
+        // model so spears, fists and the player all collide with the body you can see, and size the agent to match.
+        private void FitBodyToModel(GameObject model)
+        {
+            var b = ModelFit.MeasureLocal(model, transform);
+            var old = GetComponent<CapsuleCollider>();
+            if (old != null) old.enabled = false;
+            var box = gameObject.AddComponent<BoxCollider>();
+            box.center = b.center;
+            box.size   = new Vector3(b.size.x * 0.8f, b.size.y * 0.9f, b.size.z * 0.85f); // trim tail tip and snout air
+
+            if (_agent != null)
+            {
+                _agent.radius = Mathf.Max(0.3f, Mathf.Min(b.size.x, b.size.z) * 0.5f);
+                _agent.height = b.size.y;
+            }
         }
 
         private void OnDestroy()

@@ -15,5 +15,5 @@ MonoBehaviour:
   model: {fileID: 0}
   animator: {fileID: 0}
   height: 1.8
-  yawOffset: 0
+  yawOffset: 180
   faceHeadForward: 0

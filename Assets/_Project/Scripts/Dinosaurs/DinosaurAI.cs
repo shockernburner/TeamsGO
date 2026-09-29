@@ -79,7 +79,49 @@ namespace ProjectFossil.Dinosaurs
                 case State.Chase:  UpdateChase();  break;
                 case State.Flee:   UpdateFlee();   break;
             }
+            KeepOutOfPeople();
         }
+
+        // NavMeshAgents ignore CharacterControllers, so without this a dinosaur walks straight through the player.
+        // Push the dinosaur back out along the ground whenever its body overlaps someone's capsule.
+        private readonly Collider[] _near = new Collider[8];
+
+        private void KeepOutOfPeople()
+        {
+            if (CurrentState == State.Dead || !_agent.enabled || !_agent.isOnNavMesh) return;
+            var body = BodyCollider();
+            if (body == null) return;
+
+            var bounds = body.bounds;
+            int n = Physics.OverlapBoxNonAlloc(bounds.center, bounds.extents + Vector3.one * 0.5f, _near,
+                                               Quaternion.identity, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                if (!(_near[i] is CharacterController cc) || !cc.enabled) continue;
+                Vector3 feet = cc.transform.position;
+                Vector3 probe = feet + Vector3.up * Mathf.Min(cc.height * 0.5f, bounds.extents.y);
+                Vector3 closest = body.ClosestPoint(probe);
+                Vector3 away = closest - probe;
+                away.y = 0f;
+                float gap = away.magnitude;
+                float radius = cc.radius * Mathf.Max(cc.transform.lossyScale.x, cc.transform.lossyScale.z) + 0.05f;
+                if (gap >= radius) continue;
+
+                // Inside the body (gap 0): push straight away from the person.
+                Vector3 dir = gap > 0.001f ? away / gap : Flat(transform.position - feet).normalized;
+                if (dir.sqrMagnitude < 0.5f) dir = -transform.forward;
+                _agent.Move(dir * (radius - gap));
+            }
+        }
+
+        private Collider BodyCollider()
+        {
+            foreach (var c in GetComponents<Collider>())
+                if (c.enabled && !c.isTrigger) return c;
+            return null;
+        }
+
+        private static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }
 
         // Send this dinosaur straight after a target (used by threats). It ignores chaseRange.
         public void Hunt(Transform target)

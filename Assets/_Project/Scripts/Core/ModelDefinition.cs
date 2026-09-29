@@ -9,6 +9,8 @@ namespace ProjectFossil.Core
     {
         public GameObject                model;
         public RuntimeAnimatorController animator;
+        [Tooltip("Skinned meshes on the same skeleton (hair, beard, outfits), bound to the model's bones by name")]
+        public GameObject[]              attachments;
 
         [Tooltip("Model is scaled so its bind-pose height matches this, in the owner's local units")]
         public float height = 2f;

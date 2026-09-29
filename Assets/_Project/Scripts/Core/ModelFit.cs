@@ -18,6 +18,8 @@ namespace ProjectFossil.Core
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             go.transform.localScale    = Vector3.one;
+            if (def.attachments != null)
+                foreach (var a in def.attachments) Attach(go.transform, a);
 
             float yaw = def.yawOffset;
             if (def.faceHeadForward) yaw += HeadYaw(go.transform);
@@ -28,6 +30,29 @@ namespace ProjectFossil.Core
             go.transform.localScale = Vector3.one * s;
             go.transform.localPosition = new Vector3(-b.center.x * s, -b.min.y * s, -b.center.z * s);
             return go;
+        }
+
+        // Puts every skinned mesh of `attachment` onto `model`'s skeleton, matching bones by name.
+        // Works for pieces exported on the same rig (hair, beards, outfit parts).
+        public static void Attach(Transform model, GameObject attachment)
+        {
+            if (attachment == null) return;
+            var bones = new Dictionary<string, Transform>();
+            foreach (var t in model.GetComponentsInChildren<Transform>())
+                if (!bones.ContainsKey(t.name)) bones[t.name] = t;
+
+            var inst = Object.Instantiate(attachment);
+            foreach (var smr in inst.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                var src = smr.bones;
+                var mapped = new Transform[src.Length];
+                for (int i = 0; i < src.Length; i++)
+                    mapped[i] = src[i] != null && bones.TryGetValue(src[i].name, out var b) ? b : null;
+                smr.bones = mapped;
+                if (smr.rootBone != null && bones.TryGetValue(smr.rootBone.name, out var root)) smr.rootBone = root;
+                smr.transform.SetParent(model, false); // bones drive the vertices; this only keeps it in the hierarchy
+            }
+            if (Application.isPlaying) Object.Destroy(inst); else Object.DestroyImmediate(inst);
         }
 
         // Bounds of a prefab at scale 1 with its own rotation, measured once per prefab and cached.
