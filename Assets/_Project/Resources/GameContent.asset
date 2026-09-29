@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b8a3eb11cba4423b69f35573ec58c1e, type: 3}
+  m_Name: GameContent
+  m_EditorClassIdentifier: ProjectFossil.Match::ProjectFossil.Match.GameContent
+  matchRules: {fileID: 11400000, guid: 77a984ebfce444a3a439cdc9a12d0013, type: 2}
+  directorSettings: {fileID: 11400000, guid: 3b35e4dd3994499ab30c4edf23166b20, type: 2}
+  threatCatalog: {fileID: 11400000, guid: b9110a1649d841ed9412c0757b529b91, type: 2}
+  shopCatalog: {fileID: 11400000, guid: e0065a579e8243319ee9d7af840c2707, type: 2}
+  cacheLoot: {fileID: 11400000, guid: 017d4442b8f84078b43ca0a473d4dfdb, type: 2}
+  ruinsLoot: {fileID: 11400000, guid: 3533ee1fbea542e591073fb01ccee08b, type: 2}

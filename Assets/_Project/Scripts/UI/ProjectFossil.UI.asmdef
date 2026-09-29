@@ -4,6 +4,8 @@
     "references": [
         "ProjectFossil.Core",
         "ProjectFossil.Economy",
+        "ProjectFossil.Director",
+        "ProjectFossil.Player",
         "ProjectFossil.Match"
     ],
     "includePlatforms": [],

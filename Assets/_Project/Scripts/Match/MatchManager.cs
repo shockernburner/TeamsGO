@@ -1,8 +1,227 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+using ProjectFossil.Core;
+using ProjectFossil.Director;
+using ProjectFossil.Dinosaurs;
+using ProjectFossil.Economy;
+using ProjectFossil.Generation;
+using ProjectFossil.Player;
 
 namespace ProjectFossil.Match
 {
+    // Scene-side match flow. Owns the pure MatchState, the Threat Director and its AI buyer,
+    // and wires the player, loot, extraction zones and threat spawning together.
     public class MatchManager : MonoBehaviour
     {
+        public const string PlayerTeam   = "players";
+        public const string DirectorTeam = "director";
+
+        public MatchState      State     { get; private set; }
+        public MatchStats      Stats     { get; private set; }
+        public ThreatDirector  Director  { get; private set; }
+        public AIDirectorBrain Brain     { get; private set; }
+        public GameContent     Content   { get; private set; }
+        public bool            IsRunning => State != null && State.Phase == MatchPhase.Active;
+
+        public GameObject       Player          { get; private set; }
+        public PlayerController PlayerController { get; private set; }
+        public PlayerInventory  PlayerInventory { get; private set; }
+        public Health           PlayerHealth    { get; private set; }
+
+        public IReadOnlyList<ExtractionZone> ExtractionZones => _zones;
+
+        public event Action<string>     Announced;
+        public event Action<MatchStats> MatchEnded;
+
+        private readonly List<ExtractionZone> _zones = new List<ExtractionZone>();
+        private ThreatExecutor _executor;
+        private PlayerMenuInput _menuInput;
+
+        // ── Setup ──────────────────────────────────────────────────────────────
+
+        public void Begin(IslandData island, GameObject player, GameContent content,
+                          GameObject defaultDinosaurPrefab, Transform islandRoot)
+        {
+            Cleanup();
+
+            Content = content;
+            State   = new MatchState(content.matchRules);
+            Stats   = new MatchStats { Seed = island.Seed };
+
+            State.ExtractionOpened += OnExtractionOpened;
+            State.SurvivalPayout   += OnSurvivalPayout;
+            State.Ended            += OnEnded;
+
+            BindPlayer(player);
+            SpawnPointsOfInterest(island, islandRoot);
+
+            Director  = new ThreatDirector(content.threatCatalog.threats);
+            _executor = new ThreatExecutor(defaultDinosaurPrefab, islandRoot);
+            Director.OnThreatTriggered += OnThreatTriggered;
+
+            var aiBuyer = new ThreatBuyer("ai-director", DirectorTeam, true, new CurrencySystem());
+            // Offset the seed so director choices don't mirror island layout choices.
+            Brain = new AIDirectorBrain(Director, content.directorSettings, aiBuyer,
+                                        new RNGService(unchecked(island.Seed * 31 + 7)),
+                                        content.matchRules.matchDuration);
+
+            DinosaurAI.Killed += OnDinosaurKilled;
+
+            Announce("Survive. Scavenge caches for coins. Extraction opens later.");
+        }
+
+        private void BindPlayer(GameObject player)
+        {
+            Player           = player;
+            PlayerController = player.GetComponent<PlayerController>();
+            PlayerInventory  = player.GetComponent<PlayerInventory>();
+            PlayerHealth     = PlayerController != null ? PlayerController.Health : player.GetComponent<Health>();
+            _menuInput       = player.GetComponent<PlayerMenuInput>();
+
+            if (PlayerHealth != null) PlayerHealth.Died += OnPlayerDied;
+            if (_menuInput != null)   _menuInput.UseItemPressed += OnUseItem;
+        }
+
+        private void SpawnPointsOfInterest(IslandData island, Transform parent)
+        {
+            // Separate stream from the generator so loot is seed-stable even if generation changes.
+            var lootRng = new RNGService(unchecked(island.Seed * 17 + 3));
+
+            foreach (var poi in island.PointsOfInterest)
+            {
+                Vector3 pos = SnapToGround(poi.WorldPos);
+                switch (poi.Type)
+                {
+                    case POIType.ExtractionZone:
+                        _zones.Add(ExtractionZone.Create(pos, Content.matchRules.extractionRadius, parent));
+                        break;
+                    case POIType.LootCache:
+                        SpawnCache(pos, "Supply cache", Content.cacheLoot, lootRng, parent, 1f);
+                        break;
+                    case POIType.Ruins:
+                        SpawnCache(pos, "Ruin stash", Content.ruinsLoot, lootRng, parent, 1.6f);
+                        break;
+                }
+            }
+        }
+
+        private static void SpawnCache(Vector3 pos, string label, LootTable table, RNGService rng, Transform parent, float size)
+        {
+            if (table == null) return;
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = label;
+            go.transform.SetParent(parent, false);
+            go.transform.position   = pos + Vector3.up * (size * 0.5f);
+            go.transform.localScale = Vector3.one * size;
+
+            var container = go.AddComponent<LootContainer>();
+            container.containerName = label.ToLowerInvariant();
+            container.Fill(table.Roll(rng));
+        }
+
+        private static Vector3 SnapToGround(Vector3 pos)
+        {
+            if (Physics.Raycast(pos + Vector3.up * 500f, Vector3.down, out var hit, 1000f,
+                                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                return hit.point;
+            return pos;
+        }
+
+        // ── Loop ───────────────────────────────────────────────────────────────
+
+        private void Update()
+        {
+            if (!IsRunning) return;
+
+            bool open = State.IsExtractionOpen;
+            bool inZone = false;
+            foreach (var zone in _zones)
+            {
+                zone.SetOpen(open);
+                if (Player != null && zone.Contains(Player.transform.position)) inZone = true;
+            }
+
+            State.Tick(Time.deltaTime, inZone);
+            if (!IsRunning) return;
+
+            ThreatTarget? target = null;
+            if (Player != null && PlayerHealth != null && PlayerHealth.IsAlive)
+                target = new ThreatTarget(PlayerTeam, Player.transform.position, Player.transform);
+
+            Brain.Tick(Time.deltaTime, State.Elapsed, target);
+        }
+
+        public void Announce(string message)
+        {
+            if (!string.IsNullOrEmpty(message)) Announced?.Invoke(message);
+        }
+
+        // ── Events ─────────────────────────────────────────────────────────────
+
+        private void OnThreatTriggered(ThreatEvent e)
+        {
+            Stats.ThreatsFaced++;
+            _executor.Execute(e);
+            Announce(e.Threat.announcement);
+        }
+
+        private void OnExtractionOpened() => Announce("Extraction is open. Reach a green beacon and hold position.");
+
+        private void OnSurvivalPayout(int amount)
+        {
+            if (PlayerInventory != null) PlayerInventory.Wallet.Earn(amount);
+        }
+
+        private void OnDinosaurKilled(DinosaurAI dino, GameObject killer)
+        {
+            if (!IsRunning || killer == null || killer != Player) return;
+            Stats.DinosKilled++;
+            if (dino.species != null && PlayerInventory != null)
+                PlayerInventory.Wallet.Earn(dino.species.killReward);
+        }
+
+        private void OnPlayerDied(DamageInfo info) => State?.ReportPlayerDied();
+
+        private void OnUseItem()
+        {
+            if (!IsRunning || PlayerInventory == null) return;
+            if (!PlayerInventory.TryUseHealingItem(PlayerHealth))
+                Announce("Nothing to heal with (or already at full health).");
+        }
+
+        private void OnEnded(MatchResult result)
+        {
+            Stats.Result       = result;
+            Stats.TimeSurvived = State.Elapsed;
+            Stats.CoinsEarned  = PlayerInventory != null ? PlayerInventory.Wallet.TotalEarned : 0;
+
+            if (PlayerController != null && PlayerController.enabled)
+                PlayerController.InputBlocked = true;
+
+            MatchEnded?.Invoke(Stats);
+        }
+
+        // ── Teardown ───────────────────────────────────────────────────────────
+
+        private void Cleanup()
+        {
+            DinosaurAI.Killed -= OnDinosaurKilled;
+            if (Director != null)     Director.OnThreatTriggered -= OnThreatTriggered;
+            if (PlayerHealth != null) PlayerHealth.Died -= OnPlayerDied;
+            if (_menuInput != null)   _menuInput.UseItemPressed -= OnUseItem;
+            if (State != null)
+            {
+                State.ExtractionOpened -= OnExtractionOpened;
+                State.SurvivalPayout   -= OnSurvivalPayout;
+                State.Ended            -= OnEnded;
+            }
+
+            _zones.Clear(); // the zone objects live under the island root and die with it
+            State = null;
+        }
+
+        private void OnDestroy() => Cleanup();
     }
 }
