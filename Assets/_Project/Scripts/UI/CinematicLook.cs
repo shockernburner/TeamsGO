@@ -13,16 +13,16 @@ namespace ProjectFossil.UI
     public class CinematicLook : MonoBehaviour
     {
         [Header("Calm")]
-        public float exposure   = 0.3f;   // stops; ACES darkens midtones, this brings them back
-        public float contrast   = 18f;
+        public float exposure   = 0.55f;  // stops; ACES darkens midtones, this brings them back
+        public float contrast   = 8f;
         public float saturation = 12f;
         public float bloom      = 0.6f;
         public float vignette   = 0.22f;
 
         [Header("Danger (at full)")]
-        public float dangerSaturation = -35f;
-        public float dangerVignette   = 0.45f;
-        public Color dangerTint       = new Color(0.35f, 0.02f, 0.02f);
+        public float dangerSaturation = -15f;
+        public float dangerVignette   = 0.34f;
+        public Color dangerTint       = new Color(0.22f, 0.01f, 0.01f);
 
         private MatchBootstrap   _bootstrap;
         private Volume           _volume;

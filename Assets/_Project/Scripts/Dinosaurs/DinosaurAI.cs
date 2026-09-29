@@ -91,11 +91,14 @@ namespace ProjectFossil.Dinosaurs
                 if (ai == null || ai.species == null || ai.CurrentState == State.Dead) continue;
                 if (ai.species.temperament != Temperament.Predator) continue;
                 float d = Vector3.Distance(ai.transform.position, position);
+                bool big = ai.species.maxHealth >= 200f;
                 float level;
-                if (ai.CurrentState == State.Chase || ai.CurrentState == State.Alert) level = 1f - d / 45f;
-                else if (ai.IsSniffing)                                                level = 0.75f * (1f - d / 70f);
-                else if (ai.species.maxHealth >= 200f)                                 level = 0.45f * (1f - d / 40f);
-                else                                                                   level = 0.25f * (1f - d / 20f);
+                // Small hunters are the everyday threat and stay a warning; the big one is the real fear.
+                if (ai.CurrentState == State.Chase || ai.CurrentState == State.Alert)
+                    level = (big ? 1f : 0.55f) * (1f - d / 45f);
+                else if (ai.IsSniffing) level = 0.75f * (1f - d / 70f);
+                else if (big)           level = 0.45f * (1f - d / 40f);
+                else                    level = 0.15f * (1f - d / 20f);
                 if (level > danger) danger = level;
             }
             return Mathf.Clamp01(danger);
