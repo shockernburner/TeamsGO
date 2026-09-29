@@ -348,7 +348,7 @@ namespace ProjectFossil.UI
         {
             if (stats == null) return;
 
-            var area = new Rect(Screen.width * 0.5f - 210, Screen.height * 0.5f - 230, 420, 460);
+            var area = new Rect(Screen.width * 0.5f - 210, Screen.height * 0.5f - 245, 420, 490);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(Headline(stats.Result), _big);
             GUILayout.Label($"SCORE {stats.Score}" + (stats.NewBest ? "   NEW BEST!" : $"   (best {stats.BestScore})"), _big);
@@ -362,10 +362,19 @@ namespace ProjectFossil.UI
             GUILayout.Label(RankLine(stats));
             GUILayout.Label($"Coins earned: {stats.CoinsEarned}    Island seed: {stats.Seed}");
             GUILayout.Space(12);
-            if (GUILayout.Button("Play again (new island)", GUILayout.Height(36)) && _bootstrap != null)
-                _bootstrap.Restart(true);
-            if (GUILayout.Button("Replay same island", GUILayout.Height(28)) && _bootstrap != null)
-                _bootstrap.Restart(false);
+            if (_bootstrap != null && !_bootstrap.AllowsRestart)
+            {
+                GUILayout.Label(_bootstrap.RestartNote ?? "Waiting for the next island.", _big);
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(_bootstrap != null ? _bootstrap.RestartNote : null))
+                    GUILayout.Label(_bootstrap.RestartNote, _small);
+                if (GUILayout.Button("Play again (new island)", GUILayout.Height(36)) && _bootstrap != null)
+                    _bootstrap.Restart(true);
+                if (GUILayout.Button("Replay same island", GUILayout.Height(28)) && _bootstrap != null)
+                    _bootstrap.Restart(false);
+            }
             GUILayout.EndArea();
         }
 

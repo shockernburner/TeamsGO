@@ -74,6 +74,7 @@ namespace ProjectFossil.Match
                 if (def.speciesOverride is DinosaurSpecies species) ai.species = species;
                 ai.healthMultiplier = HealthMultiplier;
                 ai.damageMultiplier = DamageMultiplier;
+                DinosaurAI.AnnounceCreated(ai);
 
                 if (stampede)
                 {

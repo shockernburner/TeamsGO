@@ -1,0 +1,21 @@
+{
+    "name": "ProjectFossil.Net.Editor",
+    "rootNamespace": "ProjectFossil.Net.Editor",
+    "references": [
+        "FishNet.Runtime",
+        "ProjectFossil.Core",
+        "ProjectFossil.Dinosaurs",
+        "ProjectFossil.Net"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

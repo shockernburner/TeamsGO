@@ -1,0 +1,20 @@
+{
+    "name": "ProjectFossil.Net",
+    "rootNamespace": "ProjectFossil.Net",
+    "references": [
+        "FishNet.Runtime",
+        "ProjectFossil.Core",
+        "ProjectFossil.Dinosaurs",
+        "ProjectFossil.Player",
+        "ProjectFossil.Match"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

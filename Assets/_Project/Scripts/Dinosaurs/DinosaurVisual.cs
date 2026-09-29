@@ -21,6 +21,7 @@ namespace ProjectFossil.Dinosaurs
         private NavMeshAgent _agent;
         private Animator     _animator;
         private bool         _built;
+        private Vector3      _lastPos;
 
         private void Start() => Build();
 
@@ -81,9 +82,20 @@ namespace ProjectFossil.Dinosaurs
 
         private void Update()
         {
+            Vector3 moved = transform.position - _lastPos;
+            _lastPos = transform.position;
             if (_animator == null || _agent == null) return;
             // Agent speeds are world m/s and so are the blend thresholds (the species' walk and run speeds).
-            float speed = _agent.enabled ? _agent.velocity.magnitude : 0f;
+            // An online copy has no agent running; it moves by what the host sends, so measure that.
+            float speed;
+            if (_agent.enabled) speed = _agent.velocity.magnitude;
+            else if (_ai != null && _ai.IsRemote && _ai.CurrentState != DinosaurAI.State.Dead && Time.deltaTime > 0f)
+            {
+                moved.y = 0f;
+                speed = moved.magnitude / Time.deltaTime;
+                if (speed > 40f) speed = 0f; // a snap, not a sprint
+            }
+            else speed = 0f;
             _animator.SetFloat(SpeedId, speed, 0.1f, Time.deltaTime);
         }
 

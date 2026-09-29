@@ -39,6 +39,18 @@ namespace ProjectFossil.Player
 
         public float turnSpeed = 720f; // degrees per second
 
+        // Set on a teammate's body online, where there is no controller or health here to read.
+        private bool _remoteCrouch, _remoteDead, _remote;
+
+        public void SetRemotePose(bool crouched, bool dead)
+        {
+            _remote = true;
+            _remoteCrouch = crouched;
+            if (dead == _remoteDead) return;
+            _remoteDead = dead;
+            if (_animator != null) _animator.SetBool(DeadId, dead);
+        }
+
         // Adds the visual to a spawned player. No-op when the definition has no model.
         public static PlayerVisual Attach(GameObject player, ModelDefinition def)
         {
@@ -205,6 +217,7 @@ namespace ProjectFossil.Player
             if (_animator == null) return;
             _animator.SetFloat(SpeedId, speed, 0.1f, Time.deltaTime);
             if (_controller != null) _animator.SetBool(CrouchId, _controller.Stance != Stance.Standing);
+            else if (_remote) _animator.SetBool(CrouchId, _remoteCrouch);
         }
 
         // The body faces the camera direction; the model faces where it is going, so backing up or strafing

@@ -11,6 +11,7 @@ Only assets with licenses that permit commercial use are allowed.
 | Stylized Nature MegaKit, Standard (Quaternius) | https://quaternius.com/packs/stylizednaturemegakit.html | CC0 1.0 | `Art/ThirdParty/Quaternius/Nature`. Subset: trees, rocks, ferns, bushes, grass, mushrooms. Textures downscaled to 1024. |
 | Modular Character Outfits - Fantasy, Standard (Quaternius) | https://quaternius.com/packs/modularcharacteroutfitsfantasy.html | CC0 1.0 | `Art/ThirdParty/Quaternius/Characters/Outfit` (Male Ranger body, arms, legs, boots). Textures downscaled to 1024. |
 | Pirate Kit (Quaternius, via Poly Pizza) | https://poly.pizza/bundle/Pirate-kit-0q5ulmIYqQ | CC0 1.0 | `Art/ThirdParty/Quaternius/Props`: chests, barrel, palm trees, bones, skulls. `Atlas_Pirate.png` extracted from the FBX's embedded texture. |
+| FishNet: Networking Evolved 4.7.3 (FirstGearGames) | https://github.com/FirstGearGames/FishNet (Unity package from git, tag 4.7.3) | FishNet License: free, royalty-free use in games, including commercial | Code library, not art. Installed through `Packages/manifest.json`, not copied into Assets. The license text ships with the package (`LICENSE.txt`), plus its `THIRD PARTY NOTICE.md`. |
 
 CC0 needs no attribution. The license text ships in `Art/ThirdParty/Quaternius/LICENSE.txt`.
 Downloaded by Firdous on 2026-09-29.

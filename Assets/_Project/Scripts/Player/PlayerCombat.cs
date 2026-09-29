@@ -68,7 +68,7 @@ namespace ProjectFossil.Player
                 if (col.transform.IsChildOf(transform)) continue;
 
                 var target = col.GetComponentInParent<IDamageable>();
-                if (target == null || !target.IsAlive) continue;
+                if (target == null || !target.IsAlive || target is IFriendly) continue;
 
                 Vector3 to = col.ClosestPoint(origin) - origin;
                 to.y = 0f;

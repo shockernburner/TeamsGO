@@ -43,6 +43,21 @@ namespace ProjectFossil.Match
         public event Action<Vector3>    StalkerReleased;
         public event Action             FinalStandStarted;
 
+        // Online: announcements the whole team should hear (threats, the stalker), and a follower's request
+        // for the host to send the final wave to their helicopter.
+        public event Action<string>     TeamAnnounced;
+        public event Action             FinalStandRequested;
+
+        // A follower has joined someone else's island: the host runs the director, the wildlife and the
+        // animals, so this match only keeps the clock, the loot and this player's own fight.
+        public bool IsFollower { get; private set; }
+        // Teammates on other machines (their bodies here). Only the host fills this; the director picks among
+        // them and this player.
+        public readonly List<Transform> Teammates = new List<Transform>();
+        private const float TargetTurnSeconds = 45f;
+        private readonly List<Transform> _candidates = new List<Transform>();
+        private readonly HashSet<Transform> _finalStandsSent = new HashSet<Transform>();
+
         public bool IsFinalStand { get; private set; }
         // The helicopter that took the player off the island (null until they extract).
         public ExtractionZone RescuedBy { get; private set; }
@@ -74,6 +89,7 @@ namespace ProjectFossil.Match
         {
             Cleanup();
 
+            IsFollower = NetRole.IsFollower;
             Content = content;
             State   = new MatchState(content.matchRules);
             Stats   = new MatchStats { Seed = island.Seed };
@@ -109,13 +125,13 @@ namespace ProjectFossil.Match
                                         new RNGService(unchecked(island.Seed * 31 + 7)),
                                         content.matchRules.matchDuration, baseline);
 
-            SpawnWildlife(island, defaultDinosaurPrefab, islandRoot, level);
+            if (!IsFollower) SpawnWildlife(island, defaultDinosaurPrefab, islandRoot, level);
 
             DinosaurAI.Killed  += OnDinosaurKilled;
             DinosaurAI.Damaged += OnDinosaurDamaged;
             DinosaurAI.PickedUpScent += OnPickedUpScent;
             ExtractionZone.Noise += DinosaurAI.NoiseAt;
-            ScentTrail.Active = _scent = new ScentTrail();
+            ScentTrail.Active = _scent = IsFollower ? null : new ScentTrail();
             _lastScentWarning = float.NegativeInfinity;
 
             Announce(level > 0 ? $"Survivor rank {level}: the island fights harder. Survive, scavenge, extract."
@@ -232,6 +248,13 @@ namespace ProjectFossil.Match
             State.Tick(Time.deltaTime, inZone);
             if (!IsRunning) return;
 
+            if (IsFollower)
+            {
+                if (!IsFinalStand && State.IsExtracting) RequestFinalStand();
+                RescueIfFallenThroughWorld();
+                return;
+            }
+
             if (!_stalkerSent && State.Elapsed >= Content.matchRules.stalkerAt) ReleaseStalker();
             if (!IsFinalStand && State.IsExtracting) BeginFinalStand();
 
@@ -246,15 +269,29 @@ namespace ProjectFossil.Match
                 _scent.Tick(p, State.Elapsed, !hidden && !ViewBlockers.InWater(p));
             }
 
-            ThreatTarget? target = null;
-            if (Player != null && PlayerHealth != null && PlayerHealth.IsAlive)
-                target = new ThreatTarget(PlayerTeam, Player.transform.position, Player.transform);
+            ThreatTarget? target = PickDirectorTarget();
 
             float healthFraction = PlayerHealth != null ? PlayerHealth.Fraction : 1f;
             Brain.Intensity = Difficulty.Tick(Time.deltaTime, State.Elapsed, healthFraction);
             Brain.Tick(Time.deltaTime, State.Elapsed, target);
 
             _wildlife?.Tick(State.Elapsed, Player != null ? Player.transform.position : (Vector3?)null);
+        }
+
+        // Solo it's always the player. With teammates the director takes turns, so nobody gets every threat.
+        private ThreatTarget? PickDirectorTarget()
+        {
+            _candidates.Clear();
+            if (Player != null && PlayerHealth != null && PlayerHealth.IsAlive) _candidates.Add(Player.transform);
+            Teammates.RemoveAll(t => t == null);
+            foreach (var t in Teammates)
+            {
+                var d = t.GetComponentInParent<IDamageable>();
+                if (d == null || d.IsAlive) _candidates.Add(t);
+            }
+            if (_candidates.Count == 0) return null;
+            var who = _candidates[(int)(State.Elapsed / TargetTurnSeconds) % _candidates.Count];
+            return new ThreatTarget(PlayerTeam, who.position, who);
         }
 
         // Safety net: if the player ever drops through the terrain, put them back at their drop point.
@@ -280,20 +317,30 @@ namespace ProjectFossil.Match
         {
             Stats.ThreatsFaced++;
             Score.AddThreatFaced();
-            _executor.Execute(e, Content.directorSettings.ScaledSpawnCount(e.Threat.spawnCount, Difficulty.Intensity));
+            // The scent trail is this player's; threats sent at a teammate come straight for them instead.
+            bool teammate = e.Target.Focus != null && (Player == null || e.Target.Focus != Player.transform);
+            _executor.Execute(e, Content.directorSettings.ScaledSpawnCount(e.Threat.spawnCount, Difficulty.Intensity),
+                              forceHunt: teammate);
             Announce(e.Threat.announcement);
+            TeamAnnounced?.Invoke(e.Threat.announcement);
         }
 
         // ── Scripted beats ─────────────────────────────────────────────────────
 
         private ThreatEvent? ScriptedThreat(string threatId)
         {
+            if (Player == null || PlayerHealth == null || !PlayerHealth.IsAlive) return null;
+            return ScriptedThreat(threatId, Player.transform);
+        }
+
+        private ThreatEvent? ScriptedThreat(string threatId, Transform who)
+        {
             var threat = Director != null ? Director.Find(threatId) : null;
-            if (threat == null || Player == null || PlayerHealth == null || !PlayerHealth.IsAlive) return null;
+            if (threat == null || who == null || State == null) return null;
             return new ThreatEvent
             {
                 Threat = threat,
-                Target = new ThreatTarget(PlayerTeam, Player.transform.position, Player.transform),
+                Target = new ThreatTarget(PlayerTeam, who.position, who),
                 Time   = State.Elapsed,
             };
         }
@@ -309,23 +356,48 @@ namespace ProjectFossil.Match
             _stalkers.AddRange(spawned);
             if (spawned.Count == 0) return;
             StalkerReleased?.Invoke(spawned[0].transform.position);
-            Announce("A roar, far off. Something big has started sniffing the air.");
+            const string roar = "A roar, far off. Something big has started sniffing the air.";
+            Announce(roar);
+            TeamAnnounced?.Invoke(roar);
         }
 
         // Boarding takes a while and the rotors are loud: everything nearby comes for the pad. Hold it.
         private void BeginFinalStand()
         {
             IsFinalStand = true;
+            SendFinalWave(Player.transform);
+            FinalStandStarted?.Invoke();
+            Announce("They heard the rotors. HOLD THE PAD until you're aboard!");
+        }
+
+        // A teammate on another machine started boarding: their pad gets its own wave (once each).
+        public void BeginFinalStandFor(Transform teammate)
+        {
+            if (!IsRunning || IsFollower || teammate == null || teammate == (Player != null ? Player.transform : null)) return;
+            if (!_finalStandsSent.Add(teammate)) return;
+            SendFinalWave(teammate);
+            Announce("A teammate is boarding. The rotors are drawing everything to their pad.");
+        }
+
+        private void SendFinalWave(Transform who)
+        {
             var rules = Content.matchRules;
-            var e = ScriptedThreat(rules.finalWaveThreatId);
+            var e = ScriptedThreat(rules.finalWaveThreatId, who);
             if (e != null)
             {
                 int count = Content.directorSettings.ScaledSpawnCount(e.Value.Threat.spawnCount, Difficulty.Intensity);
                 _executor.Execute(e.Value, count, rules.finalWaveDistance, forceHunt: true);
             }
             foreach (var s in _stalkers)
-                if (s != null && s.CurrentState != DinosaurAI.State.Dead) s.Hunt(Player.transform);
+                if (s != null && s.CurrentState != DinosaurAI.State.Dead) s.Hunt(who);
+        }
+
+        // Follower: the pad fight is the same here, but the host sends the animals.
+        private void RequestFinalStand()
+        {
+            IsFinalStand = true;
             FinalStandStarted?.Invoke();
+            FinalStandRequested?.Invoke();
             Announce("They heard the rotors. HOLD THE PAD until you're aboard!");
         }
 
@@ -340,7 +412,7 @@ namespace ProjectFossil.Match
         private void OnExtractionOpened()
         {
             Announce("Extraction open: helicopters are landing. Their noise draws dinosaurs.");
-            if (TryDropRescueFlare(out float distance))
+            if (!IsFollower && TryDropRescueFlare(out float distance))
                 Announce($"The beacons are far off. A rescue flare landed {Mathf.RoundToInt(distance)} m away.");
         }
 
@@ -397,6 +469,24 @@ namespace ProjectFossil.Match
             Score.AddDamage(info.Amount);
             int coins = _hitCoins.AddDamage(info.Amount);
             if (coins > 0 && PlayerInventory != null) PlayerInventory.Wallet.Earn(coins);
+        }
+
+        // Online: the host saw this player's hits land on its animals and passes the credit back.
+        public void CreditDamage(float amount)
+        {
+            if (!IsRunning || amount <= 0f) return;
+            Score.AddDamage(amount);
+            int coins = _hitCoins.AddDamage(amount);
+            if (coins > 0 && PlayerInventory != null) PlayerInventory.Wallet.Earn(coins);
+        }
+
+        public void CreditKill(DinosaurSpecies species)
+        {
+            if (!IsRunning) return;
+            Stats.DinosKilled++;
+            if (species == null) return;
+            Score.AddKill(species.scoreValue);
+            if (PlayerInventory != null) PlayerInventory.Wallet.Earn(species.killReward);
         }
 
         private void OnPlayerDamaged(DamageInfo info)
@@ -480,6 +570,8 @@ namespace ProjectFossil.Match
 
             _zones.Clear(); // the zone objects live under the island root and die with it
             _stalkers.Clear();
+            _finalStandsSent.Clear();
+            Teammates.Clear();
             _stalkerSent = false;
             IsFinalStand = false;
             RescuedBy    = null;
