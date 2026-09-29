@@ -144,3 +144,18 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - `IslandDecorator.ApplyAtmosphere` enforces the same at runtime. It finds or creates a directional sun, raises one lying on the horizon, and sets the Trilight ambient, so a scene with a bad light still plays correctly.
 - Ground colours are slightly brighter, and plains trees go from 4 to 8 per hectare.
 - The bright cyan screen for the first seconds of play is Unity compiling the new terrain shader variants on first use. It stops after the first run.
+
+## 2026-09-29 — Placeholder sound (generated in code)
+
+- **No audio files yet.** `SoundSynth` (Scripts/Audio, pure C# with no UnityEngine) builds every sound from oscillators, noise, filters and envelopes. Each recipe is deterministic per variant and returns mono samples at 22.05 kHz. There's nothing to license and nothing for `ASSET_LICENSES.md`. Real recordings can replace any recipe later.
+- **Sounds:** footsteps (normal and soft), raptor screech, big roar (species with maxHealth ≥ 200), bite, swing, hit, player hurt, coin, threat sting, extraction chime, and a 12 s wind-and-birds loop with a crossfaded seam.
+- **`GameAudio`** is presentation only and auto-creates next to any `MatchBootstrap`, like the UI. It listens to existing events:
+  - footsteps come from player distance travelled, with stride and volume set by stance;
+  - `PlayerCombat.Attacked` plays the swing, plus a hit when something is struck;
+  - `Health.Damaged` plays the hurt sound, and `CurrencySystem.BalanceChanged` plays the coin;
+  - `ThreatDirector.OnThreatTriggered` plays the sting, and extraction opening plays the chime;
+  - `DinosaurAI.AttackLanded` plays a bite, and `DinosaurAI.Killed` plays a death cry;
+  - a dino switching into Alert/Chase calls out, with a 6 s cooldown per dino. Wandering dinos make quiet idle calls every 12–28 s, so you can hear what's nearby.
+- Dino sounds are 3D with linear rolloff (screech up to 110 m, roar up to 220 m), so you can tell where a threat is. Nothing depends on the Audio assembly.
+- WAV previews of every sound are in the shared project files under `audio-previews/`.
+- Tests: `SoundSynthTests` checks length, no NaN, audible and unclipped levels, click-free endings, determinism, and the loop seam.

@@ -9,7 +9,8 @@
         "ProjectFossil.Director",
         "ProjectFossil.Economy",
         "ProjectFossil.Match",
-        "ProjectFossil.Player"
+        "ProjectFossil.Player",
+        "ProjectFossil.Audio"
     ],
     "includePlatforms": [
         "Editor"

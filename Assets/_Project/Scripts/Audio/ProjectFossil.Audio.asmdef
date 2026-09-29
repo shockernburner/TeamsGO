@@ -1,0 +1,21 @@
+{
+    "name": "ProjectFossil.Audio",
+    "rootNamespace": "ProjectFossil.Audio",
+    "references": [
+        "ProjectFossil.Core",
+        "ProjectFossil.Economy",
+        "ProjectFossil.Director",
+        "ProjectFossil.Dinosaurs",
+        "ProjectFossil.Player",
+        "ProjectFossil.Match"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
