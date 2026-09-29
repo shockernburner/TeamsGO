@@ -10,6 +10,10 @@ namespace ProjectFossil.Director
         public ThreatBuyer Buyer { get; }
         public float LastThreatTime { get; private set; } = float.NegativeInfinity;
 
+        // Spending pace. 1 = as tuned; 2 = earns twice as fast and waits half as long between threats.
+        // Set each frame from AdaptiveDifficulty.
+        public float Intensity { get; set; } = 1f;
+
         private readonly ThreatDirector   _director;
         private readonly DirectorSettings _settings;
         private readonly RNGService       _rng;
@@ -19,14 +23,16 @@ namespace ProjectFossil.Director
         private float _nextDecision;
 
         public AIDirectorBrain(ThreatDirector director, DirectorSettings settings, ThreatBuyer buyer,
-                               RNGService rng, float matchDuration)
+                               RNGService rng, float matchDuration, float baseline = 1f)
         {
             _director      = director;
             _settings      = settings;
             Buyer          = buyer;
             _rng           = rng;
             _matchDuration = matchDuration > 0f ? matchDuration : 1f;
-            _nextDecision  = settings.gracePeriod;
+            Intensity      = baseline;
+            // Higher-ranked players get a shorter quiet start.
+            _nextDecision  = settings.gracePeriod / (baseline > 0.5f ? baseline : 0.5f);
 
             if (settings.startingBudget > 0) buyer.Wallet.Earn(settings.startingBudget);
         }
@@ -41,7 +47,7 @@ namespace ProjectFossil.Director
             _nextDecision = matchTime + _settings.decisionInterval;
 
             if (target == null) return null;
-            if (matchTime - LastThreatTime < _settings.minSecondsBetween) return null;
+            if (matchTime - LastThreatTime < _settings.minSecondsBetween / Pace) return null;
 
             var choice = Choose(target.Value, matchTime);
             if (choice == null) return null;
@@ -51,9 +57,11 @@ namespace ProjectFossil.Director
             return choice;
         }
 
+        private float Pace => Intensity > 0.1f ? Intensity : 0.1f;
+
         private void EarnIncome(float deltaTime, float matchTime)
         {
-            _incomeRemainder += _settings.IncomeAt(matchTime / _matchDuration) * deltaTime;
+            _incomeRemainder += _settings.IncomeAt(matchTime / _matchDuration) * Pace * deltaTime;
             int whole = (int)_incomeRemainder;
             if (whole <= 0) return;
             _incomeRemainder -= whole;

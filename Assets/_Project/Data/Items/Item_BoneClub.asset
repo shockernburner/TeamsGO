@@ -19,4 +19,5 @@ MonoBehaviour:
   damage: 18
   range: 2.2
   cooldown: 0.7
+  heldLook: 2
   healAmount: 0

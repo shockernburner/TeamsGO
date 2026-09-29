@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: BiomeDef_Volcanic
   m_EditorClassIdentifier: ProjectFossil.Generation::ProjectFossil.Generation.BiomeDefinition
   biomeName: '"Volcanic"'
-  minHeight: 0.55
+  minHeight: 0.5
   maxHeight: 1
   minMoisture: 0
   maxMoisture: 1
   groundColor: {r: 0.3, g: 0.26, b: 0.24, a: 1}
   foliageColor: {r: 0.2, g: 0.18, b: 0.15, a: 1}
   rockColor: {r: 0.2, g: 0.18, b: 0.18, a: 1}
-  treesPerHectare: 0.8
-  rocksPerHectare: 14
+  treesPerHectare: 2
+  rocksPerHectare: 25
   treeScale: {x: 0.6, y: 1}
   treeShape: 2
   plantsPerHectare: 3

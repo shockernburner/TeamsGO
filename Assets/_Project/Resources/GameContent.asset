@@ -21,3 +21,4 @@ MonoBehaviour:
   playerModel: {fileID: 11400000, guid: 16bd36841ab5430fa3138b42e805756b, type: 2}
   cacheModel: {fileID: 11400000, guid: 0243861ec30944b1b3021ed54700f581, type: 2}
   ruinsModel: {fileID: 11400000, guid: 642fc77f510d4999a1ddb3a7eabf0173, type: 2}
+  wildlife: {fileID: 11400000, guid: e4043ebbea7e4b7f9b9ae83a1f2c0d4c, type: 2}

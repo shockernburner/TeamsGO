@@ -16,5 +16,9 @@ namespace ProjectFossil.Match
         [Header("Survival income")]
         public float survivalPayoutInterval = 60f;
         public int   survivalPayoutAmount   = 10;
+
+        [Header("Combat income")]
+        [Tooltip("Coins per point of damage dealt to dinosaurs, paid on every hit (kills pay their own reward on top)")]
+        public float coinsPerDamage = 0.15f;
     }
 }

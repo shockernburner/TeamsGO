@@ -28,6 +28,15 @@ namespace ProjectFossil.Player
         private float            _yaw;        // current turn of the pivot, degrees
         private float            _faceForwardTimer;
 
+        // Weapon in the right hand. The grip is worked out from the finger bones once, in the rest pose,
+        // so it works whatever way the rig's hand bone happens to point.
+        private Transform  _hand;
+        private Vector3    _gripPos;   // hand-local
+        private Quaternion _gripRot;   // hand-local; +Y runs along the handle, out of the thumb side of the fist
+        private GameObject _held;
+        private HeldLook   _heldLook = HeldLook.None;
+        private static Material _wood, _stone, _bone, _cord;
+
         public float turnSpeed = 720f; // degrees per second
 
         // Adds the visual to a spawned player. No-op when the definition has no model.
@@ -63,9 +72,117 @@ namespace ProjectFossil.Player
                 _animator.applyRootMotion = false;
             }
 
+            FindGrip(model.transform);
+
             if (_combat != null) _combat.Attacked += OnAttacked;
             if (_health != null) { _health.Damaged += OnDamaged; _health.Died += OnDied; }
             _lastPos = transform.position;
+        }
+
+        private void FindGrip(Transform model)
+        {
+            _hand = Find(model, "hand_r");
+            if (_hand == null) return;
+            var index = Find(_hand, "index_01_r");
+            var pinky = Find(_hand, "pinky_01_r");
+            var mid   = Find(_hand, "middle_01_r");
+
+            Vector3 axis = index != null && pinky != null ? index.position - pinky.position : _hand.up;
+            Vector3 palm = mid != null ? Vector3.Lerp(_hand.position, mid.position, 0.6f) : _hand.position;
+            _gripPos = _hand.InverseTransformPoint(palm);
+            _gripRot = Quaternion.FromToRotation(Vector3.up, _hand.InverseTransformDirection(axis.normalized));
+        }
+
+        private static Transform Find(Transform root, string name)
+        {
+            if (root.name == name) return root;
+            foreach (Transform c in root)
+            {
+                var t = Find(c, name);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        private void UpdateHeldWeapon()
+        {
+            if (_hand == null || _combat == null) return;
+            var look = _combat.CurrentWeapon.Look;
+            if (look == _heldLook && (_held != null || look == HeldLook.None)) return;
+
+            _heldLook = look;
+            if (_held != null) Destroy(_held);
+            _held = null;
+            if (look == HeldLook.None) return;
+
+            _held = new GameObject("Held_" + look);
+            var t = _held.transform;
+            t.SetParent(_hand, false);
+            t.localPosition = _gripPos;
+            t.localRotation = _gripRot;
+            Vector3 ls = _hand.lossyScale; // build in metres whatever the rig's import scale
+            t.localScale = new Vector3(1f / Mathf.Max(1e-4f, ls.x), 1f / Mathf.Max(1e-4f, ls.y), 1f / Mathf.Max(1e-4f, ls.z));
+            BuildWeapon(t, look);
+        }
+
+        // Simple shapes in metres, grip at the origin, handle along +Y.
+        private static void BuildWeapon(Transform root, HeldLook look)
+        {
+            EnsureMaterials();
+            switch (look)
+            {
+                case HeldLook.Spear:
+                    Shape(root, PrimitiveType.Cylinder, _wood, new Vector3(0f, 0.2f, 0f), new Vector3(0.045f, 0.95f, 0.045f));
+                    Shape(root, PrimitiveType.Cylinder, _cord, new Vector3(0f, 1.1f, 0f), new Vector3(0.055f, 0.04f, 0.055f));
+                    var tip = new GameObject("Tip").transform;
+                    tip.SetParent(root, false);
+                    tip.localPosition = new Vector3(0f, 1.28f, 0f);
+                    tip.localScale    = new Vector3(1f, 2.6f, 1f); // stretches the diamond below into a leaf blade
+                    var blade = Shape(tip, PrimitiveType.Cube, _stone, Vector3.zero, new Vector3(0.075f, 0.075f, 0.014f));
+                    blade.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+                    break;
+
+                case HeldLook.Club:
+                    Shape(root, PrimitiveType.Cylinder, _bone, new Vector3(0f, 0.15f, 0f), new Vector3(0.055f, 0.36f, 0.055f));
+                    Shape(root, PrimitiveType.Capsule,  _bone, new Vector3(0f, 0.58f, 0f), new Vector3(0.14f, 0.16f, 0.14f));
+                    Shape(root, PrimitiveType.Sphere,   _bone, new Vector3(0f, -0.2f, 0f), new Vector3(0.08f, 0.08f, 0.08f));
+                    break;
+
+                case HeldLook.Axe:
+                    Shape(root, PrimitiveType.Cylinder, _wood, new Vector3(0f, 0.17f, 0f), new Vector3(0.045f, 0.38f, 0.045f));
+                    Shape(root, PrimitiveType.Cube,     _stone, new Vector3(0.09f, 0.48f, 0f), new Vector3(0.18f, 0.13f, 0.035f));
+                    Shape(root, PrimitiveType.Cylinder, _cord, new Vector3(0f, 0.48f, 0f), new Vector3(0.06f, 0.07f, 0.06f));
+                    break;
+            }
+        }
+
+        private static GameObject Shape(Transform parent, PrimitiveType type, Material mat, Vector3 pos, Vector3 scale)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale    = scale;
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            return go;
+        }
+
+        private static void EnsureMaterials()
+        {
+            if (_wood != null) return;
+            _wood  = Lit(new Color(0.42f, 0.28f, 0.16f));
+            _stone = Lit(new Color(0.5f, 0.5f, 0.53f));
+            _bone  = Lit(new Color(0.86f, 0.82f, 0.7f));
+            _cord  = Lit(new Color(0.25f, 0.18f, 0.12f));
+        }
+
+        private static Material Lit(Color c)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            var m = new Material(shader != null ? shader : Shader.Find("Standard"));
+            m.color = c;
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.15f);
+            return m;
         }
 
         private void OnDestroy()
@@ -84,6 +201,7 @@ namespace ProjectFossil.Player
             if (speed > 30f) speed = 0f; // teleported (respawn/rescue), not running
 
             TurnTowards(d, speed);
+            UpdateHeldWeapon();
             if (_animator == null) return;
             _animator.SetFloat(SpeedId, speed, 0.1f, Time.deltaTime);
             if (_controller != null) _animator.SetBool(CrouchId, _controller.Stance != Stance.Standing);

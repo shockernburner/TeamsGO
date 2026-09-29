@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0a1f8bad4424145b8d54f813c1d731f, type: 3}
+  m_Name: Wildlife_Default
+  m_EditorClassIdentifier: ProjectFossil.Dinosaurs::ProjectFossil.Dinosaurs.WildlifeTable
+  entries:
+  - species: {fileID: 11400000, guid: 5b88c159f964e4752a58b1f5e9ec1198, type: 2}
+    weight: 3
+    groupMin: 1
+    groupMax: 2
+    fromTime: 0
+  - species: {fileID: 11400000, guid: d71957aa6cee4c279902fd12e2462fb4, type: 2}
+    weight: 3
+    groupMin: 3
+    groupMax: 5
+    fromTime: 0
+  - species: {fileID: 11400000, guid: 96c817b9a7534d15b72300c22bb7f0a1, type: 2}
+    weight: 3
+    groupMin: 3
+    groupMax: 5
+    fromTime: 0
+  - species: {fileID: 11400000, guid: fe45adf086e94b3c9aaff01b328dda98, type: 2}
+    weight: 1.5
+    groupMin: 1
+    groupMax: 2
+    fromTime: 0
+  - species: {fileID: 11400000, guid: b34bb02adea04d5f9e12aa974e7f34ee, type: 2}
+    weight: 1.2
+    groupMin: 1
+    groupMax: 2
+    fromTime: 0
+  - species: {fileID: 11400000, guid: 72b0ccd781324815a898c2a7d7c39a8c, type: 2}
+    weight: 0.8
+    groupMin: 2
+    groupMax: 3
+    fromTime: 0
+  groupsPerZone: 2
+  growthPerMinute: 1.5
+  maxAlive: 45
+  topUpInterval: 20
+  minSpawnDistance: 70
+  maxSpawnDistance: 140

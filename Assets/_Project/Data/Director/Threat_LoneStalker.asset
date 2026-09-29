@@ -24,3 +24,4 @@ MonoBehaviour:
   speciesOverride: {fileID: 0}
   spawnCount: 1
   spawnDistance: 55
+  trampleDamage: 25

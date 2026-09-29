@@ -18,6 +18,41 @@ namespace ProjectFossil.Generation
         public float islandRadiusFraction = 0.42f;
         public AnimationCurve heightRemap = AnimationCurve.Linear(0f, 0f, 1f, 1f);
 
+        [Header("Relief")]
+        [Tooltip("Sharp ridges and mountain chains, where the mountain mask allows them")]
+        [Range(0f, 1f)] public float ridgeStrength = 0.45f;
+        [Tooltip("Ridge noise frequency, relative to the base noise")]
+        public float ridgeScale = 2.5f;
+        [Tooltip("Small bumps and gullies everywhere")]
+        [Range(0f, 0.2f)] public float detailStrength = 0.06f;
+        [Tooltip("> 1 keeps lowlands low and makes peaks steep; 1 = unchanged")]
+        [Range(1f, 3f)] public float lowlandPower = 1.7f;
+
+        [Header("Volcano")]
+        [Range(0f, 1f)] public float volcanoHeight = 0.5f; // added at the summit, as a fraction of maxHeight
+        [Tooltip("Base radius as a fraction of the world size")]
+        [Range(0f, 0.3f)] public float volcanoRadius = 0.13f;
+        [Range(0f, 0.3f)] public float craterDepth = 0.12f;
+
+        [Header("Rivers and lakes")]
+        public int   riverCount = 3;
+        [Tooltip("River width in metres near the mouth; about half that at the source")]
+        public float riverWidth = 12f;
+        [Tooltip("Bank steepness (rise over run)")]
+        public float riverBankSlope = 0.5f;
+        [Tooltip("Rivers start between these normalized heights")]
+        public Vector2 riverSourceHeight = new Vector2(0.3f, 0.6f);
+        public int   lakeCount = 2;
+        public Vector2 lakeRadius = new Vector2(16f, 30f); // metres
+        [Tooltip("Water depth in rivers and lakes, metres")]
+        public float waterDepth = 1.2f;
+        [Tooltip("How much wetter the ground is near rivers and lakes (feeds swamps)")]
+        [Range(0f, 1f)] public float riverMoisture = 0.3f;
+
+        [Header("Moisture")]
+        [Tooltip("Stretches moisture noise away from 0.5 so dry plains and wet swamps both show up")]
+        public float moistureContrast = 2.2f;
+
         [Header("Biomes")]
         public List<BiomeDefinition> biomes = new();
 

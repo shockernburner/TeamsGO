@@ -49,7 +49,7 @@ namespace ProjectFossil.Economy
                 weapon = default;
                 return false;
             }
-            weapon = new WeaponStats(best.displayName, best.damage, best.range, best.cooldown);
+            weapon = new WeaponStats(best.displayName, best.damage, best.range, best.cooldown, best.heldLook);
             return true;
         }
 

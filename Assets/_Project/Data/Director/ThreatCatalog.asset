@@ -14,5 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: ProjectFossil.Director::ProjectFossil.Director.ThreatCatalog
   threats:
   - {fileID: 11400000, guid: 66705a853da246fab5c29c550dacde31, type: 2}
+  - {fileID: 11400000, guid: 636dc6f1132f41a4a65ac2799fc6286d, type: 2}
   - {fileID: 11400000, guid: 228979f07a904f1c8adf0d074180ffb9, type: 2}
+  - {fileID: 11400000, guid: 7b8bcd6332e8416b85b7a22007c25083, type: 2}
+  - {fileID: 11400000, guid: 4b16a57d05744f5e946ebe0b5d4f2a18, type: 2}
   - {fileID: 11400000, guid: dd819cd4c0d94a969bc8c7669e2c4f9f, type: 2}

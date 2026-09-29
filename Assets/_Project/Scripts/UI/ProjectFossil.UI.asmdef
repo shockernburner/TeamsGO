@@ -6,7 +6,8 @@
         "ProjectFossil.Economy",
         "ProjectFossil.Director",
         "ProjectFossil.Player",
-        "ProjectFossil.Match"
+        "ProjectFossil.Match",
+        "ProjectFossil.Dinosaurs"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

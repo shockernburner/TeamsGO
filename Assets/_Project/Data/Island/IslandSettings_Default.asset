@@ -15,7 +15,7 @@ MonoBehaviour:
   resolution: 257
   worldSize: 1000
   maxHeight: 150
-  noiseScale: 0.003
+  noiseScale: 0.0045
   islandRadiusFraction: 0.42
   heightRemap:
     serializedVersion: 2
@@ -41,20 +41,36 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  ridgeStrength: 0.45
+  ridgeScale: 2.5
+  detailStrength: 0.06
+  lowlandPower: 1.7
+  volcanoHeight: 0.5
+  volcanoRadius: 0.13
+  craterDepth: 0.12
+  riverCount: 3
+  riverWidth: 12
+  riverBankSlope: 0.5
+  riverSourceHeight: {x: 0.3, y: 0.6}
+  lakeCount: 2
+  lakeRadius: {x: 16, y: 30}
+  waterDepth: 1.2
+  riverMoisture: 0.3
+  moistureContrast: 2.2
   biomes:
   - {fileID: 11400000, guid: 0f7f4905369564014931f3883d963238, type: 2}
+  - {fileID: 11400000, guid: 4018e25f0b2d44097b0b0e789cfbd8bb, type: 2}
   - {fileID: 11400000, guid: 899cf8c4cab38495e8f9c2330ad4d75d, type: 2}
   - {fileID: 11400000, guid: 7e172ce57f1ea462db007f4a23e5e0f5, type: 2}
   - {fileID: 11400000, guid: b75b9c4934e0246b88af5c93b5b58950, type: 2}
-  - {fileID: 11400000, guid: 4018e25f0b2d44097b0b0e789cfbd8bb, type: 2}
   extractionZoneCount: 2
   lootCacheCount: 8
   ruinsCount: 4
   minPOISpacing: 120
   spawnZoneCount: 6
   seaLevel: 0.045
-  scatterCellSize: 7
-  maxScatterInstances: 2000
-  maxPlantInstances: 6000
+  scatterCellSize: 5
+  maxScatterInstances: 5000
+  maxPlantInstances: 12000
   scatterClearance: 14
   maxTreeSlope: 0.7

@@ -13,10 +13,21 @@ MonoBehaviour:
   m_Name: DirectorSettings
   m_EditorClassIdentifier: ProjectFossil.Director::ProjectFossil.Director.DirectorSettings
   startingBudget: 0
-  startIncomePerSecond: 0.4
-  endIncomePerSecond: 2.5
+  startIncomePerSecond: 0.6
+  endIncomePerSecond: 3.2
   escalationExponent: 1.5
-  gracePeriod: 90
-  minSecondsBetween: 50
+  gracePeriod: 60
+  minSecondsBetween: 40
   decisionInterval: 5
   saveUpChance: 0.5
+  minIntensity: 0.6
+  maxIntensity: 2.5
+  intensityChangePerSecond: 0.05
+  killWindow: 120
+  killsForFullBoost: 6
+  killBoost: 0.6
+  calmSeconds: 60
+  calmBoost: 0.2
+  hurtThreshold: 0.35
+  hurtRelief: 0.4
+  extraSpawnAtMax: 0.6

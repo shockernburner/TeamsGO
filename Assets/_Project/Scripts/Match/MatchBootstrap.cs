@@ -27,6 +27,7 @@ namespace ProjectFossil.Match
 
         [Header("Dinosaurs")]
         public GameObject dinosaurPrefab;
+        [Tooltip("Only used when GameContent has no wildlife table")]
         public int dinosaursPerSpawnZone = 2;
 
         public IslandData LastData { get; private set; }
@@ -75,7 +76,7 @@ namespace ProjectFossil.Match
             Physics.SyncTransforms(); // make the new terrain collider solid before anything is placed on it
 
             BakeNavMesh(islandGO);
-            SpawnDinosaurs(LastData, islandGO.transform);
+            if (content.wildlife == null) SpawnDinosaurs(LastData, islandGO.transform); // otherwise the match spawns wildlife
             _player = SpawnPlayer(LastData);
 
             Match = GetComponent<MatchManager>();
