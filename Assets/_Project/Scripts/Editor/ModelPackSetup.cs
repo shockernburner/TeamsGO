@@ -40,7 +40,7 @@ namespace ProjectFossil.Editor
             { "Bark_TwistedTree",   ("Bark_TwistedTree", "Bark_TwistedTree_Normal", false) },
             { "Bark_DeadTree",      ("Bark_DeadTree",    "Bark_DeadTree_Normal",    false) },
             { "Leaves_NormalTree",  ("Leaves_NormalTree_C",  null, true) },
-            { "Leaves_TwistedTree", ("Leaves_TwistedTree_C", null, true) },
+            { "Leaves_TwistedTree", ("Leaves_TwistedTree",   null, true) }, // white mask, tinted below (the _C version is autumn red)
             { "Leaves_Pine",        ("Leaf_Pine_C",          null, true) },
             { "Leaves",             ("Leaves",               null, true) },
             { "Grass",              ("Grass",                null, true) },
@@ -53,7 +53,14 @@ namespace ProjectFossil.Editor
             { "MI_Hair_1",           ("T_Hair_1_BaseColor", "T_Hair_1_Normal", false) },
         };
 
-        private static readonly string[] Ferns  = { "Fern_1", "Plant_1", "Plant_1_Big", "Plant_7", "Plant_7_Big" };
+        // Plant_7 is left out: its leaves sit on the purple part of the atlas.
+        private static readonly string[] Ferns  = { "Fern_1", "Plant_1", "Plant_1_Big" };
+
+        // White leaf masks get a colour here instead of from the texture.
+        private static readonly Dictionary<string, Color> Tints = new Dictionary<string, Color>
+        {
+            { "Leaves_TwistedTree", new Color(0.36f, 0.55f, 0.2f) },
+        };
         private static readonly string[] Rocks  = { "Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3" };
 
         [MenuItem("Project Fossil/Art/Set Up Model Packs")]
@@ -310,7 +317,7 @@ namespace ProjectFossil.Editor
 
             SetBiome("BiomeDef_Jungle",   Get(common.Concat(twisted).ToArray()), Get(Rocks), Get(Ferns.Append("Bush_Common").ToArray()));
             SetBiome("BiomeDef_Plains",   Get(common),                            Get(Rocks), Get("Grass_Common_Tall", "Grass_Wispy_Tall", "Bush_Common", "Bush_Common_Flowers"));
-            SetBiome("BiomeDef_Swamp",    Get(dead.Concat(twisted).ToArray()),    Get(Rocks), Get("Fern_1", "Plant_7", "Plant_7_Big", "Grass_Wispy_Tall", "Mushroom_Common"));
+            SetBiome("BiomeDef_Swamp",    Get(dead.Concat(twisted).ToArray()),    Get(Rocks), Get("Fern_1", "Plant_1", "Grass_Wispy_Tall", "Mushroom_Common"));
             SetBiome("BiomeDef_Beach",    Get(pines),                             Get(Rocks), Get("Grass_Wispy_Tall"));
             SetBiome("BiomeDef_Volcanic", Get(dead),                              Get(Rocks), Get("Mushroom_Common"));
         }
@@ -373,7 +380,11 @@ namespace ProjectFossil.Editor
             if (!Textures.TryGetValue(sourceName, out var t)) { EditorUtility.SetDirty(mat); return; }
 
             var tex = FindTexture(t.baseTex);
-            if (tex != null) { mat.SetTexture("_BaseMap", tex); mat.SetColor("_BaseColor", Color.white); }
+            if (tex != null)
+            {
+                mat.SetTexture("_BaseMap", tex);
+                mat.SetColor("_BaseColor", Tints.TryGetValue(sourceName, out var tint) ? tint : Color.white);
+            }
             var nrm = t.normal != null ? FindTexture(t.normal) : null;
             if (nrm != null) { mat.SetTexture("_BumpMap", nrm); mat.EnableKeyword("_NORMALMAP"); }
 
