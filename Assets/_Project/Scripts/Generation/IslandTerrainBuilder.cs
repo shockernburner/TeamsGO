@@ -6,7 +6,8 @@ namespace ProjectFossil.Generation
     // Call from an editor window or from a Match bootstrap MonoBehaviour at runtime.
     public static class IslandTerrainBuilder
     {
-        public static GameObject Build(IslandData data, Transform parent = null)
+        // showPoiMarkers: big coloured debug spheres over POIs. Useful in the editor tool, noise in a match.
+        public static GameObject Build(IslandData data, Transform parent = null, bool showPoiMarkers = true)
         {
             var s   = data.Settings;
             int res = data.Resolution;
@@ -22,14 +23,20 @@ namespace ProjectFossil.Generation
             go.name     = $"Island_{data.Seed}";
             if (parent != null) go.transform.SetParent(parent, false);
 
-            // Spawn debug markers for POIs
+            if (showPoiMarkers) AddPoiMarkers(data, go.transform);
+
+            return go;
+        }
+
+        private static void AddPoiMarkers(IslandData data, Transform parent)
+        {
             foreach (var poi in data.PointsOfInterest)
             {
                 var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 marker.name = $"POI_{poi.Type}_{poi.GridPos.x}_{poi.GridPos.y}";
                 marker.transform.position = poi.WorldPos + Vector3.up * 3f;
                 marker.transform.localScale = Vector3.one * 6f;
-                marker.transform.SetParent(go.transform, true);
+                marker.transform.SetParent(parent, true);
                 Object.DestroyImmediate(marker.GetComponent<Collider>());
 
                 var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
@@ -42,8 +49,6 @@ namespace ProjectFossil.Generation
                 };
                 marker.GetComponent<Renderer>().sharedMaterial = mat;
             }
-
-            return go;
         }
 
         // Creates a single solid-color terrain layer so the terrain isn't checkerboard.

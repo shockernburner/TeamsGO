@@ -7,6 +7,8 @@ namespace ProjectFossil.Economy
     // A searchable cache. Contents are rolled up front from the match seed, so the same seed gives the same loot.
     public class LootContainer : MonoBehaviour, IInteractable
     {
+        public const string BeaconName = "Beacon";
+
         public string containerName = "Supply cache";
 
         public bool IsEmpty => _contents.Count == 0;
@@ -26,7 +28,7 @@ namespace ProjectFossil.Economy
 
         private void Awake()
         {
-            _renderer = GetComponentInChildren<Renderer>();
+            _renderer = GetComponent<Renderer>();
         }
 
         public bool CanInteract(GameObject interactor) =>
@@ -51,9 +53,12 @@ namespace ProjectFossil.Economy
 
         private void RefreshVisual()
         {
-            if (_renderer == null) _renderer = GetComponentInChildren<Renderer>();
+            if (_renderer == null) _renderer = GetComponent<Renderer>();
             if (_renderer != null)
                 _renderer.material.color = IsEmpty ? new Color(0.35f, 0.3f, 0.25f) : new Color(1f, 0.8f, 0.2f);
+
+            var beacon = transform.Find(BeaconName);
+            if (beacon != null) beacon.gameObject.SetActive(!IsEmpty);
         }
     }
 }

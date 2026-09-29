@@ -15,6 +15,9 @@ namespace ProjectFossil.Player
         public float unarmedCooldown = 0.6f;
 
         public float hitRadius = 0.4f;
+        [Range(-1f, 1f)]
+        [Tooltip("How far around you a swing reaches: 1 = dead ahead only, 0 = 180 degrees, -0.5 = 240 degrees")]
+        public float minFacingDot = -0.5f;
 
         public float CooldownRemaining { get; private set; }
         public WeaponStats CurrentWeapon => GetWeapon();
@@ -50,15 +53,15 @@ namespace ProjectFossil.Player
             var weapon = GetWeapon();
             CooldownRemaining = weapon.Cooldown;
 
-            // Swing from the body (the third-person camera sits ~4 m behind it) in the direction the player faces.
+            // Swing from the body (the third-person camera sits ~4 m behind it). Anything within reach in a
+            // wide arc counts, preferring what is straight ahead, and the player snaps to face what they hit.
             Vector3 origin = transform.position + Vector3.up * 1f;
-            Vector3 center = origin + transform.forward * (weapon.Range * 0.5f);
-            int count = Physics.OverlapSphereNonAlloc(center, weapon.Range * 0.5f + hitRadius, _buffer,
+            int count = Physics.OverlapSphereNonAlloc(origin, weapon.Range + hitRadius, _buffer,
                                                       Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
 
             IDamageable best = null;
             Collider bestCollider = null;
-            float bestDist = float.MaxValue;
+            float bestScore = float.MinValue;
             for (int i = 0; i < count; i++)
             {
                 var col = _buffer[i];
@@ -67,17 +70,20 @@ namespace ProjectFossil.Player
                 var target = col.GetComponentInParent<IDamageable>();
                 if (target == null || !target.IsAlive) continue;
 
-                Vector3 closest = col.ClosestPoint(origin);
-                Vector3 to = closest - origin;
+                Vector3 to = col.ClosestPoint(origin) - origin;
                 to.y = 0f;
-                if (to.sqrMagnitude > 0.01f && Vector3.Dot(transform.forward, to.normalized) < 0.2f) continue; // behind us
-
                 float dist = to.magnitude;
-                if (dist < bestDist)
+                if (dist > weapon.Range + hitRadius) continue;
+
+                float dot = dist > 0.1f ? Vector3.Dot(transform.forward, to / dist) : 1f;
+                if (dot < minFacingDot) continue;
+
+                float score = dot * 2f - dist / weapon.Range; // facing matters more than a few cm
+                if (score > bestScore)
                 {
                     best         = target;
                     bestCollider = col;
-                    bestDist     = dist;
+                    bestScore    = score;
                 }
             }
 
@@ -86,6 +92,10 @@ namespace ProjectFossil.Player
                 Attacked?.Invoke(weapon, null);
                 return false;
             }
+
+            Vector3 face = bestCollider.bounds.center - transform.position;
+            face.y = 0f;
+            if (face.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(face);
 
             best.TakeDamage(new DamageInfo(weapon.Damage, gameObject, bestCollider.ClosestPoint(origin)));
             Attacked?.Invoke(weapon, best as Health);

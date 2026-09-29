@@ -8,7 +8,8 @@
         "ProjectFossil.Generation",
         "ProjectFossil.Director",
         "ProjectFossil.Economy",
-        "ProjectFossil.Match"
+        "ProjectFossil.Match",
+        "ProjectFossil.Player"
     ],
     "includePlatforms": [
         "Editor"

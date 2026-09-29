@@ -120,6 +120,15 @@ namespace ProjectFossil.Match
             go.transform.position   = pos + Vector3.up * (size * 0.5f);
             go.transform.localScale = Vector3.one * size;
 
+            // Thin marker pole so caches can be spotted from a distance; hidden once the cache is emptied.
+            var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pole.name = LootContainer.BeaconName;
+            Destroy(pole.GetComponent<Collider>());
+            pole.transform.SetParent(go.transform, false);
+            pole.transform.localScale    = new Vector3(0.08f, 3f / size, 0.08f);
+            pole.transform.localPosition = new Vector3(0f, 3.5f / size, 0f);
+            pole.GetComponent<Renderer>().material.color = new Color(1f, 0.8f, 0.2f);
+
             var container = go.AddComponent<LootContainer>();
             container.containerName = label.ToLowerInvariant();
             container.Fill(table.Roll(rng));
