@@ -10,10 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01698656cdbe44bfa324478da1abf434, type: 3}
-  m_Name: Model_Survivor
+  m_Name: Model_SupplyCache
   m_EditorClassIdentifier: ProjectFossil.Core::ProjectFossil.Core.ModelDefinition
   model: {fileID: 0}
   animator: {fileID: 0}
-  height: 1.8
-  yawOffset: 180
+  attachments: []
+  trimMeshes: []
+  keepBones: []
+  height: 0.8
+  yawOffset: 0
   faceHeadForward: 0

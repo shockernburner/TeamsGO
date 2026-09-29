@@ -18,6 +18,11 @@ namespace ProjectFossil.Core
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             go.transform.localScale    = Vector3.one;
+            if (def.trimMeshes != null && def.trimMeshes.Length > 0 && def.keepBones != null)
+                foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+                    if (System.Array.IndexOf(def.trimMeshes, smr.name) >= 0) TrimToBones(smr, def.keepBones);
+            if (def.attachments != null)
+                foreach (var a in def.attachments) Attach(go.transform, a);
 
             float yaw = def.yawOffset;
             if (def.faceHeadForward) yaw += HeadYaw(go.transform);
@@ -28,6 +33,71 @@ namespace ProjectFossil.Core
             go.transform.localScale = Vector3.one * s;
             go.transform.localPosition = new Vector3(-b.center.x * s, -b.min.y * s, -b.center.z * s);
             return go;
+        }
+
+        // Puts every skinned mesh of `attachment` onto `model`'s skeleton, matching bones by name.
+        // Works for pieces exported on the same rig (hair, beards, outfit parts).
+        public static void Attach(Transform model, GameObject attachment)
+        {
+            if (attachment == null) return;
+            var bones = new Dictionary<string, Transform>();
+            foreach (var t in model.GetComponentsInChildren<Transform>())
+                if (!bones.ContainsKey(t.name)) bones[t.name] = t;
+
+            var inst = Object.Instantiate(attachment);
+            foreach (var smr in inst.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                var src = smr.bones;
+                var mapped = new Transform[src.Length];
+                for (int i = 0; i < src.Length; i++)
+                    mapped[i] = src[i] != null && bones.TryGetValue(src[i].name, out var b) ? b : null;
+                smr.bones = mapped;
+                if (smr.rootBone != null && bones.TryGetValue(smr.rootBone.name, out var root)) smr.rootBone = root;
+                smr.transform.SetParent(model, false); // bones drive the vertices; this only keeps it in the hierarchy
+            }
+            if (Application.isPlaying) Object.Destroy(inst); else Object.DestroyImmediate(inst);
+        }
+
+        private static readonly Dictionary<Mesh, Mesh> TrimCache = new Dictionary<Mesh, Mesh>();
+
+        // Keeps only the triangles mostly skinned to the given bones (list every bone you want). Used to show just the head of a full-body character under an outfit, which
+        // otherwise clips through the clothes. Needs the mesh imported as readable.
+        public static void TrimToBones(SkinnedMeshRenderer smr, string[] keepBones)
+        {
+            var src = smr.sharedMesh;
+            if (src == null) return;
+            if (TrimCache.TryGetValue(src, out var cached)) { smr.sharedMesh = cached; return; }
+            if (!src.isReadable) { Debug.LogWarning($"[ModelFit] {src.name} is not readable; can't trim it."); return; }
+
+            var keep = new bool[smr.bones.Length];
+            for (int i = 0; i < keep.Length; i++)
+                keep[i] = smr.bones[i] != null &&
+                          System.Array.Exists(keepBones, n => string.Equals(n, smr.bones[i].name, System.StringComparison.OrdinalIgnoreCase));
+
+            var weights = src.boneWeights;
+            var keepVertex = new bool[weights.Length];
+            for (int v = 0; v < weights.Length; v++)
+            {
+                var w = weights[v];
+                float kept = (keep[w.boneIndex0] ? w.weight0 : 0f) + (keep[w.boneIndex1] ? w.weight1 : 0f) +
+                             (keep[w.boneIndex2] ? w.weight2 : 0f) + (keep[w.boneIndex3] ? w.weight3 : 0f);
+                keepVertex[v] = kept >= 0.5f;
+            }
+
+            var mesh = Object.Instantiate(src);
+            mesh.name = src.name + "_Trimmed";
+            var tris = new List<int>();
+            for (int sub = 0; sub < src.subMeshCount; sub++)
+            {
+                tris.Clear();
+                var t = src.GetTriangles(sub);
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                    if (keepVertex[t[i]] && keepVertex[t[i + 1]] && keepVertex[t[i + 2]])
+                    { tris.Add(t[i]); tris.Add(t[i + 1]); tris.Add(t[i + 2]); }
+                mesh.SetTriangles(tris, sub);
+            }
+            TrimCache[src] = mesh;
+            smr.sharedMesh = mesh;
         }
 
         // Bounds of a prefab at scale 1 with its own rotation, measured once per prefab and cached.

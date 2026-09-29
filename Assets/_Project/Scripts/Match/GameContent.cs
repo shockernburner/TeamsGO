@@ -18,6 +18,8 @@ namespace ProjectFossil.Match
         public LootTable        cacheLoot;
         public LootTable        ruinsLoot;
         public ModelDefinition  playerModel; // empty = placeholder capsule
+        public ModelDefinition  cacheModel;  // supply caches; empty = placeholder cube
+        public ModelDefinition  ruinsModel;  // ruin stashes; empty = placeholder cube
 
         public static GameContent LoadDefault() => Resources.Load<GameContent>(ResourcePath);
     }

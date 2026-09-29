@@ -101,16 +101,17 @@ namespace ProjectFossil.Match
                         _zones.Add(ExtractionZone.Create(pos, Content.matchRules.extractionRadius, parent));
                         break;
                     case POIType.LootCache:
-                        SpawnCache(pos, "Supply cache", Content.cacheLoot, lootRng, parent, 1f);
+                        SpawnCache(pos, "Supply cache", Content.cacheLoot, lootRng, parent, 1f, Content.cacheModel);
                         break;
                     case POIType.Ruins:
-                        SpawnCache(pos, "Ruin stash", Content.ruinsLoot, lootRng, parent, 1.6f);
+                        SpawnCache(pos, "Ruin stash", Content.ruinsLoot, lootRng, parent, 1.6f, Content.ruinsModel);
                         break;
                 }
             }
         }
 
-        private static void SpawnCache(Vector3 pos, string label, LootTable table, RNGService rng, Transform parent, float size)
+        private static void SpawnCache(Vector3 pos, string label, LootTable table, RNGService rng, Transform parent, float size,
+                                       ModelDefinition model)
         {
             if (table == null) return;
 
@@ -119,6 +120,16 @@ namespace ProjectFossil.Match
             go.transform.SetParent(parent, false);
             go.transform.position   = pos + Vector3.up * (size * 0.5f);
             go.transform.localScale = Vector3.one * size;
+
+            // A chest (or whatever the content names) in place of the cube; the cube's collider stays for interaction.
+            if (model != null && model.HasModel)
+            {
+                go.GetComponent<Renderer>().enabled = false;
+                var visual = ModelFit.Spawn(model, go.transform);
+                visual.transform.localPosition += Vector3.down * 0.5f; // cube pivot is its centre; the model's is its base
+                // Turn from the position, not the loot RNG, so loot rolls don't depend on whether art is set up.
+                visual.transform.localRotation = Quaternion.Euler(0f, Mathf.Repeat(pos.x * 13.7f + pos.z * 7.3f, 360f), 0f);
+            }
 
             // Thin marker pole so caches can be spotted from a distance; hidden once the cache is emptied.
             var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
