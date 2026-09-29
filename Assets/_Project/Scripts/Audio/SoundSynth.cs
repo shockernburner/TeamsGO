@@ -48,26 +48,35 @@ namespace ProjectFossil.Audio
             return Finish(s, 0.8f);
         }
 
-        // Big predator roar: low growl sliding down, rough amplitude flutter, long tail.
+        // Big predator roar. Laptop and phone speakers play almost nothing below ~200 Hz, so the body of the sound
+        // lives in throat formants (roughly 350 Hz to 2 kHz) and the sub rumble is only a bonus for headphones.
         public static float[] Roar(int variant)
         {
             var rng = new Random(3000 + variant);
-            const float len = 2.2f;
+            const float len = 2.6f;
             var s = Buffer(len);
-            var lp = new OnePole(900f);
-            var rumble = new OnePole(180f);
-            double phase = 0;
+            var chest  = new Bandpass(380f + variant * 20f, 2.5f);
+            var throat = new Bandpass(900f, 3f);
+            var rasp   = new Bandpass(1800f - variant * 60f, 4f);
+            var sub    = new OnePole(140f);
+            double phase = 0, phase2 = 0;
             for (int i = 0; i < s.Length; i++)
             {
                 float t = T(i), k = t / len;
-                float f = Lerp(125f - variant * 6f, 58f, k);
-                phase += f / SampleRate;
-                float saw = (float)(2.0 * (phase - Math.Floor(phase + 0.5)));
-                float flutter = 0.65f + 0.35f * (float)Math.Sin(Tau * 31f * t + Noise(rng) * 0.6f);
-                float env = Adsr(t, 0.25f, 0.2f, 0.85f, len, 0.9f);
-                s[i] = (lp.Next(saw) * flutter * 1.2f + rumble.Next(Noise(rng)) * 1.6f) * env;
+                // Swell up in pitch, then sag as the breath runs out.
+                float f = t < 0.35f ? Lerp(100f, 165f - variant * 7f, t / 0.35f) : Lerp(165f - variant * 7f, 78f, (t - 0.35f) / (len - 0.35f));
+                phase  += f / SampleRate;
+                phase2 += f * 1.013f / SampleRate;
+                float saw = (float)(2.0 * (phase - Math.Floor(phase + 0.5)) + (phase2 - Math.Floor(phase2 + 0.5)));
+                float growl = 0.6f + 0.4f * (float)Math.Sin(Tau * (26f + variant * 2f) * t);
+                float noise = Noise(rng);
+                throat.SetFrequency(Lerp(1050f, 650f, k));
+                float src = saw * growl + noise * 0.7f;
+                float body = chest.Next(src) * 1.4f + throat.Next(src) * 1.1f + rasp.Next(noise * growl) * 0.9f;
+                float env = Adsr(t, 0.15f, 0.3f, 0.8f, len, 1.0f);
+                s[i] = (body * 2.2f + sub.Next(saw) * 0.5f) * env;
             }
-            return Finish(s, 0.95f);
+            return Finish(s, 0.97f);
         }
 
         // Jaws snapping: a sharp click, a crunch and a low thump.

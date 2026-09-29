@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ProjectFossil.Core;
@@ -27,6 +28,11 @@ namespace ProjectFossil.Audio
         public Vector2 idleCallGap = new Vector2(12f, 28f);
         public float bigDinoHealth = 200f; // at or above this, species use the big roar
 
+        [Header("Distant roars")]            // the apex predator is out there long before the director sends it
+        public float   firstDistantRoarAt = 75f;
+        public Vector2 distantRoarGap     = new Vector2(60f, 110f);
+        public float   distantRoarRange   = 140f;
+
         private const int Variants = 4;
 
         private AudioClip[] _steps, _softSteps, _screeches, _roars, _bites, _swings, _hits, _hurts;
@@ -49,6 +55,7 @@ namespace ProjectFossil.Audio
         private float   _stepDistance;
         private bool    _extractionWasOpen;
         private float   _dinoScanTimer;
+        private float   _nextDistantRoar;
 
         private class DinoTrack
         {
@@ -141,6 +148,7 @@ namespace ProjectFossil.Audio
             UpdateFootsteps();
             UpdateDinosaurs();
             UpdateExtraction();
+            UpdateDistantRoar();
         }
 
         private void Bind(MatchManager match)
@@ -165,6 +173,7 @@ namespace ProjectFossil.Audio
             _lastPlayerPos     = _player != null ? _player.transform.position : Vector3.zero;
             _stepDistance      = 0f;
             _extractionWasOpen = false;
+            _nextDistantRoar   = firstDistantRoarAt;
             _dinos.Clear();
         }
 
@@ -223,7 +232,38 @@ namespace ProjectFossil.Audio
 
         // ── Match ──────────────────────────────────────────────────────────────
 
-        private void OnThreat(ThreatEvent e) => Play2D(_sting, 0.9f, 1f);
+        private void OnThreat(ThreatEvent e)
+        {
+            Play2D(_sting, 0.9f, 1f);
+            // A bought apex announces itself from where it will come from.
+            if (e.Threat != null && e.Threat.speciesOverride is DinosaurSpecies sp && sp.maxHealth >= bigDinoHealth)
+                StartCoroutine(RoarLater(e.Target.Position + RandomFlat() * e.Threat.spawnDistance, 1.2f));
+        }
+
+        private IEnumerator RoarLater(Vector3 position, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            Play3D(Pick(_roars), position, 1f, 0.95f, 300f);
+        }
+
+        private void UpdateDistantRoar()
+        {
+            var state = _match.State;
+            if (state == null || !_match.IsRunning || _player == null || state.Elapsed < _nextDistantRoar) return;
+            _nextDistantRoar = state.Elapsed + Random.Range(distantRoarGap.x, distantRoarGap.y);
+
+            foreach (var kv in _dinos) // a real one nearby already speaks for itself
+                if (kv.Key != null && kv.Key.species != null && kv.Key.species.maxHealth >= bigDinoHealth) return;
+
+            Vector3 far = _player.transform.position + RandomFlat() * distantRoarRange;
+            Play3D(Pick(_roars), far, 0.9f, Random.Range(0.8f, 0.92f), distantRoarRange * 2.8f);
+        }
+
+        private static Vector3 RandomFlat()
+        {
+            float a = Random.Range(0f, Mathf.PI * 2f);
+            return new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+        }
 
         private void UpdateExtraction()
         {
