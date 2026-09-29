@@ -4,7 +4,7 @@ using ProjectFossil.Core;
 
 namespace ProjectFossil.Generation
 {
-    public enum ScatterKind { Tree, Rock }
+    public enum ScatterKind { Tree, Rock, Plant }
 
     public struct ScatterInstance
     {
@@ -13,6 +13,7 @@ namespace ProjectFossil.Generation
         public float       Scale;
         public float       Yaw;       // degrees
         public int         BiomeIndex;
+        public int         Variant;   // stable per cell; picks which model of the biome's list to use
     }
 
     // Decides where trees and rocks go. Pure and deterministic: same island data and seed, same result.
@@ -26,6 +27,7 @@ namespace ProjectFossil.Generation
             var s      = data.Settings;
             var rng    = new RNGService(unchecked(data.Seed * 31 + SaltSeed));
             var result = new List<ScatterInstance>();
+            int solid = 0, plants = 0; // trees+rocks and plants have separate caps
             var biomes = s.biomes;
             if (biomes == null || biomes.Count == 0 || s.scatterCellSize <= 0f) return result;
 
@@ -40,9 +42,9 @@ namespace ProjectFossil.Generation
             foreach (var poi in data.PointsOfInterest) clearings.Add(poi.WorldPos);
             if (data.SpawnZones.Count > 0) clearings.Add(data.SpawnZones[0].WorldCenter);
 
-            for (int cz = 0; cz < cells && result.Count < s.maxScatterInstances; cz++)
+            for (int cz = 0; cz < cells; cz++)
             {
-                for (int cx = 0; cx < cells && result.Count < s.maxScatterInstances; cx++)
+                for (int cx = 0; cx < cells; cx++)
                 {
                     // Always draw the same number of values per cell so one change doesn't reshuffle the island.
                     float jx = rng.NextFloat(), jz = rng.NextFloat();
@@ -62,20 +64,25 @@ namespace ProjectFossil.Generation
 
                     float pTree = b.treesPerHectare * cellArea / 10000f;
                     float pRock = b.rocksPerHectare * cellArea / 10000f;
+                    float pPlant = b.plantsPerHectare * cellArea / 10000f;
                     ScatterKind kind;
                     if (roll < pTree) kind = ScatterKind.Tree;
                     else if (roll < pTree + pRock) kind = ScatterKind.Rock;
+                    else if (roll < pTree + pRock + pPlant) kind = ScatterKind.Plant;
                     else continue;
 
+                    if (kind == ScatterKind.Plant ? plants >= s.maxPlantInstances : solid >= s.maxScatterInstances) continue;
+
                     float slope = SampleSlope(data, x, z);
-                    float maxSlope = kind == ScatterKind.Tree ? s.maxTreeSlope : s.maxTreeSlope * 2f;
+                    float maxSlope = kind == ScatterKind.Rock ? s.maxTreeSlope * 2f : s.maxTreeSlope;
                     if (slope > maxSlope) continue;
 
                     if (InClearing(clearings, x, z, clear2)) continue;
 
-                    float scale = kind == ScatterKind.Tree
-                        ? Mathf.Lerp(b.treeScale.x, b.treeScale.y, scaleT)
-                        : Mathf.Lerp(0.6f, 2.2f, scaleT * scaleT); // mostly small rocks, a few boulders
+                    float scale = kind == ScatterKind.Tree  ? Mathf.Lerp(b.treeScale.x, b.treeScale.y, scaleT)
+                                : kind == ScatterKind.Plant ? Mathf.Lerp(b.plantScale.x, b.plantScale.y, scaleT)
+                                : Mathf.Lerp(0.6f, 2.2f, scaleT * scaleT); // mostly small rocks, a few boulders
+                    if (kind == ScatterKind.Plant) plants++; else solid++;
 
                     result.Add(new ScatterInstance
                     {
@@ -84,10 +91,22 @@ namespace ProjectFossil.Generation
                         Scale      = scale,
                         Yaw        = yaw,
                         BiomeIndex = biome,
+                        Variant    = CellHash(cx, cz),
                     });
                 }
             }
             return result;
+        }
+
+        // Stable, non-negative hash of a cell, so model choice doesn't consume RNG draws.
+        private static int CellHash(int cx, int cz)
+        {
+            unchecked
+            {
+                uint h = (uint)cx * 73856093u ^ (uint)cz * 19349663u;
+                h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+                return (int)(h & 0x7fffffff);
+            }
         }
 
         private static bool InClearing(List<Vector3> clearings, float x, float z, float clear2)

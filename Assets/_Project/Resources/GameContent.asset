@@ -18,3 +18,4 @@ MonoBehaviour:
   shopCatalog: {fileID: 11400000, guid: e0065a579e8243319ee9d7af840c2707, type: 2}
   cacheLoot: {fileID: 11400000, guid: 017d4442b8f84078b43ca0a473d4dfdb, type: 2}
   ruinsLoot: {fileID: 11400000, guid: 3533ee1fbea542e591073fb01ccee08b, type: 2}
+  playerModel: {fileID: 11400000, guid: 16bd36841ab5430fa3138b42e805756b, type: 2}

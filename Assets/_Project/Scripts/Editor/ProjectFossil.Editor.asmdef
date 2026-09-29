@@ -3,7 +3,12 @@
     "rootNamespace": "ProjectFossil.Editor",
     "references": [
         "ProjectFossil.Core",
-        "ProjectFossil.Generation"
+        "ProjectFossil.Generation",
+        "ProjectFossil.Dinosaurs",
+        "ProjectFossil.Player",
+        "ProjectFossil.Match",
+        "ProjectFossil.Director",
+        "ProjectFossil.Economy"
     ],
     "includePlatforms": [
         "Editor"

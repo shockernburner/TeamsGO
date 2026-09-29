@@ -1,4 +1,5 @@
 using UnityEngine;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Dinosaurs
 {
@@ -9,6 +10,7 @@ namespace ProjectFossil.Dinosaurs
         public string speciesName = "Unknown";
         public Color  debugColor  = Color.green;
         public float  bodyScale   = 1f;   // uniform scale applied to the spawned body
+        public ModelDefinition model;     // imported look; empty = placeholder capsule
 
         [Header("Movement")]
         public float walkSpeed   = 3f;

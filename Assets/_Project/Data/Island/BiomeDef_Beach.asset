@@ -24,4 +24,9 @@ MonoBehaviour:
   rocksPerHectare: 3
   treeScale: {x: 0.9, y: 1.3}
   treeShape: 1
+  plantsPerHectare: 10
+  plantScale: {x: 0.8, y: 1.4}
+  treeModels: []
+  rockModels: []
+  plantModels: []
   debugColor: {r: 1, g: 0.9, b: 0.5, a: 1}

@@ -37,6 +37,7 @@ namespace ProjectFossil.Dinosaurs
         private void Awake()
         {
             _agent = GetComponent<NavMeshAgent>();
+            if (GetComponent<DinosaurVisual>() == null)   gameObject.AddComponent<DinosaurVisual>();
             if (GetComponent<DinosaurFeedback>() == null) gameObject.AddComponent<DinosaurFeedback>();
 
             Health = GetComponent<Health>();
@@ -276,8 +277,10 @@ namespace ProjectFossil.Dinosaurs
             foreach (var col in GetComponentsInChildren<Collider>())
                 col.enabled = false;
 
-            // Placeholder death: tip over, then clean up
-            transform.rotation = Quaternion.LookRotation(transform.forward, transform.right);
+            // Animated models play their own death; the placeholder just tips over. Then clean up.
+            var visual = GetComponent<DinosaurVisual>();
+            if (visual == null || !visual.IsAnimated)
+                transform.rotation = Quaternion.LookRotation(transform.forward, transform.right);
             Destroy(gameObject, 5f);
 
             Killed?.Invoke(this, info.Source);

@@ -120,5 +120,46 @@ namespace ProjectFossil.Tests.EditMode
             s.maxScatterInstances = 30;
             Assert.That(ScatterPlanner.Plan(Island(s, 3)).Count, Is.EqualTo(30));
         }
+
+        [Test]
+        public void Plants_OnlyWhenBiomeHasThem_AndDoNotChangeTreesOrRocks()
+        {
+            var s = Settings(20f, 5f);
+            var before = ScatterPlanner.Plan(Island(s, 77));
+            Assert.That(before.Exists(i => i.Kind == ScatterKind.Plant), Is.False);
+
+            s.biomes[0].plantsPerHectare = 60f;
+            s.biomes[0].plantScale = new Vector2(1f, 1f);
+            var after = ScatterPlanner.Plan(Island(s, 77));
+            var solid = after.FindAll(i => i.Kind != ScatterKind.Plant);
+            Assert.That(after.Count, Is.GreaterThan(solid.Count), "plants were added");
+            Assert.That(solid.Count, Is.EqualTo(before.Count), "trees and rocks are untouched");
+            for (int i = 0; i < solid.Count; i++)
+                Assert.That(solid[i].WorldPos.x, Is.EqualTo(before[i].WorldPos.x));
+        }
+
+        [Test]
+        public void PlantCap_IsSeparateFromTreeCap()
+        {
+            var s = Settings(20f, 0f);
+            s.biomes[0].plantsPerHectare = 200f;
+            s.maxPlantInstances = 5;
+            var plan = ScatterPlanner.Plan(Island(s, 3));
+            Assert.That(plan.FindAll(i => i.Kind == ScatterKind.Plant).Count, Is.EqualTo(5));
+            Assert.That(plan.FindAll(i => i.Kind == ScatterKind.Tree).Count, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void Variant_IsNonNegativeAndStable()
+        {
+            var s = Settings(40f, 10f);
+            var a = ScatterPlanner.Plan(Island(s, 9));
+            var b = ScatterPlanner.Plan(Island(s, 9));
+            for (int i = 0; i < a.Count; i++)
+            {
+                Assert.That(a[i].Variant, Is.GreaterThanOrEqualTo(0));
+                Assert.That(b[i].Variant, Is.EqualTo(a[i].Variant));
+            }
+        }
     }
 }

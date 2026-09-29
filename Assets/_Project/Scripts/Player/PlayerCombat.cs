@@ -106,7 +106,7 @@ namespace ProjectFossil.Player
         {
             if (_weapons == null) _weapons = GetComponent<IWeaponProvider>(); // may be added after Awake
             if (_weapons != null && _weapons.TryGetEquippedWeapon(out var w)) return w;
-            return new WeaponStats("Bare hands", unarmedDamage, unarmedRange, unarmedCooldown);
+            return new WeaponStats(PlayerVisual.UnarmedName, unarmedDamage, unarmedRange, unarmedCooldown);
         }
     }
 }
