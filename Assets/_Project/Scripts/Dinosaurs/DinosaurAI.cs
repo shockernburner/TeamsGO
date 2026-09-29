@@ -45,6 +45,7 @@ namespace ProjectFossil.Dinosaurs
         private float        _trampleTimer;
         private Transform    _slotTarget;    // the person this dinosaur holds a bite slot on
         private float        _circleSide;    // +1 / -1: which way it circles while waiting its turn
+        private static int   _spawnCounter;  // alternates circling direction between animals
 
         private static readonly Dictionary<Transform, List<DinosaurAI>> Attackers =
             new Dictionary<Transform, List<DinosaurAI>>();
@@ -72,7 +73,7 @@ namespace ProjectFossil.Dinosaurs
 
             transform.localScale = Vector3.one * species.bodyScale;
             Health.Initialize(species.maxHealth * Mathf.Max(0.1f, healthMultiplier));
-            _circleSide = (GetInstanceID() & 1) == 0 ? 1f : -1f;
+            _circleSide = (_spawnCounter++ & 1) == 0 ? 1f : -1f;
             Health.Damaged += OnDamaged;
             Health.Died    += OnDied;
 
