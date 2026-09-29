@@ -109,3 +109,11 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - **Melee** reaches 240° around the player and snaps them to face the target. The recording showed raptors attacking from the sides while every swing missed.
 - **POI debug spheres** are editor-only now (`IslandTerrainBuilder.Build(..., showPoiMarkers)`). Loot caches get a thin yellow pole that disappears once emptied.
 - **Tuning:** Raptor Pack unlocks at 4:00 (was 2:30) and costs 60.
+
+## 2026-09-29 — Combat readability pass (second playtest recording)
+
+- **Telegraphed bites:** dinosaurs now charge a bite for `attackWindup` seconds (raptor 0.45, Ironjaw 0.8) before it lands. The body glows red and rears up while charging (`DinosaurFeedback`, presentation only). The bite only lands if the target is still within 1.25× attack range, so stepping back dodges it.
+- **Hit stagger:** a hit pauses the dinosaur for `hitStagger` seconds (raptor 0.35, Ironjaw 0.15) and cancels a charging bite, so fighting back buys time. Hit dinosaurs flash white.
+- **Raptor run speed 10 → 8.5.** Before, raptors outran a running player (9), so running away never worked.
+- **Camera** sits over the right shoulder (camera local 0.7, 0.35, -3.2 under CameraTarget) so the body no longer blocks the middle of the screen. A small crosshair marks the centre.
+- **HUD** is a compact top-left panel with one-line bars. Key hints show for the first 60 s (and while the shop is open) along the bottom. Missed swings no longer post messages. Taking damage flashes the screen edges red, stronger on the side the hit came from.

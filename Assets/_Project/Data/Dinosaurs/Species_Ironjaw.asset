@@ -28,6 +28,8 @@ MonoBehaviour:
   attackRange: 4
   attackDamage: 60
   attackCooldown: 2
+  attackWindup: 0.8
+  hitStagger: 0.15
   maxHealth: 400
   fleeHealthFraction: 0
   fleeDistance: 30
