@@ -228,9 +228,42 @@ namespace ProjectFossil.Generation
             mat.renderQueue = (int)RenderQueue.Transparent;
         }
 
+        // The match needs a high, angled sun. The first playtest scene had a point light where the sun should be,
+        // which left the ground almost black once it stopped mirroring the sky.
+        private static void EnsureSun()
+        {
+            var sun = RenderSettings.sun;
+            if (sun == null || sun.type != LightType.Directional)
+            {
+                sun = null;
+                foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                    if (l.type == LightType.Directional) { sun = l; break; }
+            }
+            if (sun == null)
+            {
+                sun = new GameObject("Sun").AddComponent<Light>();
+                sun.type = LightType.Directional;
+            }
+
+            // Keep a sun that's already high; fix one lying on the horizon.
+            if (Vector3.Dot(sun.transform.forward, Vector3.down) < 0.4f)
+                sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            if (sun.intensity < 0.8f) sun.intensity = 1.2f;
+            if (sun.shadows == LightShadows.None) sun.shadows = LightShadows.Soft;
+            RenderSettings.sun = sun;
+        }
+
         // Light haze gives depth and hides the far edge of the sea. Scene-level, set at runtime only.
         public static void ApplyAtmosphere()
         {
+            EnsureSun();
+
+            // Soft three-colour ambient so shaded sides aren't black (the scene has no baked lighting).
+            RenderSettings.ambientMode         = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor     = new Color(0.56f, 0.63f, 0.72f);
+            RenderSettings.ambientEquatorColor = new Color(0.46f, 0.48f, 0.45f);
+            RenderSettings.ambientGroundColor  = new Color(0.26f, 0.24f, 0.2f);
+
             RenderSettings.fog        = true;
             RenderSettings.fogMode    = FogMode.ExponentialSquared;
             RenderSettings.fogDensity = 0.0032f;

@@ -136,3 +136,11 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - **Placeholder models** are primitives: trunk plus sphere crowns, a tall capsule crown, a dead trunk with a branch, and tilted boxes for rocks. Trunks and rocks keep colliders, so they block the player and become NavMesh obstacles. Crowns have no colliders. Swapping in real prefabs only touches the `Make*` methods in `IslandDecorator`.
 - **Haze:** exponential fog is turned on at runtime (play mode only) for depth. It isn't saved to the scene.
 - Tests: `ScatterTests` covers determinism, sea, clearance, density, and the cap. `GenerationTests` checks scatter across 20 generated seeds.
+
+## 2026-09-29 — Lighting fix (fourth playtest)
+
+- The Bootstrap scene's "Directional Light" was really a **point light** (type 2, range 10) floating 330 m up, so nothing in the match was lit by a sun. The mirror-like ground used to hide this. Once the ground went matte, everything turned near-black.
+- The scene light is now a directional sun at 50° down and -30° yaw, with soft shadows, and it's set as the scene's sun. Ambient is Trilight (sky, horizon and ground colours), because the scene has no baked lighting and skybox ambient came out almost black.
+- `IslandDecorator.ApplyAtmosphere` enforces the same at runtime. It finds or creates a directional sun, raises one lying on the horizon, and sets the Trilight ambient, so a scene with a bad light still plays correctly.
+- Ground colours are slightly brighter, and plains trees go from 4 to 8 per hectare.
+- The bright cyan screen for the first seconds of play is Unity compiling the new terrain shader variants on first use. It stops after the first run.
