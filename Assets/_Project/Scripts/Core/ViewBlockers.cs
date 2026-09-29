@@ -23,6 +23,7 @@ namespace ProjectFossil.Core
             public Quaternion RestRotation;
             public float      Sway;       // wind strength multiplier (plants 1, trees small)
             public bool       Cover;      // a player inside it is hard to see
+            public bool       Tree;       // canopy and trunk: counts toward how dense the forest is here
         }
 
         private static readonly Dictionary<long, List<Entry>> Grid = new Dictionary<long, List<Entry>>();
@@ -73,11 +74,16 @@ namespace ProjectFossil.Core
             });
         }
 
-        // Something solid that only sways (a tree): never hidden from the camera, never cover.
-        public static void RegisterSwaying(Vector3 center, Transform root, float sway)
+        // A tree: never hidden from the camera, but part of the forest a player can disappear into. `root` (may be
+        // null) is what the wind leans.
+        public static void RegisterTree(Vector3 center, Transform root, float sway)
         {
-            if (root == null) return;
-            Add(new Entry { Center = center, Radius = 0f, Root = root, RestRotation = root.localRotation, Sway = sway });
+            Add(new Entry
+            {
+                Center = center, Radius = 0f, Root = root,
+                RestRotation = root != null ? root.localRotation : Quaternion.identity,
+                Sway = sway, Tree = true,
+            });
         }
 
         private static void Add(Entry e)
@@ -111,10 +117,17 @@ namespace ProjectFossil.Core
             }
         }
 
-        // True when `position` (a player's feet) is inside a plant that gives cover.
-        public static bool InCover(Vector3 position)
+        // How hidden someone standing at `position` is, 0 (open ground) to 1 (deep in thick forest). Trunks and
+        // canopy around them count most, big plants close by add to it, and standing inside one adds more. A lone
+        // bush in a field is only partial cover; it takes a proper stand of trees and undergrowth to vanish.
+        public const float TreeReach  = 7f;
+        public const float PlantReach = 3f;
+        private const float FullCover = 3f;
+
+        public static float Concealment(Vector3 position)
         {
-            if (Count == 0) return false;
+            if (Count == 0) return 0f;
+            float score = 0f;
             int cx = Mathf.FloorToInt(position.x / Cell), cz = Mathf.FloorToInt(position.z / Cell);
             for (int x = cx - 1; x <= cx + 1; x++)
             for (int z = cz - 1; z <= cz + 1; z++)
@@ -122,14 +135,27 @@ namespace ProjectFossil.Core
                 if (!Grid.TryGetValue(Key(x, z), out var list)) continue;
                 foreach (var e in list)
                 {
-                    if (!e.Cover) continue;
                     float dx = e.Center.x - position.x, dz = e.Center.z - position.z;
-                    float r = e.Radius * 0.8f; // well inside, not brushing the edge
-                    if (dx * dx + dz * dz <= r * r) return true;
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (e.Tree)
+                    {
+                        if (d < TreeReach) score += 1f - d / TreeReach;
+                    }
+                    else if (e.Cover)
+                    {
+                        if (d < e.Radius * 0.8f) score += 1f;                    // inside it
+                        if (d < PlantReach)      score += 0.6f * (1f - d / PlantReach);
+                    }
                 }
             }
-            return false;
+            return Mathf.Clamp01(score / FullCover);
         }
+
+        // Concealment at which someone keeping low counts as hidden, and at which the HUD calls it cover at all.
+        public const float HiddenAt = 0.7f;
+        public const float CoverAt  = 0.3f;
+
+        public static bool InCover(Vector3 position) => Concealment(position) >= CoverAt;
 
         // Calls `visit` for every swaying thing whose centre lies within `radius` (flat distance) of `center`.
         // The visitor gets the grid list and the index, so it can read the entry without copying the whole list.

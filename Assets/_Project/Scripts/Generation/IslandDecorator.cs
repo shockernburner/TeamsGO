@@ -251,6 +251,7 @@ namespace ProjectFossil.Generation
                            : b.treeShape == TreeShape.Tall ? MakeTallTree(trunk, leaf)
                            : MakeRoundTree(trunk, leaf);
                     Place(go, root, pos, inst);
+                    if (Application.isPlaying) ViewBlockers.RegisterTree(go.transform.position, null, 0f);
                 }
                 else if (inst.Kind == ScatterKind.Rock)
                 {
@@ -295,7 +296,7 @@ namespace ProjectFossil.Generation
                     // Sway the model, not the root: the trunk collider has to stay put or physics re-inserts it
                     // every frame.
                     var pivot = SwayPivot(go.transform);
-                    if (pivot != null) ViewBlockers.RegisterSwaying(go.transform.position, pivot, 0.3f);
+                    ViewBlockers.RegisterTree(go.transform.position, pivot, 0.55f);
                 }
                 var col = go.AddComponent<CapsuleCollider>();
                 col.radius = 0.35f / s * inst.Scale;
@@ -333,17 +334,30 @@ namespace ProjectFossil.Generation
             lod.RecalculateBounds();
         }
 
-        // Moves a model's children under a new child at its base and returns that, so the whole model can lean in the
-        // wind while the root (and its collider) stays still. Null when the root draws the mesh itself.
+        // Moves a model's drawing under a new child at its base and returns that, so the whole model can lean in the
+        // wind while the root (and its collider) stays still. Many imported trees are one mesh on the root itself:
+        // that mesh moves to the child too, and the root keeps only the collider.
         private static Transform SwayPivot(Transform model)
         {
-            if (model.GetComponent<Renderer>() != null || model.childCount == 0) return null;
             var pivot = new GameObject("Sway").transform;
             pivot.SetParent(model, false);
             for (int i = model.childCount - 1; i >= 0; i--)
             {
                 var child = model.GetChild(i);
                 if (child != pivot) child.SetParent(pivot, true);
+            }
+
+            var filter   = model.GetComponent<MeshFilter>();
+            var renderer = model.GetComponent<MeshRenderer>();
+            if (filter != null && renderer != null)
+            {
+                pivot.gameObject.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
+                var copy = pivot.gameObject.AddComponent<MeshRenderer>();
+                copy.sharedMaterials    = renderer.sharedMaterials;
+                copy.shadowCastingMode  = renderer.shadowCastingMode;
+                copy.receiveShadows     = renderer.receiveShadows;
+                Object.DestroyImmediate(renderer); // immediate, so the LODGroup below only finds the moving copy
+                Object.DestroyImmediate(filter);
             }
             return pivot;
         }

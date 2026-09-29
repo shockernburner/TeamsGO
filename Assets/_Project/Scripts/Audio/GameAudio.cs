@@ -33,10 +33,17 @@ namespace ProjectFossil.Audio
         public Vector2 distantRoarGap     = new Vector2(60f, 110f);
         public float   distantRoarRange   = 140f;
 
+        [Header("Fear")]
+        public float sniffRange    = 60f;
+        public Vector2 heartRate   = new Vector2(70f, 150f); // beats per minute, from first unease to a charge
+        public float heartFrom     = 0.2f;                   // danger level where the heartbeat starts
+
         private const int Variants = 4;
 
-        private AudioClip[] _steps, _softSteps, _screeches, _roars, _bites, _swings, _hits, _hurts;
-        private AudioClip _coin, _sting, _chime, _ambience;
+        private AudioClip[] _steps, _softSteps, _screeches, _roars, _bites, _swings, _hits, _hurts, _sniffs;
+        private AudioClip _coin, _sting, _chime, _ambience, _heartbeat, _rotor, _victory;
+        private float _nextBeat;
+        private readonly Dictionary<ExtractionZone, AudioSource> _rotors = new Dictionary<ExtractionZone, AudioSource>();
 
         private AudioSource _ui;       // 2D one-shots
         private AudioSource _feet;     // player footsteps (own source so pitch jitter doesn't bend other sounds)
@@ -63,6 +70,7 @@ namespace ProjectFossil.Audio
             public DinosaurAI.State LastState;
             public float NextCallTime;
             public float NextIdleCall;
+            public float NextSniff;
         }
         private readonly Dictionary<DinosaurAI, DinoTrack> _dinos = new Dictionary<DinosaurAI, DinoTrack>();
         private readonly List<DinosaurAI> _gone = new List<DinosaurAI>();
@@ -91,6 +99,10 @@ namespace ProjectFossil.Audio
             _sting     = Clip("Sting",    SoundSynth.ThreatSting());
             _chime     = Clip("Chime",    SoundSynth.Chime());
             _ambience  = Clip("Ambience", SoundSynth.Ambience());
+            _sniffs    = Make("Sniff",    SoundSynth.Sniff);
+            _heartbeat = Clip("Heartbeat", SoundSynth.Heartbeat());
+            _rotor     = Clip("Rotor",    SoundSynth.Rotor());
+            _victory   = Clip("Victory",  SoundSynth.Victory());
 
             _ui = gameObject.AddComponent<AudioSource>();
             _ui.playOnAwake = false;
@@ -149,6 +161,8 @@ namespace ProjectFossil.Audio
             UpdateDinosaurs();
             UpdateExtraction();
             UpdateDistantRoar();
+            UpdateHeartbeat();
+            UpdateRotors();
         }
 
         private void Bind(MatchManager match)
@@ -169,6 +183,8 @@ namespace ProjectFossil.Audio
             if (_wallet != null)       _wallet.BalanceChanged += OnBalanceChanged;
             if (_director != null)     _director.OnThreatTriggered += OnThreat;
             _match.MatchEnded += OnMatchEnded;
+            _match.StalkerReleased   += OnStalkerReleased;
+            _match.FinalStandStarted += OnFinalStand;
 
             _lastPlayerPos     = _player != null ? _player.transform.position : Vector3.zero;
             _stepDistance      = 0f;
@@ -183,7 +199,13 @@ namespace ProjectFossil.Audio
             if (_playerHealth != null) _playerHealth.Damaged -= OnPlayerDamaged;
             if (_wallet != null)       _wallet.BalanceChanged -= OnBalanceChanged;
             if (_director != null)     _director.OnThreatTriggered -= OnThreat;
-            if (_match != null)        _match.MatchEnded -= OnMatchEnded;
+            if (_match != null)
+            {
+                _match.MatchEnded        -= OnMatchEnded;
+                _match.StalkerReleased   -= OnStalkerReleased;
+                _match.FinalStandStarted -= OnFinalStand;
+            }
+            _rotors.Clear(); // their sources live on the helicopters, which go with the island
             _combat = null; _playerHealth = null; _wallet = null; _director = null; _match = null;
         }
 
@@ -278,9 +300,53 @@ namespace ProjectFossil.Audio
         private void OnMatchEnded(MatchStats stats)
         {
             _ambient.Stop();
-            // Bright if you got out, low and slow if not. Positional so the pitch doesn't touch the shared 2D source.
-            if (_player != null)
-                Play3D(_chime, _player.transform.position, 0.8f, stats.Result == MatchResult.Extracted ? 1.2f : 0.6f, 50f);
+            if (stats.Result == MatchResult.Extracted) { Play2D(_victory, 1f, 1f); return; }
+            // Low and slow if you didn't make it. Positional so the pitch doesn't touch the shared 2D source.
+            if (_player != null) Play3D(_chime, _player.transform.position, 0.8f, 0.6f, 50f);
+        }
+
+        // The stalker announces itself from where it starts, far off.
+        private void OnStalkerReleased(Vector3 position) => Play3D(Pick(_roars), position, 1f, 0.85f, 400f);
+
+        private void OnFinalStand() => Play2D(_sting, 1f, 1.15f);
+
+        // A heartbeat that comes in as predators close in and races when one charges. Silent when safe.
+        private void UpdateHeartbeat()
+        {
+            if (_player == null || !_match.IsRunning || _heartbeat == null) return;
+            float danger = DinosaurAI.DangerAt(_player.transform.position);
+            if (_match.IsFinalStand) danger = Mathf.Max(danger, 0.6f);
+            if (danger < heartFrom) { _nextBeat = Mathf.Min(_nextBeat, Time.time + 0.3f); return; }
+            if (Time.time < _nextBeat) return;
+
+            float k = Mathf.InverseLerp(heartFrom, 1f, danger);
+            _nextBeat = Time.time + 60f / Mathf.Lerp(heartRate.x, heartRate.y, k);
+            Play2D(_heartbeat, Mathf.Lerp(0.35f, 0.9f, k), 1f);
+        }
+
+        // Each helicopter carries a looping rotor sound while it's in the air.
+        private void UpdateRotors()
+        {
+            foreach (var zone in _match.ExtractionZones)
+            {
+                if (zone == null || zone.Helicopter == null) continue;
+                bool active = zone.HelicopterActive;
+                if (!_rotors.TryGetValue(zone, out var src) || src == null)
+                {
+                    if (!active) continue;
+                    src = zone.Helicopter.gameObject.AddComponent<AudioSource>();
+                    src.clip         = _rotor;
+                    src.loop         = true;
+                    src.spatialBlend = 1f;
+                    src.rolloffMode  = AudioRolloffMode.Linear;
+                    src.minDistance  = 12f;
+                    src.maxDistance  = 260f;
+                    src.dopplerLevel = 0.4f;
+                    _rotors[zone] = src;
+                }
+                src.volume = masterVolume;
+                if (active && !src.isPlaying) src.Play();
+            }
         }
 
         // ── Dinosaurs ──────────────────────────────────────────────────────────
@@ -313,6 +379,16 @@ namespace ProjectFossil.Audio
                 bool spotted = (state == DinosaurAI.State.Alert || state == DinosaurAI.State.Chase) &&
                                d.LastState != DinosaurAI.State.Alert && d.LastState != DinosaurAI.State.Chase;
                 d.LastState = state;
+
+                // A predator on a trail sniffs as it comes, so you can hear it working toward you.
+                if (d.Ai.IsSniffing && Time.time >= d.NextSniff && _player != null &&
+                    (d.Ai.transform.position - _player.transform.position).sqrMagnitude < sniffRange * sniffRange)
+                {
+                    bool big = d.Ai.species != null && d.Ai.species.maxHealth >= bigDinoHealth;
+                    Play3D(Pick(_sniffs), d.Ai.transform.position, big ? 1f : 0.6f,
+                           Random.Range(0.9f, 1.05f) * (big ? 0.75f : 1.2f), sniffRange);
+                    d.NextSniff = Time.time + Random.Range(2.2f, 3.8f);
+                }
 
                 if (spotted && Time.time >= d.NextCallTime)
                 {

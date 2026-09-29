@@ -7,7 +7,9 @@
         "ProjectFossil.Director",
         "ProjectFossil.Player",
         "ProjectFossil.Match",
-        "ProjectFossil.Dinosaurs"
+        "ProjectFossil.Dinosaurs",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

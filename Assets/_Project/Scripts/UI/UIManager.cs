@@ -42,8 +42,14 @@ namespace ProjectFossil.UI
         private int   _coinBurst;
         private float _coinBurstUntil;
 
-        private GUIStyle _big, _center, _box, _slot, _panel, _small, _hint, _barText, _marker;
-        private Texture2D _arrow;
+        private GUIStyle _big, _center, _box, _slot, _panel, _small, _hint, _barText, _marker, _banner, _alert;
+        private Texture2D _arrow, _vignette;
+
+        // Fear on screen: dark red edges that close in with the danger level, smoothed so they breathe.
+        private float _danger;
+        // After a successful extraction the victory banner holds the screen while the helicopter climbs away.
+        public float victorySeconds = 5.5f;
+        private float _endedAt = float.NegativeInfinity;
 
         // Auto-create alongside any MatchBootstrap so no scene edits are needed.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -106,6 +112,14 @@ namespace ProjectFossil.UI
 
             _messages.RemoveAll(m => m.until < Time.unscaledTime);
             if (_damageFlash > 0f) _damageFlash = Mathf.Max(0f, _damageFlash - Time.deltaTime / damageFlashSeconds);
+
+            float target = 0f;
+            if (_match != null && _match.IsRunning && _boundPlayer != null)
+            {
+                target = DinosaurAI.DangerAt(_boundPlayer.transform.position);
+                if (_match.IsFinalStand) target = Mathf.Max(target, 0.5f);
+            }
+            _danger = Mathf.MoveTowards(_danger, target, Time.deltaTime * (target > _danger ? 2f : 0.5f));
         }
 
         private void BindPlayer(GameObject player)
@@ -172,6 +186,7 @@ namespace ProjectFossil.UI
 
         private void OnMatchEnded(MatchStats stats)
         {
+            _endedAt  = Time.unscaledTime;
             _shopOpen = false;
             SetPlayerBlocked(true);
         }
@@ -199,13 +214,20 @@ namespace ProjectFossil.UI
 
             if (_match.IsRunning)
             {
+                DrawDanger();
                 DrawHealthBars();
                 DrawDamageFlash();
                 if (!_shopOpen) DrawCrosshair();
                 if (!_shopOpen) DrawBeaconMarker();
                 DrawHud();
+                DrawAlerts();
                 DrawPrompt();
                 if (_shopOpen) DrawShop();
+            }
+            else if (_match.Stats != null && _match.Stats.Result == MatchResult.Extracted &&
+                     Time.unscaledTime - _endedAt < victorySeconds)
+            {
+                DrawVictory(Time.unscaledTime - _endedAt);
             }
             else
             {
@@ -451,6 +473,100 @@ namespace ProjectFossil.UI
             GUI.Label(new Rect(gx - 60f, gy - 11f, 120f, 22f), $"BEACON {Mathf.RoundToInt(best)} m", _marker);
         }
 
+        // Dark red closing in from the edges as danger rises; at its peak it pulses with the heartbeat.
+        private void DrawDanger()
+        {
+            if (_danger <= 0.02f) return;
+            float pulse = _danger > 0.6f ? 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * Mathf.Lerp(7f, 15f, _danger)) : 1f;
+            var old = GUI.color;
+            GUI.color = new Color(0.35f, 0f, 0f, Mathf.Clamp01(_danger * 0.55f * pulse));
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), VignetteTexture(), ScaleMode.StretchToFill);
+            GUI.color = old;
+        }
+
+        // Centre-screen warnings: something has your scent; the last stand at the helicopter.
+        private void DrawAlerts()
+        {
+            var state = _match.State;
+            float y = Screen.height * 0.18f;
+
+            if (state.IsExtracting)
+            {
+                float left = state.ExtractionHoldTime - state.ExtractionProgress;
+                float w = Mathf.Min(460f, Screen.width - 40f);
+                var r = new Rect((Screen.width - w) * 0.5f, y, w, 34f);
+                GUI.Label(new Rect(r.x, r.y - 34f, r.width, 32f), $"BOARDING: HOLD THE PAD  {Mathf.CeilToInt(left)}s", _banner);
+                var old = GUI.color;
+                GUI.color = new Color(0f, 0f, 0f, 0.55f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                GUI.color = new Color(0.3f, 0.95f, 0.4f);
+                GUI.DrawTexture(new Rect(r.x + 3f, r.y + 3f, (r.width - 6f) * (state.ExtractionProgress / state.ExtractionHoldTime), r.height - 6f),
+                                Texture2D.whiteTexture);
+                GUI.color = old;
+                return;
+            }
+            if (_match.IsFinalStand)
+            {
+                GUI.Label(new Rect(0, y, Screen.width, 32f), "GET BACK TO THE HELICOPTER", _banner);
+                return;
+            }
+
+            if (_boundPlayer != null && DinosaurAI.IsBeingTracked(_boundPlayer.transform))
+            {
+                var c = _match.PlayerController;
+                bool hidden = c != null && c.IsHidden;
+                float a = 0.6f + 0.4f * Mathf.Sin(Time.unscaledTime * 4f);
+                var old = _alert.normal.textColor;
+                _alert.normal.textColor = new Color(1f, 0.35f, 0.25f, a);
+                GUI.Label(new Rect(0, y, Screen.width, 26f),
+                          hidden ? "It's sniffing around. STAY LOW. DON'T MOVE." : "SOMETHING HAS YOUR SCENT", _alert);
+                _alert.normal.textColor = old;
+            }
+        }
+
+        // "YOU MADE IT OUT": the moment the helicopter lifts away with you on the ladder.
+        private void DrawVictory(float t)
+        {
+            var old = GUI.color;
+            float fadeIn = Mathf.Clamp01(t / 0.4f);
+            GUI.color = new Color(1f, 0.95f, 0.7f, 0.18f * (1f - Mathf.Clamp01(t / 1.2f))); // flash
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, fadeIn);
+
+            float scale = 1f + 0.25f * Mathf.Exp(-t * 4f) + 0.03f * Mathf.Sin(t * 6f);
+            var matrix = GUI.matrix;
+            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.3f);
+            GUIUtility.ScaleAroundPivot(new Vector2(scale, scale), centre);
+            int size = _banner.fontSize;
+            _banner.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width / 14f, 36f, 96f));
+            GUI.Label(new Rect(0, centre.y - 60f, Screen.width, 120f), "YOU MADE IT OUT!", _banner);
+            _banner.fontSize = size;
+            GUI.matrix = matrix;
+
+            var s = _match.Stats;
+            GUI.Label(new Rect(0, centre.y + 70f, Screen.width, 30f),
+                      $"SCORE {s.Score}" + (s.NewBest ? "   NEW BEST!" : "") + $"    {s.DinosKilled} kills    survived {FormatTime(s.TimeSurvived)}",
+                      _center);
+            GUI.color = old;
+        }
+
+        private Texture2D VignetteTexture()
+        {
+            if (_vignette != null) return _vignette;
+            const int n = 64;
+            _vignette = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                float d = Mathf.Sqrt(dx * dx * 0.8f + dy * dy);
+                float a = Mathf.Clamp01((d - 0.55f) / 0.6f);
+                _vignette.SetPixel(x, y, new Color(1f, 1f, 1f, a * a * (3f - 2f * a)));
+            }
+            _vignette.Apply();
+            return _vignette;
+        }
+
         private Texture2D ArrowTexture()
         {
             if (_arrow != null) return _arrow;
@@ -536,17 +652,22 @@ namespace ProjectFossil.UI
                                                       padding = new RectOffset(0, 0, 0, 0) };
             _marker = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             _marker.normal.textColor = new Color(0.55f, 1f, 0.6f);
+            _banner = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _banner.normal.textColor = new Color(1f, 0.92f, 0.45f);
+            _alert  = new GUIStyle(GUI.skin.label) { fontSize = 17, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         }
 
         private static string MovementLabel(PlayerController c)
         {
             if (c.IsHidden) return c.Stance == Stance.Prone ? "HIDDEN (crawling)" : "HIDDEN (crouching)";
+            bool deep = c.Concealment >= ViewBlockers.HiddenAt;
             switch (c.Stance)
             {
-                case Stance.Prone:     return "Crawling";
-                case Stance.Crouching: return "Crouching";
+                case Stance.Prone:     return c.InCover ? "Crawling (cover too thin)" : "Crawling";
+                case Stance.Crouching: return c.InCover ? "Crouching (cover too thin)" : "Crouching";
             }
-            if (c.InCover) return "In cover (crouch to hide)";
+            if (deep)      return "Deep forest (crouch to hide)";
+            if (c.InCover) return "Thin cover (find thicker forest)";
             if (c.IsExhausted) return "Out of breath";
             if (c.IsSprinting) return "Running";
             return c.RunToggled ? "Run on" : "Walking";

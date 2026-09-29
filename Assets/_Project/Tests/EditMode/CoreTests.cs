@@ -108,15 +108,30 @@ namespace ProjectFossil.Tests.EditMode
     
 
         [Test]
-        public void ViewBlockers_CoverOnlyInsideBigPlants()
+        public void ViewBlockers_LoneBushIsThinCover_ForestHides()
         {
             ViewBlockers.Clear();
+            // A single bush in a field, and some grass.
             ViewBlockers.Register(new Vector3(0f, 0.5f, 0f), 1f, new Renderer[1], null, 1f, cover: true);
             ViewBlockers.Register(new Vector3(20f, 0.2f, 0f), 1f, new Renderer[1], null, 1f, cover: false);
 
-            Assert.IsTrue(ViewBlockers.InCover(new Vector3(0.3f, 0f, 0.2f)));
-            Assert.IsFalse(ViewBlockers.InCover(new Vector3(0.95f, 0f, 0f)), "brushing the edge isn't hiding");
-            Assert.IsFalse(ViewBlockers.InCover(new Vector3(20f, 0f, 0f)), "grass isn't cover");
+            float bush = ViewBlockers.Concealment(new Vector3(0.3f, 0f, 0.2f));
+            Assert.GreaterOrEqual(bush, ViewBlockers.CoverAt, "a bush is some cover");
+            Assert.Less(bush, ViewBlockers.HiddenAt, "but one bush alone doesn't hide you");
+            Assert.AreEqual(0f, ViewBlockers.Concealment(new Vector3(20f, 0f, 0f)), "grass isn't cover");
+
+            // A stand of trees with undergrowth, 100 m away.
+            var forest = new Vector3(100f, 0f, 100f);
+            ViewBlockers.Register(forest + new Vector3(0.4f, 0.5f, 0f), 1f, new Renderer[1], null, 1f, cover: true);
+            ViewBlockers.Register(forest + new Vector3(-2f, 0.5f, 1f), 1f, new Renderer[1], null, 1f, cover: true);
+            for (int i = 0; i < 6; i++)
+            {
+                float a = i * Mathf.PI / 3f;
+                ViewBlockers.RegisterTree(forest + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * 3.5f, null, 0f);
+            }
+            Assert.GreaterOrEqual(ViewBlockers.Concealment(forest), ViewBlockers.HiddenAt, "thick forest hides you");
+            Assert.Less(ViewBlockers.Concealment(forest + new Vector3(15f, 0f, 0f)), ViewBlockers.CoverAt,
+                        "step out of the trees and you're in the open");
             ViewBlockers.Clear();
         }
 

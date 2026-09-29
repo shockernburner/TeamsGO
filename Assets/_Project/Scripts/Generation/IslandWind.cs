@@ -41,8 +41,8 @@ namespace ProjectFossil.Generation
         private void Sway(in ViewBlockers.Entry e)
         {
             float phase = e.Center.x * 0.37f + e.Center.z * 0.61f;
-            // A steady lean downwind plus a flutter on top; the flutter runs faster on small plants.
-            float flutter = Mathf.Sin(_time * frequency * (e.Sway < 0.5f ? 0.6f : 1f) * Mathf.PI * 2f + phase);
+            // A steady lean downwind plus a flutter on top: slow, heavy rocking for trees, quick for plants.
+            float flutter = Mathf.Sin(_time * frequency * (e.Tree ? 0.3f : 1f) * Mathf.PI * 2f + phase);
             float angle = plantBend * e.Sway * _gust * (0.45f + 0.55f * flutter);
 
             var parent = e.Root.parent;
