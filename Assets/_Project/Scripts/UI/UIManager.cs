@@ -346,9 +346,9 @@ namespace ProjectFossil.UI
         {
             if (_damageFlash <= 0f) return;
             var old = GUI.color;
-            float a = 0.45f * _damageFlash;
-            float edge = Screen.width * 0.12f;
-            GUI.color = new Color(0.8f, 0f, 0f, a * 0.35f);
+            float a = 0.35f * _damageFlash;
+            float edge = Screen.width * 0.08f;
+            GUI.color = new Color(0.8f, 0f, 0f, a * 0.15f);
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = new Color(0.9f, 0f, 0f, a * (_damageSide < 0f ? 1.6f : 0.8f));
             GUI.DrawTexture(new Rect(0, 0, edge, Screen.height), Texture2D.whiteTexture);

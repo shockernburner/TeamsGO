@@ -28,8 +28,14 @@ namespace ProjectFossil.Dinosaurs
         {
             _renderers  = GetComponentsInChildren<Renderer>();
             _baseColors = new Color[_renderers.Length];
+            // Placeholder bodies take the species colour so each kind reads at a distance.
+            bool useSpecies = _ai != null && _ai.species != null;
             for (int i = 0; i < _renderers.Length; i++)
-                _baseColors[i] = _renderers[i].material.color; // instances the material; fine for placeholders
+            {
+                _baseColors[i] = useSpecies ? _ai.species.debugColor
+                                            : _renderers[i].material.color; // instances the material; fine for placeholders
+                _renderers[i].material.color = _baseColors[i];
+            }
 
             // Rear the first child mesh rather than the root, so the NavMeshAgent keeps control of the root.
             var r = _renderers.Length > 0 ? _renderers[0].transform : null;

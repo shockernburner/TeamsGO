@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Species_Raptor
   m_EditorClassIdentifier: ProjectFossil.Dinosaurs::ProjectFossil.Dinosaurs.DinosaurSpecies
   speciesName: Raptor
-  debugColor: {r: 0.2, g: 0.8, b: 0.2, a: 1}
+  debugColor: {r: 0.85, g: 0.55, b: 0.15, a: 1}
   bodyScale: 1
   walkSpeed: 4
   runSpeed: 8.5
