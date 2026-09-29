@@ -16,6 +16,8 @@ MonoBehaviour:
   debugColor: {r: 0.85, g: 0.55, b: 0.15, a: 1}
   bodyScale: 1
   model: {fileID: 11400000, guid: 3dcf831ccd044d7db69dcbcf2f4c6525, type: 2}
+  temperament: 0
+  territoryRadius: 9
   walkSpeed: 4
   runSpeed: 8.5
   turnSpeed: 200
@@ -31,8 +33,9 @@ MonoBehaviour:
   attackCooldown: 1.5
   attackWindup: 0.45
   hitStagger: 0.35
-  maxHealth: 60
-  fleeHealthFraction: 0.25
+  maxHealth: 85
+  fleeHealthFraction: 0.15
   fleeDistance: 30
   fleeDuration: 6
-  killReward: 15
+  killReward: 10
+  scoreValue: 100

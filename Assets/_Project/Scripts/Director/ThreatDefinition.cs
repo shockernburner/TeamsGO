@@ -2,7 +2,9 @@ using UnityEngine;
 
 namespace ProjectFossil.Director
 {
-    public enum ThreatKind { SpawnHunters }
+    // SpawnHunters: dinosaurs that hunt the target down.
+    // Stampede: a panicked herd charges through the target's position and tramples whatever is in the way.
+    public enum ThreatKind { SpawnHunters, Stampede }
 
     // One purchasable threat. New threat = new asset. The AI director and (later) rival teams buy from the same catalog.
     [CreateAssetMenu(menuName = "Project Fossil/Threat", fileName = "Threat_New")]
@@ -26,5 +28,6 @@ namespace ProjectFossil.Director
         public ScriptableObject speciesOverride;      // e.g. a DinosaurSpecies; empty = prefab's own
         public int              spawnCount    = 1;
         public float            spawnDistance = 45f;  // spawn this far from the target, out of sight
+        public float            trampleDamage = 25f;  // Stampede only: damage to anyone a runner hits
     }
 }

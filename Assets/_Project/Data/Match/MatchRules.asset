@@ -18,3 +18,4 @@ MonoBehaviour:
   extractionRadius: 8
   survivalPayoutInterval: 60
   survivalPayoutAmount: 10
+  coinsPerDamage: 0.15

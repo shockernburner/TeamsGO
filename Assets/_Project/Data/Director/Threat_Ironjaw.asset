@@ -15,12 +15,13 @@ MonoBehaviour:
   threatId: ironjaw
   displayName: Ironjaw
   announcement: The ground shakes. An Ironjaw is hunting you.
-  cost: 160
+  cost: 150
   cooldown: 300
-  unlockTime: 600
+  unlockTime: 480
   aiWeight: 1
   kind: 0
   spawnPrefab: {fileID: 0}
   speciesOverride: {fileID: 11400000, guid: 775c91a3a89f46a19b15403fc30edc36, type: 2}
   spawnCount: 1
   spawnDistance: 60
+  trampleDamage: 25

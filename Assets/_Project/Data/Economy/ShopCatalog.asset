@@ -31,6 +31,18 @@ MonoBehaviour:
     price: 30
     item: {fileID: 11400000, guid: c9b6dbf745564962960517d787e341a4, type: 2}
     amount: 1
+  - offerId: stone_axe
+    displayName: Stone Axe
+    kind: 0
+    price: 45
+    item: {fileID: 11400000, guid: 775356c0098f424bbae4415b0a63f2e8, type: 2}
+    amount: 1
+  - offerId: bandage
+    displayName: Bandage
+    kind: 0
+    price: 12
+    item: {fileID: 11400000, guid: a1113bd5a3554023913f2a4adb643b00, type: 2}
+    amount: 1
   - offerId: slots_2
     displayName: +2 inventory slots
     kind: 1

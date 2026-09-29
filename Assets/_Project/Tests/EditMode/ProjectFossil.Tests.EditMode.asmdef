@@ -10,7 +10,8 @@
         "ProjectFossil.Economy",
         "ProjectFossil.Match",
         "ProjectFossil.Player",
-        "ProjectFossil.Audio"
+        "ProjectFossil.Audio",
+        "ProjectFossil.Dinosaurs"
     ],
     "includePlatforms": [
         "Editor"

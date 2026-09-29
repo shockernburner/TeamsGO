@@ -102,5 +102,20 @@ namespace ProjectFossil.Match
         public int         CoinsEarned;
         public int         DinosKilled;
         public int         ThreatsFaced;
+
+        // Score (filled in when the match ends)
+        public int   SurvivalPoints;
+        public int   KillPoints;
+        public int   DamagePoints;
+        public int   ThreatPoints;
+        public float ResultMultiplier = 1f;
+        public int   Score;
+        public int   BestScore;
+        public bool  NewBest;
+
+        // Survivor Rank before and after this match
+        public int   RankBefore;
+        public int   RankAfter;
+        public float RatingDelta;
     }
 }

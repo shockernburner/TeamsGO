@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using ProjectFossil.Core;
@@ -10,8 +11,17 @@ namespace ProjectFossil.Dinosaurs
     {
         public DinosaurSpecies species;
 
+        [Tooltip("Set by the spawner from the player's rank: multiplies the species' health and bite")]
+        public float healthMultiplier = 1f;
+        public float damageMultiplier = 1f;
+
+        // At most this many dinosaurs bite one person at once; the rest circle and wait for an opening.
+        public const int MaxAttackersPerTarget = 2;
+
         // Raised when any dinosaur dies. Killer may be null (hazards, unknown source).
         public static event Action<DinosaurAI, GameObject> Killed;
+        // Raised when any dinosaur takes damage (amount actually applied, and who dealt it).
+        public static event Action<DinosaurAI, DamageInfo> Damaged;
 
         // Presentation hooks (DinosaurFeedback listens). Windup passes its duration in seconds.
         public event Action<float> AttackWindupStarted;
@@ -31,6 +41,13 @@ namespace ProjectFossil.Dinosaurs
         private float        _windupTimer;  // > 0 while a telegraphed attack is charging
         private float        _staggerTimer; // > 0 right after being hit
         private bool         _hunting; // sent by the Threat Director: never gives up the chase
+        private float        _trampleDamage; // > 0 while stampeding: runs through people and hurts them
+        private float        _trampleTimer;
+        private Transform    _slotTarget;    // the person this dinosaur holds a bite slot on
+        private float        _circleSide;    // +1 / -1: which way it circles while waiting its turn
+
+        private static readonly Dictionary<Transform, List<DinosaurAI>> Attackers =
+            new Dictionary<Transform, List<DinosaurAI>>();
 
         // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -54,7 +71,8 @@ namespace ProjectFossil.Dinosaurs
             }
 
             transform.localScale = Vector3.one * species.bodyScale;
-            Health.Initialize(species.maxHealth);
+            Health.Initialize(species.maxHealth * Mathf.Max(0.1f, healthMultiplier));
+            _circleSide = (GetInstanceID() & 1) == 0 ? 1f : -1f;
             Health.Damaged += OnDamaged;
             Health.Died    += OnDied;
 
@@ -65,6 +83,7 @@ namespace ProjectFossil.Dinosaurs
 
         private void OnDestroy()
         {
+            ReleaseSlot();
             if (Health == null) return;
             Health.Damaged -= OnDamaged;
             Health.Died    -= OnDied;
@@ -72,6 +91,7 @@ namespace ProjectFossil.Dinosaurs
 
         private void Update()
         {
+            if (_trampleTimer > 0f) _trampleTimer -= Time.deltaTime;
             switch (CurrentState)
             {
                 case State.Wander: UpdateWander(); break;
@@ -107,6 +127,17 @@ namespace ProjectFossil.Dinosaurs
                 float radius = cc.radius * Mathf.Max(cc.transform.lossyScale.x, cc.transform.lossyScale.z) + 0.05f;
                 if (gap >= radius) continue;
 
+                // A stampeding animal hurts whoever it runs into (once a second at most).
+                if (_trampleDamage > 0f && _trampleTimer <= 0f)
+                {
+                    var victim = cc.GetComponentInParent<IDamageable>();
+                    if (victim != null && victim.IsAlive)
+                    {
+                        victim.TakeDamage(new DamageInfo(_trampleDamage * damageMultiplier, gameObject, probe));
+                        _trampleTimer = 1f;
+                    }
+                }
+
                 // Inside the body (gap 0): push straight away from the person.
                 Vector3 dir = gap > 0.001f ? away / gap : Flat(transform.position - feet).normalized;
                 if (dir.sqrMagnitude < 0.5f) dir = -transform.forward;
@@ -133,13 +164,41 @@ namespace ProjectFossil.Dinosaurs
             if (species != null && _agent.isOnNavMesh) EnterChase();
         }
 
+        // Stampede (used by threats): run flat out through a point and keep going, trampling anyone in the way.
+        public void Stampede(Vector3 through, float trampleDamage)
+        {
+            if (CurrentState == State.Dead || species == null || !_agent.isOnNavMesh) return;
+
+            Vector3 dir = Flat(through - transform.position);
+            if (dir.sqrMagnitude < 0.01f) dir = transform.forward;
+            dir.Normalize();
+
+            float runOut = 50f;
+            Vector3 dest = through + dir * runOut;
+            if (NavMesh.SamplePosition(dest, out var hit, 30f, NavMesh.AllAreas)) dest = hit.position;
+
+            ReleaseSlot();
+            CurrentState   = State.Flee;
+            _hunting       = false;
+            _target        = null;
+            _windupTimer   = 0f;
+            _trampleDamage = trampleDamage;
+            _agent.speed   = species.runSpeed * 1.15f;
+            _agent.acceleration = 25f;
+            _agent.SetDestination(dest);
+            _fleeTimer = Vector3.Distance(transform.position, dest) / Mathf.Max(1f, _agent.speed) + 2f;
+        }
+
         // ── Wander ─────────────────────────────────────────────────────────────
 
         private void EnterWander()
         {
-            CurrentState = State.Wander;
-            _hunting     = false;
-            _agent.speed = species.walkSpeed;
+            ReleaseSlot();
+            CurrentState   = State.Wander;
+            _hunting       = false;
+            _trampleDamage = 0f;
+            _agent.speed   = species.walkSpeed;
+            _agent.acceleration = 10f;
             SetRandomWanderDestination();
         }
 
@@ -148,6 +207,23 @@ namespace ProjectFossil.Dinosaurs
             var detected = TryDetectPlayer();
             if (detected != null)
             {
+                switch (species.temperament)
+                {
+                    case Temperament.Skittish:
+                        EnterFlee(detected.position);
+                        return;
+
+                    case Temperament.Territorial:
+                        // Watch intruders; only charge the ones who come too close.
+                        if (Vector3.Distance(transform.position, detected.position) > species.territoryRadius)
+                        {
+                            if (_agent.hasPath) _agent.ResetPath();
+                            FaceTowards(detected.position);
+                            return;
+                        }
+                        break;
+                }
+
                 _target = detected;
                 if (ShouldFlee()) EnterFlee(detected.position);
                 else EnterAlert();
@@ -207,7 +283,7 @@ namespace ProjectFossil.Dinosaurs
             float dist = Vector3.Distance(transform.position, _target.position);
 
             // Give up if target is too far (hunters sent by the director never give up)
-            if (!_hunting && dist > species.chaseRange)
+            if (!_hunting && dist > GiveUpRange)
             {
                 _target = null;
                 EnterWander();
@@ -235,15 +311,23 @@ namespace ProjectFossil.Dinosaurs
                     if (dist <= species.attackRange * 1.25f)
                     {
                         var victim = _target.GetComponentInParent<IDamageable>();
-                        victim?.TakeDamage(new DamageInfo(species.attackDamage, gameObject, _target.position));
+                        victim?.TakeDamage(new DamageInfo(species.attackDamage * damageMultiplier, gameObject, _target.position));
                         AttackLanded?.Invoke();
                     }
                 }
                 return;
             }
 
+            // Only a couple bite at once; the rest circle just out of reach and wait for a gap.
+            if (dist <= species.attackRange + 4f && !HoldAttackSlot(_target))
+            {
+                CircleAround(_target.position);
+                return;
+            }
+
             if (dist > species.attackRange)
             {
+                _agent.speed = species.runSpeed;
                 _agent.SetDestination(_target.position);
                 return;
             }
@@ -265,6 +349,7 @@ namespace ProjectFossil.Dinosaurs
 
         private void EnterFlee(Vector3 threatPosition)
         {
+            ReleaseSlot();
             CurrentState = State.Flee;
             _hunting     = false;
             _target      = null;
@@ -291,11 +376,15 @@ namespace ProjectFossil.Dinosaurs
 
         private void OnDamaged(DamageInfo info)
         {
+            Damaged?.Invoke(this, info);
             if (!Health.IsAlive || info.Source == null) return;
+            if (_trampleDamage > 0f) return; // a stampede doesn't stop for a punch
 
             _staggerTimer = species.hitStagger;
 
-            if (ShouldFlee())
+            // Skittish animals bolt when hurt, unless they're already cornered and fighting.
+            bool bolt = species.temperament == Temperament.Skittish && CurrentState != State.Chase && Health.Fraction > 0.5f;
+            if (ShouldFlee() || bolt)
             {
                 EnterFlee(info.Source.transform.position);
                 return;
@@ -311,6 +400,7 @@ namespace ProjectFossil.Dinosaurs
 
         private void OnDied(DamageInfo info)
         {
+            ReleaseSlot();
             CurrentState = State.Dead;
             _target      = null;
             if (_agent.isOnNavMesh) _agent.ResetPath();
@@ -383,6 +473,49 @@ namespace ProjectFossil.Dinosaurs
             if (target == null) return false;
             var damageable = target.GetComponentInParent<IDamageable>();
             return damageable == null || damageable.IsAlive;
+        }
+
+        // ── Bite slots ─────────────────────────────────────────────────────────
+
+        private float GiveUpRange =>
+            species.temperament == Temperament.Territorial ? Mathf.Min(species.chaseRange, species.territoryRadius * 3f)
+                                                           : species.chaseRange;
+
+        private bool HoldAttackSlot(Transform target)
+        {
+            if (!Attackers.TryGetValue(target, out var list))
+                Attackers[target] = list = new List<DinosaurAI>();
+
+            list.RemoveAll(a => a == null || a._slotTarget != target || a.CurrentState != State.Chase);
+            if (list.Contains(this)) return true;
+            if (list.Count >= MaxAttackersPerTarget) return false;
+
+            list.Add(this);
+            _slotTarget = target;
+            return true;
+        }
+
+        private void ReleaseSlot()
+        {
+            if (_slotTarget != null && Attackers.TryGetValue(_slotTarget, out var list))
+            {
+                list.Remove(this);
+                if (list.Count == 0) Attackers.Remove(_slotTarget);
+            }
+            _slotTarget = null;
+        }
+
+        // Walk around the target just outside biting range, facing it.
+        private void CircleAround(Vector3 center)
+        {
+            Vector3 from = Flat(transform.position - center);
+            if (from.sqrMagnitude < 0.01f) from = -transform.forward;
+            float radius = species.attackRange + 3f;
+            Vector3 next = Quaternion.Euler(0f, 35f * _circleSide, 0f) * from.normalized * radius;
+            _agent.speed = species.walkSpeed;
+            if (NavMesh.SamplePosition(center + next, out var hit, 3f, NavMesh.AllAreas))
+                _agent.SetDestination(hit.position);
+            if (Flat(transform.position - center).magnitude < radius + 1f) FaceTowards(center);
         }
 
         // ── Helpers ────────────────────────────────────────────────────────────

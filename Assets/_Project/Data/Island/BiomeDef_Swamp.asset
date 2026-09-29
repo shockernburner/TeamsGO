@@ -14,17 +14,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: ProjectFossil.Generation::ProjectFossil.Generation.BiomeDefinition
   biomeName: '"Swamp"'
   minHeight: 0.05
-  maxHeight: 0.25
-  minMoisture: 0.65
+  maxHeight: 0.2
+  minMoisture: 0.62
   maxMoisture: 1
-  groundColor: {r: 0.31, g: 0.35, b: 0.21, a: 1}
+  groundColor: {r: 0.25, g: 0.28, b: 0.17, a: 1}
   foliageColor: {r: 0.25, g: 0.33, b: 0.15, a: 1}
   rockColor: {r: 0.33, g: 0.33, b: 0.28, a: 1}
-  treesPerHectare: 12
-  rocksPerHectare: 2
+  treesPerHectare: 35
+  rocksPerHectare: 4
   treeScale: {x: 0.7, y: 1.1}
   treeShape: 2
-  plantsPerHectare: 50
+  plantsPerHectare: 140
   plantScale: {x: 0.8, y: 2.0}
   treeModels: []
   rockModels: []

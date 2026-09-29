@@ -29,6 +29,10 @@ namespace ProjectFossil.Editor
         {
             { "Model_Raptor",   "Dinosaurs/Dino_Raptor.fbx" },
             { "Model_Ironjaw",  "Dinosaurs/Dino_Ironjaw.fbx" },
+            { "Model_Hornback", "Dinosaurs/Dino_Triceratops.fbx" },
+            { "Model_Spikeback", "Dinosaurs/Dino_Stegosaurus.fbx" },
+            { "Model_Crestback", "Dinosaurs/Dino_Parasaurolophus.fbx" },
+            { "Model_Longneck", "Dinosaurs/Dino_Apatosaurus.fbx" },
             { "Model_Survivor", "Characters/Survivor_Male.fbx" },
         };
 

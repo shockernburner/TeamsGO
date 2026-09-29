@@ -199,5 +199,73 @@ namespace ProjectFossil.Tests.EditMode
                 }
             }
         }
+
+        // ── Rivers, lakes, relief ─────────────────────────────────────────────
+
+        [Test]
+        public void Rivers_FlowDownhill_AndAreNotLand()
+        {
+            var s = MakeSettings(257); // the game's resolution: rivers are a few cells wide
+            s.worldSize = 1000f;
+            int rivers = 0;
+            for (int seed = 0; seed < 6; seed++)
+            {
+                var data = new IslandGenerator(seed, s).Generate();
+                foreach (var river in data.Rivers)
+                {
+                    rivers++;
+                    for (int i = 1; i < river.Points.Count; i++)
+                        Assert.LessOrEqual(river.Points[i].y, river.Points[i - 1].y + 1e-3f, $"Seed {seed}: river runs uphill at {i}");
+                    Assert.AreEqual(river.Points.Count, river.HalfWidths.Count);
+
+                    // The drawn line is smoothed, so a few points may sit just beside the carved channel.
+                    int wet = 0;
+                    foreach (var p in river.Points)
+                    {
+                        int gx = Mathf.RoundToInt(p.x / s.worldSize * (data.Resolution - 1));
+                        int gz = Mathf.RoundToInt(p.z / s.worldSize * (data.Resolution - 1));
+                        if (!data.LandMask[gz, gx]) wet++;
+                    }
+                    Assert.Greater(wet, river.Points.Count * 3 / 4, $"Seed {seed}: river mostly on dry land");
+                }
+            }
+            Assert.Greater(rivers, 0, "No rivers in 6 islands");
+        }
+
+        [Test]
+        public void PlayerDropZone_IsOnDryLand()
+        {
+            var s = MakeSettings(129);
+            for (int seed = 0; seed < 15; seed++)
+            {
+                var data = new IslandGenerator(seed, s).Generate();
+                if (data.SpawnZones.Count == 0) continue;
+                var c = data.SpawnZones[0].Center;
+                Assert.IsTrue(data.LandMask[c.y, c.x], $"Seed {seed}: drop zone in water");
+            }
+        }
+
+        [Test]
+        public void Relief_HasHillsAndFlats()
+        {
+            var s = MakeSettings(129);
+            s.worldSize = 1000f;
+            s.maxHeight = 150f;
+            s.noiseScale = 0.0045f;
+            var data = new IslandGenerator(7, s).Generate();
+            int land = 0, hilly = 0, flat = 0;
+            float step = s.worldSize / (data.Resolution - 1);
+            for (int z = 1; z < data.Resolution - 1; z++)
+                for (int x = 1; x < data.Resolution - 1; x++)
+                {
+                    if (!data.LandMask[z, x]) continue;
+                    land++;
+                    float slope = ScatterPlanner.SampleSlope(data, x * step, z * step);
+                    if (slope > 0.3f) hilly++;
+                    if (slope < 0.2f) flat++;
+                }
+            Assert.Greater(hilly, land / 10, "Island is too flat");
+            Assert.Greater(flat, land / 10, "Island has no open ground");
+        }
     }
 }

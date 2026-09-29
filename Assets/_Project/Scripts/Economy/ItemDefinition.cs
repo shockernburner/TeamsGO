@@ -1,4 +1,5 @@
 using UnityEngine;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Economy
 {
@@ -17,6 +18,7 @@ namespace ProjectFossil.Economy
         public float damage   = 0f;
         public float range    = 2f;
         public float cooldown = 0.6f;
+        public HeldLook heldLook = HeldLook.None; // what the character shows in hand
 
         [Header("Consumable")]
         public float healAmount = 0f;

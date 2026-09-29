@@ -1,6 +1,7 @@
 using UnityEngine;
 using ProjectFossil.Core;
 using ProjectFossil.Director;
+using ProjectFossil.Dinosaurs;
 using ProjectFossil.Economy;
 
 namespace ProjectFossil.Match
@@ -20,6 +21,7 @@ namespace ProjectFossil.Match
         public ModelDefinition  playerModel; // empty = placeholder capsule
         public ModelDefinition  cacheModel;  // supply caches; empty = placeholder cube
         public ModelDefinition  ruinsModel;  // ruin stashes; empty = placeholder cube
+        public WildlifeTable    wildlife;    // animals living on the island; empty = the default prefab's species
 
         public static GameContent LoadDefault() => Resources.Load<GameContent>(ResourcePath);
     }

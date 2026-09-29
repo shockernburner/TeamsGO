@@ -13,18 +13,18 @@ MonoBehaviour:
   m_Name: BiomeDef_Jungle
   m_EditorClassIdentifier: ProjectFossil.Generation::ProjectFossil.Generation.BiomeDefinition
   biomeName: '"Jungle"'
-  minHeight: 0.1
-  maxHeight: 0.62
-  minMoisture: 0.45
+  minHeight: 0.07
+  maxHeight: 0.55
+  minMoisture: 0.44
   maxMoisture: 1
-  groundColor: {r: 0.27, g: 0.43, b: 0.17, a: 1}
+  groundColor: {r: 0.2, g: 0.33, b: 0.12, a: 1}
   foliageColor: {r: 0.12, g: 0.38, b: 0.1, a: 1}
   rockColor: {r: 0.38, g: 0.4, b: 0.33, a: 1}
-  treesPerHectare: 40
-  rocksPerHectare: 4
-  treeScale: {x: 0.9, y: 1.6}
+  treesPerHectare: 110
+  rocksPerHectare: 6
+  treeScale: {x: 1, y: 2.2}
   treeShape: 0
-  plantsPerHectare: 60
+  plantsPerHectare: 180
   plantScale: {x: 0.8, y: 2.4}
   treeModels: []
   rockModels: []

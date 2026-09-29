@@ -178,6 +178,14 @@ namespace ProjectFossil.Player
         {
             IsGrounded = _cc.isGrounded;
 
+            // The Editor (or Alt-Tab) can drop the cursor lock; a click in the game takes it back.
+            if (!_inputBlocked && Cursor.lockState != CursorLockMode.Locked && Application.isFocused &&
+                Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible   = false;
+            }
+
             if (_inputBlocked)
             {
                 _moveInput   = Vector2.zero;

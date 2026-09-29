@@ -12,6 +12,8 @@ namespace ProjectFossil.Generation
         private static readonly Color TrunkColor     = new Color(0.33f, 0.24f, 0.16f);
         private static readonly Color DeadTrunkColor = new Color(0.28f, 0.25f, 0.22f);
         private static readonly Color CliffColor     = new Color(0.42f, 0.4f, 0.37f);
+        private static readonly Color DirtColor      = new Color(0.36f, 0.29f, 0.19f);
+        private static readonly Color MossColor      = new Color(0.15f, 0.25f, 0.09f);
 
         public static void Decorate(GameObject islandGO, IslandData data)
         {
@@ -19,6 +21,7 @@ namespace ProjectFossil.Generation
             if (terrain != null) PaintTerrain(terrain.terrainData, data);
 
             AddWater(islandGO.transform, data);
+            AddInlandWater(islandGO.transform, data);
             if (terrain != null) AddScatter(islandGO.transform, terrain, data, ScatterPlanner.Plan(data));
             if (Application.isPlaying) ApplyAtmosphere(); // don't rewrite the open scene's lighting from the editor tool
         }
@@ -32,11 +35,17 @@ namespace ProjectFossil.Generation
             int biomeCount = biomes != null ? biomes.Count : 0;
             if (biomeCount == 0) return;
 
-            var layers = new TerrainLayer[biomeCount + 1];
+            // Biome layers, then cliff, bare dirt and dark moss. Dirt and moss come in patches so the ground
+            // doesn't read as one mown lawn.
+            int cliffL = biomeCount, dirtL = biomeCount + 1, mossL = biomeCount + 2;
+            var layers = new TerrainLayer[biomeCount + 3];
             for (int i = 0; i < biomeCount; i++)
                 layers[i] = MakeLayer(biomes[i] != null ? biomes[i].groundColor : Color.gray, 1000 + i);
-            layers[biomeCount] = MakeLayer(CliffColor, 999);
+            layers[cliffL] = MakeLayer(CliffColor, 999);
+            layers[dirtL]  = MakeLayer(DirtColor, 998);
+            layers[mossL]  = MakeLayer(MossColor, 997);
             td.terrainLayers = layers;
+            float offA = (data.Seed & 0xFFF) * 0.37f, offB = ((data.Seed >> 12) & 0xFFF) * 0.41f;
 
             int aRes = Mathf.ClosestPowerOfTwo(Mathf.Clamp(data.Resolution - 1, 16, 1024));
             td.alphamapResolution = aRes;
@@ -59,8 +68,13 @@ namespace ProjectFossil.Generation
                             weights[ScatterPlanner.SampleBiome(data, x + ox * step * 1.5f, z + oz * step * 1.5f)] += 1f / 9f;
 
                     float cliff = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1.1f, ScatterPlanner.SampleSlope(data, x, z)));
-                    for (int l = 0; l < biomeCount; l++) alpha[az, ax, l] = weights[l] * (1f - cliff);
-                    alpha[az, ax, biomeCount] = cliff;
+                    float dirt  = 0.7f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.58f, 0.75f, Mathf.PerlinNoise(x * 0.018f + offA, z * 0.018f + offB)));
+                    float moss  = 0.6f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 0.72f, Mathf.PerlinNoise(x * 0.03f + offB, z * 0.03f + offA)));
+                    float rest  = (1f - cliff) * (1f - dirt) * (1f - moss);
+                    for (int l = 0; l < biomeCount; l++) alpha[az, ax, l] = weights[l] * rest;
+                    alpha[az, ax, cliffL] = cliff;
+                    alpha[az, ax, dirtL]  = (1f - cliff) * dirt;
+                    alpha[az, ax, mossL]  = (1f - cliff) * (1f - dirt) * moss;
                 }
             }
             td.SetAlphamaps(0, 0, alpha);
@@ -70,13 +84,13 @@ namespace ProjectFossil.Generation
         // so it stays low: a full alpha made the old ground mirror the sky and look like snow.
         private static TerrainLayer MakeLayer(Color baseColor, int seed)
         {
-            const int size = 32;
+            const int size = 64;
             var rng = new System.Random(seed);
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
             var px  = new Color[size * size];
             for (int i = 0; i < px.Length; i++)
             {
-                float v = 0.88f + (float)rng.NextDouble() * 0.24f;
+                float v = 0.8f + (float)rng.NextDouble() * 0.4f;
                 px[i] = new Color(baseColor.r * v, baseColor.g * v, baseColor.b * v, 0.08f);
             }
             tex.SetPixels(px);
@@ -85,7 +99,7 @@ namespace ProjectFossil.Generation
             return new TerrainLayer
             {
                 diffuseTexture = tex,
-                tileSize       = new Vector2(6f, 6f),
+                tileSize       = new Vector2(5f, 5f),
                 smoothness     = 0f,
                 metallic       = 0f,
             };
@@ -103,11 +117,87 @@ namespace ProjectFossil.Generation
             water.transform.localPosition = new Vector3(s.worldSize * 0.5f, s.seaLevel * s.maxHeight, s.worldSize * 0.5f);
             water.transform.localScale    = new Vector3(s.worldSize * 0.4f, 1f, s.worldSize * 0.4f); // 4x the island
 
-            var mat = NewLit(new Color(0.1f, 0.33f, 0.42f, 0.8f), 0.85f);
-            MakeTransparent(mat);
             var r = water.GetComponent<Renderer>();
+            var mat = WaterMaterial();
             r.sharedMaterial   = mat;
             r.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        private static Material _water;
+
+        private static Material WaterMaterial()
+        {
+            if (_water != null) return _water;
+            _water = NewLit(new Color(0.1f, 0.3f, 0.36f, 0.82f), 0.85f);
+            MakeTransparent(_water);
+            return _water;
+        }
+
+        // Rivers as ribbons following their centre line at the water surface; lakes as flat discs.
+        // The banks were carved by the generator, so the edges tuck under the ground.
+        private static void AddInlandWater(Transform parent, IslandData data)
+        {
+            if (data.Rivers.Count == 0 && data.Lakes.Count == 0) return;
+            var root = new GameObject("InlandWater").transform;
+            root.SetParent(parent, false);
+
+            foreach (var river in data.Rivers)
+                if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river));
+            foreach (var lake in data.Lakes)
+                AddMesh(root, "Lake", DiscMesh(lake.Center, lake.Radius + 4f, 32));
+        }
+
+        private static void AddMesh(Transform root, string name, Mesh mesh)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var r = go.AddComponent<MeshRenderer>();
+            r.sharedMaterial = WaterMaterial();
+            r.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        private static Mesh RiverMesh(RiverPath river)
+        {
+            int n = river.Points.Count;
+            var verts = new Vector3[n * 2];
+            var tris  = new int[(n - 1) * 6];
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 prev = river.Points[Mathf.Max(0, i - 1)], next = river.Points[Mathf.Min(n - 1, i + 1)];
+                Vector3 dir = next - prev; dir.y = 0f;
+                Vector3 side = dir.sqrMagnitude > 1e-4f ? Vector3.Cross(Vector3.up, dir.normalized) : Vector3.right;
+                float w = river.HalfWidths[i] + 3f; // run a little under the banks so no gap shows
+                verts[i * 2]     = river.Points[i] - side * w;
+                verts[i * 2 + 1] = river.Points[i] + side * w;
+            }
+            for (int i = 0; i < n - 1; i++)
+            {
+                int v = i * 2, t = i * 6;
+                tris[t] = v; tris[t + 1] = v + 2; tris[t + 2] = v + 1;
+                tris[t + 3] = v + 1; tris[t + 4] = v + 2; tris[t + 5] = v + 3;
+            }
+            var mesh = new Mesh { name = "River", vertices = verts, triangles = tris };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static Mesh DiscMesh(Vector3 centre, float radius, int segments)
+        {
+            var verts = new Vector3[segments + 1];
+            var tris  = new int[segments * 3];
+            verts[0] = centre;
+            for (int i = 0; i < segments; i++)
+            {
+                float a = i * Mathf.PI * 2f / segments;
+                verts[i + 1] = centre + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * radius;
+                tris[i * 3] = 0; tris[i * 3 + 1] = 1 + (i + 1) % segments; tris[i * 3 + 2] = 1 + i;
+            }
+            var mesh = new Mesh { name = "Lake", vertices = verts, triangles = tris };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         // ── Trees and rocks ────────────────────────────────────────────────────
@@ -199,6 +289,12 @@ namespace ProjectFossil.Generation
                 foreach (var r in go.GetComponentsInChildren<Renderer>())
                     r.shadowCastingMode = ShadowCastingMode.Off; // thousands of small shadows cost more than they add
             }
+
+            // Stop drawing small things once they're a few pixels tall; the haze hides the pop.
+            float cullBelow = inst.Kind == ScatterKind.Plant ? 0.012f : inst.Kind == ScatterKind.Rock ? 0.006f : 0.003f;
+            var lod = go.AddComponent<LODGroup>();
+            lod.SetLODs(new[] { new LOD(cullBelow, go.GetComponentsInChildren<Renderer>()) });
+            lod.RecalculateBounds();
         }
 
         private static void Place(GameObject go, Transform root, Vector3 pos, ScatterInstance inst)
@@ -303,6 +399,7 @@ namespace ProjectFossil.Generation
             if (Vector3.Dot(sun.transform.forward, Vector3.down) < 0.4f)
                 sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             if (sun.intensity < 0.8f) sun.intensity = 1.2f;
+            sun.color = new Color(1f, 0.93f, 0.82f); // warm tropical light
             if (sun.shadows == LightShadows.None) sun.shadows = LightShadows.Soft;
             RenderSettings.sun = sun;
         }
@@ -314,14 +411,15 @@ namespace ProjectFossil.Generation
 
             // Soft three-colour ambient so shaded sides aren't black (the scene has no baked lighting).
             RenderSettings.ambientMode         = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor     = new Color(0.56f, 0.63f, 0.72f);
-            RenderSettings.ambientEquatorColor = new Color(0.46f, 0.48f, 0.45f);
-            RenderSettings.ambientGroundColor  = new Color(0.26f, 0.24f, 0.2f);
+            RenderSettings.ambientSkyColor     = new Color(0.52f, 0.6f, 0.62f);
+            RenderSettings.ambientEquatorColor = new Color(0.42f, 0.46f, 0.38f);
+            RenderSettings.ambientGroundColor  = new Color(0.22f, 0.21f, 0.16f);
 
+            // Humid, green-grey haze: far hills fade out and the jungle feels deep.
             RenderSettings.fog        = true;
             RenderSettings.fogMode    = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.0032f;
-            RenderSettings.fogColor   = new Color(0.66f, 0.74f, 0.78f);
+            RenderSettings.fogDensity = 0.0052f;
+            RenderSettings.fogColor   = new Color(0.58f, 0.66f, 0.62f);
         }
     }
 }

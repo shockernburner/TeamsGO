@@ -253,7 +253,8 @@ namespace ProjectFossil.Audio
             _nextDistantRoar = state.Elapsed + Random.Range(distantRoarGap.x, distantRoarGap.y);
 
             foreach (var kv in _dinos) // a real one nearby already speaks for itself
-                if (kv.Key != null && kv.Key.species != null && kv.Key.species.maxHealth >= bigDinoHealth) return;
+                if (kv.Key != null && kv.Key.species != null && kv.Key.species.maxHealth >= bigDinoHealth &&
+                    kv.Key.species.temperament == Temperament.Predator) return;
 
             Vector3 far = _player.transform.position + RandomFlat() * distantRoarRange;
             Play3D(Pick(_roars), far, 0.9f, Random.Range(0.8f, 0.92f), distantRoarRange * 2.8f);
@@ -330,8 +331,10 @@ namespace ProjectFossil.Audio
         private void Call(DinosaurAI ai, float volume)
         {
             bool big = ai.species != null && ai.species.maxHealth >= bigDinoHealth;
-            if (big) Play3D(Pick(_roars), ai.transform.position, volume, Random.Range(0.9f, 1.05f), 220f);
-            else     Play3D(Pick(_screeches), ai.transform.position, volume * 0.9f, Random.Range(0.9f, 1.15f), 110f);
+            // Plant-eaters bellow: the same voices, pitched down.
+            float pitch = ai.species != null && ai.species.temperament != Temperament.Predator ? 0.7f : 1f;
+            if (big) Play3D(Pick(_roars), ai.transform.position, volume, Random.Range(0.9f, 1.05f) * pitch, 220f);
+            else     Play3D(Pick(_screeches), ai.transform.position, volume * 0.9f, Random.Range(0.9f, 1.15f) * pitch, 110f);
         }
 
         private void OnDinoBite(DinosaurAI ai)

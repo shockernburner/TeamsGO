@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ProjectFossil.Core;
+using ProjectFossil.Dinosaurs;
 using ProjectFossil.Economy;
 using ProjectFossil.Match;
 using ProjectFossil.Player;
@@ -32,7 +33,16 @@ namespace ProjectFossil.UI
 
         private readonly List<(string text, float until)> _messages = new List<(string, float)>();
 
-        private GUIStyle _big, _center, _box, _panel, _small, _hint, _barText;
+        // Dinosaurs recently hit by the player show a health bar over their heads for a few seconds.
+        public float healthBarSeconds = 4f;
+        private readonly Dictionary<DinosaurAI, float> _barsUntil = new Dictionary<DinosaurAI, float>();
+        private readonly List<DinosaurAI> _barScratch = new List<DinosaurAI>();
+
+        // Coins earned in the last moments, shown as "+N" beside the coin count.
+        private int   _coinBurst;
+        private float _coinBurstUntil;
+
+        private GUIStyle _big, _center, _box, _slot, _panel, _small, _hint, _barText;
 
         // Auto-create alongside any MatchBootstrap so no scene edits are needed.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -41,6 +51,32 @@ namespace ProjectFossil.UI
             if (FindFirstObjectByType<UIManager>() != null) return;
             if (FindFirstObjectByType<MatchBootstrap>() == null) return;
             new GameObject("UIManager").AddComponent<UIManager>();
+        }
+
+        private void OnEnable()
+        {
+            DinosaurAI.Damaged += OnDinosaurDamaged;
+            DinosaurAI.Killed  += OnDinosaurKilled;
+        }
+
+        private void OnDisable()
+        {
+            DinosaurAI.Damaged -= OnDinosaurDamaged;
+            DinosaurAI.Killed  -= OnDinosaurKilled;
+        }
+
+        private void OnDinosaurDamaged(DinosaurAI dino, DamageInfo info)
+        {
+            if (dino != null && info.Source != null && info.Source == _boundPlayer)
+                _barsUntil[dino] = Time.unscaledTime + healthBarSeconds;
+        }
+
+        private void OnDinosaurKilled(DinosaurAI dino, GameObject killer)
+        {
+            if (dino == null) return;
+            _barsUntil.Remove(dino);
+            if (killer != null && killer == _boundPlayer && dino.species != null)
+                Push($"{dino.species.speciesName} down  +{dino.species.scoreValue} score");
         }
 
         // ── Binding ────────────────────────────────────────────────────────────
@@ -120,21 +156,17 @@ namespace ProjectFossil.UI
             }
         }
 
-        private void OnAttacked(WeaponStats weapon, Health target)
-        {
-            if (target == null)
-                return; // swings at nothing are obvious; don't spam the feed
-            if (!target.IsAlive)
-                Push($"{weapon.Name}: killed it!");
-            else
-                Push($"{weapon.Name}: hit for {Mathf.RoundToInt(weapon.Damage)} (target {Mathf.CeilToInt(target.Current)}/{Mathf.CeilToInt(target.Max)})");
-        }
+        // Hits show on the target's own health bar; kills are announced by OnDinosaurKilled.
+        private void OnAttacked(WeaponStats weapon, Health target) { }
 
         private void Push(string text) => _messages.Add((text, Time.unscaledTime + announcementSeconds));
 
         private void OnBalanceChanged(int balance, int delta)
         {
-            if (delta > 0) Push($"+{delta} coins");
+            if (delta <= 0) return;
+            _coinBurst = Time.unscaledTime < _coinBurstUntil ? _coinBurst + delta : delta;
+            _coinBurstUntil = Time.unscaledTime + 2f;
+            if (delta >= 10) Push($"+{delta} coins"); // loot and rewards; small per-hit coins only show by the counter
         }
 
         private void OnMatchEnded(MatchStats stats)
@@ -166,6 +198,7 @@ namespace ProjectFossil.UI
 
             if (_match.IsRunning)
             {
+                DrawHealthBars();
                 DrawDamageFlash();
                 if (!_shopOpen) DrawCrosshair();
                 DrawHud();
@@ -188,7 +221,7 @@ namespace ProjectFossil.UI
             var inv = _match.PlayerInventory;
 
             // Compact status panel, top-left.
-            GUILayout.BeginArea(new Rect(10, 10, 230, 150), _panel);
+            GUILayout.BeginArea(new Rect(10, 10, 230, 168), _panel);
             if (health != null) Bar("HP", health.Current, health.Max, new Color(0.85f, 0.2f, 0.2f));
             if (controller != null)
             {
@@ -196,7 +229,13 @@ namespace ProjectFossil.UI
                 Bar(tired ? "Tired" : "Stam", controller.Stamina, controller.maxStamina,
                     tired ? new Color(0.95f, 0.55f, 0.1f) : new Color(0.3f, 0.7f, 0.9f));
             }
-            if (inv != null) GUILayout.Label($"Coins {inv.Wallet.Balance}    Time {FormatTime(state.Remaining)}", _small);
+            if (inv != null)
+            {
+                string burst = Time.unscaledTime < _coinBurstUntil ? $" (+{_coinBurst})" : "";
+                GUILayout.Label($"Coins {inv.Wallet.Balance}{burst}    Time {FormatTime(state.Remaining)}", _small);
+            }
+            string rank = _match.Rank != null ? $"    Rank {_match.Rank.Level}" : "";
+            GUILayout.Label($"Score {_match.LiveScore}{rank}", _small);
 
             if (!state.IsExtractionOpen)
                 GUILayout.Label($"Extraction in {FormatTime(state.ExtractionOpensAt - state.Elapsed)}", _small);
@@ -222,7 +261,7 @@ namespace ProjectFossil.UI
 
         private void DrawInventory(Inventory inventory)
         {
-            const float slot = 52f;
+            const float slot = 64f;
             float width = inventory.SlotCount * (slot + 4f);
             float x = (Screen.width - width) * 0.5f;
             float y = Screen.height - slot - 12f;
@@ -236,7 +275,7 @@ namespace ProjectFossil.UI
                     var s = inventory.Stacks[i];
                     label = s.Amount > 1 ? $"{s.Item.displayName}\nx{s.Amount}" : s.Item.displayName;
                 }
-                GUI.Box(r, label, _box);
+                GUI.Box(r, label, _slot);
             }
         }
 
@@ -284,15 +323,19 @@ namespace ProjectFossil.UI
         {
             if (stats == null) return;
 
-            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 160, 400, 320);
+            var area = new Rect(Screen.width * 0.5f - 210, Screen.height * 0.5f - 230, 420, 460);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(Headline(stats.Result), _big);
-            GUILayout.Space(8);
-            GUILayout.Label($"Time survived: {FormatTime(stats.TimeSurvived)}");
-            GUILayout.Label($"Coins earned: {stats.CoinsEarned}");
-            GUILayout.Label($"Dinosaurs killed: {stats.DinosKilled}");
-            GUILayout.Label($"Threats faced: {stats.ThreatsFaced}");
-            GUILayout.Label($"Island seed: {stats.Seed}");
+            GUILayout.Label($"SCORE {stats.Score}" + (stats.NewBest ? "   NEW BEST!" : $"   (best {stats.BestScore})"), _big);
+            GUILayout.Space(6);
+            GUILayout.Label($"Survived {FormatTime(stats.TimeSurvived)}: {stats.SurvivalPoints}");
+            GUILayout.Label($"Kills ({stats.DinosKilled}): {stats.KillPoints}");
+            GUILayout.Label($"Damage dealt: {stats.DamagePoints}");
+            GUILayout.Label($"Threats faced ({stats.ThreatsFaced}): {stats.ThreatPoints}");
+            GUILayout.Label($"{ResultLabel(stats.Result)}: x{stats.ResultMultiplier:0.##}");
+            GUILayout.Space(6);
+            GUILayout.Label(RankLine(stats));
+            GUILayout.Label($"Coins earned: {stats.CoinsEarned}    Island seed: {stats.Seed}");
             GUILayout.Space(12);
             if (GUILayout.Button("Play again (new island)", GUILayout.Height(36)) && _bootstrap != null)
                 _bootstrap.Restart(true);
@@ -357,12 +400,65 @@ namespace ProjectFossil.UI
             GUI.color = old;
         }
 
+        // Small bars over dinosaurs the player hit recently.
+        private void DrawHealthBars()
+        {
+            var cam = Camera.main;
+            if (cam == null || _barsUntil.Count == 0) return;
+
+            _barScratch.Clear();
+            foreach (var kv in _barsUntil)
+                if (kv.Key == null || kv.Value < Time.unscaledTime || !kv.Key.Health.IsAlive) _barScratch.Add(kv.Key);
+            foreach (var d in _barScratch) _barsUntil.Remove(d);
+
+            var old = GUI.color;
+            foreach (var kv in _barsUntil)
+            {
+                var dino = kv.Key;
+                var col = dino.GetComponent<Collider>();
+                Vector3 top = col != null ? new Vector3(col.bounds.center.x, col.bounds.max.y + 0.4f, col.bounds.center.z)
+                                          : dino.transform.position + Vector3.up * 2f;
+                Vector3 sp = cam.WorldToScreenPoint(top);
+                if (sp.z <= 0f) continue;
+
+                float w = Mathf.Clamp(900f / sp.z, 36f, 90f);
+                var r = new Rect(sp.x - w * 0.5f, Screen.height - sp.y - 6f, w, 6f);
+                GUI.color = new Color(0f, 0f, 0f, 0.6f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                GUI.color = new Color(0.9f, 0.25f, 0.2f);
+                var fill = new Rect(r.x + 1f, r.y + 1f, (r.width - 2f) * dino.Health.Fraction, r.height - 2f);
+                GUI.DrawTexture(fill, Texture2D.whiteTexture);
+            }
+            GUI.color = old;
+        }
+
+        private static string ResultLabel(MatchResult result)
+        {
+            switch (result)
+            {
+                case MatchResult.Extracted: return "Extraction bonus";
+                case MatchResult.Died:      return "Died";
+                default:                    return "Stranded";
+            }
+        }
+
+        private static string RankLine(MatchStats s)
+        {
+            // 10 rating points = one rank, so the change reads as a percentage of a rank.
+            int pct = Mathf.RoundToInt(s.RatingDelta * 10f);
+            string change = pct >= 0 ? $"+{pct}%" : $"{pct}%";
+            if (s.RankAfter > s.RankBefore) return $"Survivor rank UP: {s.RankBefore} to {s.RankAfter}. Islands get harder.";
+            if (s.RankAfter < s.RankBefore) return $"Survivor rank down: {s.RankBefore} to {s.RankAfter}.";
+            return $"Survivor rank {s.RankAfter} ({change} toward the next rank)";
+        }
+
         private void EnsureStyles()
         {
             if (_big != null) return;
             _big    = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
             _center = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleCenter };
             _box    = new GUIStyle(GUI.skin.box)   { alignment = TextAnchor.MiddleCenter, wordWrap = true, fontSize = 13 };
+            _slot   = new GUIStyle(_box)           { fontSize = 11, padding = new RectOffset(2, 2, 2, 2) };
             _panel  = new GUIStyle(GUI.skin.box)   { padding = new RectOffset(8, 8, 6, 6) };
             _small  = new GUIStyle(GUI.skin.label) { fontSize = 12, margin = new RectOffset(0, 0, 1, 1) };
             _hint   = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter };

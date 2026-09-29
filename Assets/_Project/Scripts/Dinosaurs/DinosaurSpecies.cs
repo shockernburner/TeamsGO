@@ -3,6 +3,11 @@ using ProjectFossil.Core;
 
 namespace ProjectFossil.Dinosaurs
 {
+    // How a species reacts to people.
+    // Predator: hunts anyone it notices. Territorial: warns, then charges anyone who comes too close or hits it.
+    // Skittish: runs from people; only fights back when cornered (hit while it can't flee).
+    public enum Temperament { Predator, Territorial, Skittish }
+
     [CreateAssetMenu(menuName = "Project Fossil/Dinosaur Species", fileName = "Species_New")]
     public class DinosaurSpecies : ScriptableObject
     {
@@ -11,6 +16,11 @@ namespace ProjectFossil.Dinosaurs
         public Color  debugColor  = Color.green;
         public float  bodyScale   = 1f;   // uniform scale applied to the spawned body
         public ModelDefinition model;     // imported look; empty = placeholder capsule
+
+        [Header("Behaviour")]
+        public Temperament temperament   = Temperament.Predator;
+        [Tooltip("Territorial only: charges anyone who comes closer than this")]
+        public float       territoryRadius = 9f;
 
         [Header("Movement")]
         public float walkSpeed   = 3f;
@@ -45,5 +55,6 @@ namespace ProjectFossil.Dinosaurs
 
         [Header("Economy")]
         public int killReward = 15; // in-match currency paid to whoever lands the killing blow
+        public int scoreValue = 100; // match score for the kill
     }
 }

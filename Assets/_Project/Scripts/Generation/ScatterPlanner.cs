@@ -56,7 +56,7 @@ namespace ProjectFossil.Generation
                     float z = (cz + jz) * cell;
 
                     float h = SampleHeight(data, x, z);
-                    if (h < minHeight) continue;
+                    if (h < minHeight || !IsLand(data, x, z)) continue; // not in the sea, rivers or lakes
 
                     int biome = SampleBiome(data, x, z);
                     var b = biome >= 0 && biome < biomes.Count ? biomes[biome] : null;
@@ -132,6 +132,14 @@ namespace ProjectFossil.Generation
             float a   = Mathf.Lerp(hm[z0, x0],     hm[z0, x0 + 1],     tx);
             float b   = Mathf.Lerp(hm[z0 + 1, x0], hm[z0 + 1, x0 + 1], tx);
             return Mathf.Lerp(a, b, tz);
+        }
+
+        public static bool IsLand(IslandData data, float worldX, float worldZ)
+        {
+            int res = data.Resolution;
+            int gx  = Mathf.Clamp(Mathf.RoundToInt(worldX / data.Settings.worldSize * (res - 1)), 0, res - 1);
+            int gz  = Mathf.Clamp(Mathf.RoundToInt(worldZ / data.Settings.worldSize * (res - 1)), 0, res - 1);
+            return data.LandMask[gz, gx];
         }
 
         public static int SampleBiome(IslandData data, float worldX, float worldZ)

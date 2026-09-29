@@ -15,12 +15,13 @@ MonoBehaviour:
   threatId: raptor_pack
   displayName: Raptor Pack
   announcement: Chattering calls all around. A raptor pack has your scent.
-  cost: 60
+  cost: 55
   cooldown: 90
-  unlockTime: 240
+  unlockTime: 150
   aiWeight: 2
   kind: 0
   spawnPrefab: {fileID: 0}
   speciesOverride: {fileID: 0}
   spawnCount: 3
   spawnDistance: 50
+  trampleDamage: 25

@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7aca359cf96eb4297b64bc1ca50c4492, type: 3}
+  m_Name: Species_Longneck
+  m_EditorClassIdentifier: ProjectFossil.Dinosaurs::ProjectFossil.Dinosaurs.DinosaurSpecies
+  speciesName: Longneck
+  debugColor: {r: 0.5, g: 0.45, b: 0.4, a: 1}
+  bodyScale: 2.2
+  model: {fileID: 11400000, guid: b6d3cc3deb3b4bd7b23c4cd4cf7c0940, type: 2}
+  temperament: 1
+  territoryRadius: 6
+  walkSpeed: 2
+  runSpeed: 4.5
+  turnSpeed: 50
+  wanderRadius: 35
+  wanderWaitMin: 5
+  wanderWaitMax: 10
+  sightRange: 30
+  sightAngle: 100
+  hearingRange: 18
+  chaseRange: 25
+  attackRange: 5
+  attackDamage: 40
+  attackCooldown: 2.5
+  attackWindup: 1
+  hitStagger: 0
+  maxHealth: 700
+  fleeHealthFraction: 0
+  fleeDistance: 30
+  fleeDuration: 6
+  killReward: 60
+  scoreValue: 500
