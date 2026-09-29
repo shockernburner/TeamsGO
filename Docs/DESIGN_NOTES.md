@@ -159,3 +159,11 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - Dino sounds are 3D with linear rolloff (screech up to 110 m, roar up to 220 m), so you can tell where a threat is. Nothing depends on the Audio assembly.
 - WAV previews of every sound are in the shared project files under `audio-previews/`.
 - Tests: `SoundSynthTests` checks length, no NaN, audible and unclipped levels, click-free endings, determinism, and the loop seam.
+
+## Audible apex roar (2026-09-29)
+
+- Playtest: no big roar was ever heard. Two causes. The Ironjaw threat unlocks at 10:00 and matches were ending near 6:00, and the old roar put ~73% of its energy below 250 Hz, which laptop speakers barely reproduce.
+- The roar recipe now lives in throat formants (~380 Hz, 1 kHz sweeping down, 1.8 kHz rasp) with a detuned growl; the sub rumble is a headphone bonus. A test keeps at least half the energy above 250 Hz.
+- Distant roars: from 1:15, every 60–110 s, a roar plays ~140 m from the player in a random direction, unless a big dinosaur is already being tracked. Foreshadowing only; nothing spawns.
+- When a threat whose species is big (maxHealth ≥ 200) is bought, a roar follows the sting from where it will come.
+- Ironjaw unlock time is unchanged (economy call, not audio).

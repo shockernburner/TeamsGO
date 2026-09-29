@@ -48,6 +48,26 @@ namespace ProjectFossil.Tests.EditMode
         }
 
         [Test]
+        public void Roar_IsAudibleOnLaptopSpeakers()
+        {
+            // Small speakers drop most of what sits below ~250 Hz; the roar must not live there.
+            for (int v = 0; v < 4; v++)
+            {
+                var s = SoundSynth.Roar(v);
+                float a = 1f - (float)Math.Exp(-2.0 * Math.PI * 250.0 / SoundSynth.SampleRate);
+                float low = 0f;
+                double total = 0, high = 0;
+                foreach (var x in s)
+                {
+                    low += a * (x - low);
+                    total += x * x;
+                    high  += (x - low) * (x - low);
+                }
+                Assert.That(high / total, Is.GreaterThan(0.5), $"variant {v}");
+            }
+        }
+
+        [Test]
         public void SameVariant_SameSamples_DifferentVariant_Differs()
         {
             var a = SoundSynth.Screech(1);
