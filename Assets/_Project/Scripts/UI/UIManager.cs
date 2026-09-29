@@ -161,9 +161,15 @@ namespace ProjectFossil.UI
             var controller = _match.PlayerController;
             var inv = _match.PlayerInventory;
 
-            GUILayout.BeginArea(new Rect(12, 12, 300, 240), _box);
+            GUILayout.BeginArea(new Rect(12, 12, 330, 290), _box);
             if (health != null)     Bar("Health",  health.Current, health.Max, new Color(0.85f, 0.2f, 0.2f));
-            if (controller != null) Bar("Stamina", controller.Stamina, controller.maxStamina, new Color(0.3f, 0.7f, 0.9f));
+            if (controller != null)
+            {
+                bool tired = controller.IsExhausted;
+                Bar(tired ? "Stamina (EXHAUSTED)" : "Stamina", controller.Stamina, controller.maxStamina,
+                    tired ? new Color(0.95f, 0.55f, 0.1f) : new Color(0.3f, 0.7f, 0.9f));
+                GUILayout.Label($"Moving: {MovementLabel(controller)}");
+            }
             if (inv != null)        GUILayout.Label($"Coins: {inv.Wallet.Balance}", _big);
             GUILayout.Label($"Time left: {FormatTime(state.Remaining)}");
 
@@ -175,7 +181,8 @@ namespace ProjectFossil.UI
                 GUILayout.Label("Extraction OPEN: reach a green beacon");
 
             if (_combat != null) GUILayout.Label($"Weapon: {_combat.CurrentWeapon.Name}");
-            GUILayout.Label("[Tab] Shop   [Q] Heal   [LMB/F] Attack   [E] Interact");
+            GUILayout.Label("[Shift] Run on/off  [C] Crouch  [Z] Crawl  [Space] Jump/stand");
+            GUILayout.Label("[LMB/F] Attack  [E] Interact  [Q] Heal  [Tab] Shop");
             GUILayout.EndArea();
 
             if (inv != null) DrawInventory(inv.Inventory);
@@ -292,6 +299,18 @@ namespace ProjectFossil.UI
             _big    = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
             _center = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleCenter };
             _box    = new GUIStyle(GUI.skin.box)   { alignment = TextAnchor.MiddleCenter, wordWrap = true, fontSize = 13 };
+        }
+
+        private static string MovementLabel(PlayerController c)
+        {
+            switch (c.Stance)
+            {
+                case Stance.Prone:     return "Crawling (very quiet)";
+                case Stance.Crouching: return "Crouching (quiet)";
+            }
+            if (c.IsExhausted) return "Out of breath";
+            if (c.IsSprinting) return "Running (loud)";
+            return c.RunToggled ? "Run on" : "Walking";
         }
 
         private static string FormatTime(float seconds)

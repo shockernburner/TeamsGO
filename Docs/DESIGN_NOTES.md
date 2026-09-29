@@ -99,3 +99,13 @@ The director exposes three surface points regardless of whether the buyer is AI 
 
 ### Input
 - Added actions: Attack (LMB / RT), Shop (Tab / Select), UseItem (Q / D-pad up).
+
+## 2026-09-29 — Movement, stamina and stealth pass (from playtest recording)
+
+- **Input model:** `PlayerInput` uses Send Messages, which only reports button *presses*. The old hold-to-sprint and hold-to-crouch never saw the release, so sprint stuck on and drained stamina whenever the player moved. Run, crouch and crawl are now **toggles**: Shift runs, C or Ctrl crouches, Z crawls, and Space jumps or stands up.
+- **Stamina** lives in a pure `StaminaModel` (Player). Running drains it. At 0 the player is **exhausted**: no running or jumping, and walking drops to 3 m/s until stamina is back above 30%. Standing still recovers 1.75× faster. A jump costs 10.
+- **Stances:** standing, crouching (2.5 m/s) and prone crawl (1.2 m/s). Each resizes the CharacterController and the placeholder body, and lowers the camera.
+- **Stealth:** the player exposes Core's `IStealthProfile`. Dinosaurs multiply hearing range by noise (run 1.5, crouch 0.5, crawl 0.25) and sight range by visibility (crouch 0.75, crawl 0.5).
+- **Melee** reaches 240° around the player and snaps them to face the target. The recording showed raptors attacking from the sides while every swing missed.
+- **POI debug spheres** are editor-only now (`IslandTerrainBuilder.Build(..., showPoiMarkers)`). Loot caches get a thin yellow pole that disappears once emptied.
+- **Tuning:** Raptor Pack unlocks at 4:00 (was 2:30) and costs 60.

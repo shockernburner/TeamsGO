@@ -249,33 +249,35 @@ namespace ProjectFossil.Dinosaurs
 
         // ── Detection ──────────────────────────────────────────────────────────
 
+        // Hearing is omnidirectional; sight needs the FOV cone and a clear line. Both ranges shrink
+        // for a player who is crouching or crawling (IStealthProfile) and hearing grows when they run.
         private Transform TryDetectPlayer()
         {
-            // Hearing: omnidirectional sphere check
-            var heard = OverlapCheckForPlayer(species.hearingRange);
-            if (heard != null) return heard;
-
-            // Sight: FOV cone + line-of-sight raycast
-            var inSightRange = OverlapCheckForPlayer(species.sightRange);
-            if (inSightRange != null && HasLineOfSight(inSightRange))
-                return inSightRange;
-
-            return null;
-        }
-
-        private Transform OverlapCheckForPlayer(float radius)
-        {
-            var cols = Physics.OverlapSphere(transform.position, radius);
+            float maxRange = Mathf.Max(species.hearingRange, species.sightRange) * 1.5f;
+            var cols = Physics.OverlapSphere(transform.position, maxRange);
             foreach (var col in cols)
             {
                 if (!col.CompareTag("Player")) continue;
                 if (!IsValidTarget(col.transform)) continue;
-                return col.transform;
+
+                float noise = 1f, visibility = 1f;
+                var stealth = col.GetComponentInParent<IStealthProfile>();
+                if (stealth != null)
+                {
+                    noise      = stealth.NoiseMultiplier;
+                    visibility = stealth.VisibilityMultiplier;
+                }
+
+                float dist = Vector3.Distance(transform.position, col.transform.position);
+                if (dist <= species.hearingRange * noise) return col.transform;
+
+                float sight = species.sightRange * visibility;
+                if (dist <= sight && HasLineOfSight(col.transform, sight)) return col.transform;
             }
             return null;
         }
 
-        private bool HasLineOfSight(Transform target)
+        private bool HasLineOfSight(Transform target, float range)
         {
             Vector3 toTarget = target.position - transform.position;
             float angle = Vector3.Angle(transform.forward, toTarget);
@@ -285,7 +287,7 @@ namespace ProjectFossil.Dinosaurs
             if (Physics.Raycast(transform.position + Vector3.up,
                                 toTarget.normalized,
                                 out var hit,
-                                species.sightRange,
+                                range,
                                 Physics.DefaultRaycastLayers,
                                 QueryTriggerInteraction.Ignore))
             {
