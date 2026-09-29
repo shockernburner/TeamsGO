@@ -3,12 +3,19 @@ using UnityEngine.AI;
 using Unity.AI.Navigation;
 using ProjectFossil.Generation;
 using ProjectFossil.Dinosaurs;
+using ProjectFossil.Economy;
+using ProjectFossil.Player;
 
 namespace ProjectFossil.Match
 {
-    // Place on a scene object. Generates the island, bakes NavMesh, spawns player and dinosaurs on Start.
+    // Place on a scene object. Generates the island, bakes NavMesh, spawns player and dinosaurs,
+    // then hands everything to the MatchManager on the same object.
     public class MatchBootstrap : MonoBehaviour
     {
+        [Header("Content")]
+        [Tooltip("Empty = Resources/GameContent")]
+        public GameContent content;
+
         [Header("Island")]
         public IslandSettings islandSettings;
         public int seed = 0;
@@ -23,10 +30,20 @@ namespace ProjectFossil.Match
         public int dinosaursPerSpawnZone = 2;
 
         public IslandData LastData { get; private set; }
+        public MatchManager Match  { get; private set; }
+
+        private GameObject _player;
 
         private void Start()
         {
             int usedSeed = randomSeed ? Random.Range(0, int.MaxValue) : seed;
+            GenerateAndSpawn(usedSeed);
+        }
+
+        // New island, new match. Used by the results screen.
+        public void Restart(bool newSeed = true)
+        {
+            int usedSeed = newSeed ? Random.Range(0, int.MaxValue) : (LastData != null ? LastData.Seed : seed);
             GenerateAndSpawn(usedSeed);
         }
 
@@ -38,6 +55,18 @@ namespace ProjectFossil.Match
                 return;
             }
 
+            if (content == null) content = GameContent.LoadDefault();
+            if (content == null)
+            {
+                Debug.LogError("[MatchBootstrap] No GameContent assigned and none found at Resources/GameContent.");
+                return;
+            }
+
+            if (_player != null)
+            {
+                _player.SetActive(false); // run OnDisable now so the old camera/cursor state doesn't linger
+                Destroy(_player);
+            }
             IslandTerrainBuilder.DestroyExisting();
 
             var generator = new IslandGenerator(usedSeed, islandSettings);
@@ -46,7 +75,12 @@ namespace ProjectFossil.Match
 
             BakeNavMesh(islandGO);
             SpawnDinosaurs(LastData, islandGO.transform);
-            SpawnPlayer(LastData);
+            _player = SpawnPlayer(LastData);
+
+            Match = GetComponent<MatchManager>();
+            if (Match == null) Match = gameObject.AddComponent<MatchManager>();
+            if (_player != null)
+                Match.Begin(LastData, _player, content, dinosaurPrefab, islandGO.transform);
 
             Debug.Log($"[MatchBootstrap] Seed {usedSeed} | {LastData.SpawnZones.Count} spawn zones | {LastData.PointsOfInterest.Count} POIs");
         }
@@ -91,12 +125,25 @@ namespace ProjectFossil.Match
 
         // ── Player spawning ────────────────────────────────────────────────────
 
-        private void SpawnPlayer(IslandData data)
+        private GameObject SpawnPlayer(IslandData data)
         {
-            if (playerPrefab == null) return;
+            if (playerPrefab == null) return null;
 
             Vector3 spawnPos = GetSpawnPosition(data);
-            Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+            var player = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+
+            // Gameplay components the prefab may not carry yet (inventory first: combat reads its weapon).
+            EnsureComponent<PlayerInventory>(player);
+            EnsureComponent<PlayerCombat>(player);
+            EnsureComponent<PlayerInteractor>(player);
+            EnsureComponent<PlayerMenuInput>(player);
+            return player;
+        }
+
+        private static T EnsureComponent<T>(GameObject go) where T : Component
+        {
+            var c = go.GetComponent<T>();
+            return c != null ? c : go.AddComponent<T>();
         }
 
         private Vector3 GetSpawnPosition(IslandData data)

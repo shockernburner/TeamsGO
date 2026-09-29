@@ -2,7 +2,8 @@
     "name": "ProjectFossil.Director",
     "rootNamespace": "ProjectFossil.Director",
     "references": [
-        "ProjectFossil.Core"
+        "ProjectFossil.Core",
+        "ProjectFossil.Economy"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

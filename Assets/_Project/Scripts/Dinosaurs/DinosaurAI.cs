@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using UnityEngine.AI;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Dinosaurs
 {
@@ -8,20 +10,30 @@ namespace ProjectFossil.Dinosaurs
     {
         public DinosaurSpecies species;
 
+        // Raised when any dinosaur dies. Killer may be null (hazards, unknown source).
+        public static event Action<DinosaurAI, GameObject> Killed;
+
         // ── State machine ──────────────────────────────────────────────────────
-        public enum State { Wander, Alert, Chase }
+        public enum State { Wander, Alert, Chase, Flee, Dead }
         public State CurrentState { get; private set; } = State.Wander;
+
+        public Health Health { get; private set; }
 
         private NavMeshAgent _agent;
         private Transform    _target;
         private float        _waitTimer;
         private float        _attackTimer;
+        private float        _fleeTimer;
+        private bool         _hunting; // sent by the Threat Director: never gives up the chase
 
         // ── Lifecycle ──────────────────────────────────────────────────────────
 
         private void Awake()
         {
             _agent = GetComponent<NavMeshAgent>();
+
+            Health = GetComponent<Health>();
+            if (Health == null) Health = gameObject.AddComponent<Health>();
         }
 
         private void Start()
@@ -33,8 +45,21 @@ namespace ProjectFossil.Dinosaurs
                 return;
             }
 
+            transform.localScale = Vector3.one * species.bodyScale;
+            Health.Initialize(species.maxHealth);
+            Health.Damaged += OnDamaged;
+            Health.Died    += OnDied;
+
             ApplySpeciesToAgent();
-            EnterWander();
+            if (_hunting && _target != null) EnterChase();
+            else EnterWander();
+        }
+
+        private void OnDestroy()
+        {
+            if (Health == null) return;
+            Health.Damaged -= OnDamaged;
+            Health.Died    -= OnDied;
         }
 
         private void Update()
@@ -44,7 +69,18 @@ namespace ProjectFossil.Dinosaurs
                 case State.Wander: UpdateWander(); break;
                 case State.Alert:  UpdateAlert();  break;
                 case State.Chase:  UpdateChase();  break;
+                case State.Flee:   UpdateFlee();   break;
             }
+        }
+
+        // Send this dinosaur straight after a target (used by threats). It ignores chaseRange.
+        public void Hunt(Transform target)
+        {
+            if (target == null || CurrentState == State.Dead) return;
+
+            _target  = target;
+            _hunting = true;
+            if (species != null && _agent.isOnNavMesh) EnterChase();
         }
 
         // ── Wander ─────────────────────────────────────────────────────────────
@@ -52,18 +88,19 @@ namespace ProjectFossil.Dinosaurs
         private void EnterWander()
         {
             CurrentState = State.Wander;
+            _hunting     = false;
             _agent.speed = species.walkSpeed;
             SetRandomWanderDestination();
         }
 
         private void UpdateWander()
         {
-            // Try to detect players every frame
             var detected = TryDetectPlayer();
             if (detected != null)
             {
                 _target = detected;
-                EnterAlert();
+                if (ShouldFlee()) EnterFlee(detected.position);
+                else EnterAlert();
                 return;
             }
 
@@ -77,9 +114,9 @@ namespace ProjectFossil.Dinosaurs
 
         private void SetRandomWanderDestination()
         {
-            _waitTimer = Random.Range(species.wanderWaitMin, species.wanderWaitMax);
+            _waitTimer = UnityEngine.Random.Range(species.wanderWaitMin, species.wanderWaitMax);
 
-            Vector3 randomDir = Random.insideUnitSphere * species.wanderRadius;
+            Vector3 randomDir = UnityEngine.Random.insideUnitSphere * species.wanderRadius;
             randomDir += transform.position;
             if (NavMesh.SamplePosition(randomDir, out var hit, species.wanderRadius, NavMesh.AllAreas))
                 _agent.SetDestination(hit.position);
@@ -96,16 +133,9 @@ namespace ProjectFossil.Dinosaurs
 
         private void UpdateAlert()
         {
-            if (_target == null) { EnterWander(); return; }
+            if (!IsValidTarget(_target)) { EnterWander(); return; }
 
-            // Face the target while paused
-            Vector3 dir = (_target.position - transform.position).normalized;
-            dir.y = 0f;
-            if (dir != Vector3.zero)
-                transform.rotation = Quaternion.RotateTowards(
-                    transform.rotation,
-                    Quaternion.LookRotation(dir),
-                    species.turnSpeed * Time.deltaTime);
+            FaceTowards(_target.position);
 
             _waitTimer -= Time.deltaTime;
             if (_waitTimer <= 0f)
@@ -122,32 +152,99 @@ namespace ProjectFossil.Dinosaurs
 
         private void UpdateChase()
         {
-            if (_target == null) { EnterWander(); return; }
+            if (!IsValidTarget(_target)) { _target = null; EnterWander(); return; }
 
             float dist = Vector3.Distance(transform.position, _target.position);
 
-            // Give up if target is too far
-            if (dist > species.chaseRange)
+            // Give up if target is too far (hunters sent by the director never give up)
+            if (!_hunting && dist > species.chaseRange)
             {
                 _target = null;
                 EnterWander();
                 return;
             }
 
-            _agent.SetDestination(_target.position);
+            if (dist > species.attackRange)
+            {
+                _agent.SetDestination(_target.position);
+                return;
+            }
 
             // Attack when in range
-            if (dist <= species.attackRange)
+            _agent.ResetPath();
+            FaceTowards(_target.position);
+            _attackTimer -= Time.deltaTime;
+            if (_attackTimer <= 0f)
             {
-                _agent.ResetPath();
-                _attackTimer -= Time.deltaTime;
-                if (_attackTimer <= 0f)
-                {
-                    _attackTimer = species.attackCooldown;
-                    // TODO: deal damage via health component
-                    Debug.Log($"[DinosaurAI] {name} attacks {_target.name} for {species.attackDamage} dmg");
-                }
+                _attackTimer = species.attackCooldown;
+                var victim = _target.GetComponentInParent<IDamageable>();
+                victim?.TakeDamage(new DamageInfo(species.attackDamage, gameObject, _target.position));
             }
+        }
+
+        // ── Flee ───────────────────────────────────────────────────────────────
+
+        private bool ShouldFlee() =>
+            species.fleeHealthFraction > 0f && Health.Fraction <= species.fleeHealthFraction;
+
+        private void EnterFlee(Vector3 threatPosition)
+        {
+            CurrentState = State.Flee;
+            _hunting     = false;
+            _target      = null;
+            _fleeTimer   = species.fleeDuration;
+            _agent.speed = species.runSpeed;
+
+            Vector3 away = transform.position - threatPosition;
+            away.y = 0f;
+            if (away.sqrMagnitude < 0.01f) away = transform.forward;
+
+            Vector3 dest = transform.position + away.normalized * species.fleeDistance;
+            if (NavMesh.SamplePosition(dest, out var hit, species.fleeDistance, NavMesh.AllAreas))
+                _agent.SetDestination(hit.position);
+        }
+
+        private void UpdateFlee()
+        {
+            _fleeTimer -= Time.deltaTime;
+            if (_fleeTimer <= 0f) EnterWander();
+        }
+
+        // ── Damage / death ─────────────────────────────────────────────────────
+
+        private void OnDamaged(DamageInfo info)
+        {
+            if (!Health.IsAlive || info.Source == null) return;
+
+            if (ShouldFlee())
+            {
+                EnterFlee(info.Source.transform.position);
+                return;
+            }
+
+            // Retaliate against whoever hurt us
+            if (CurrentState == State.Wander || CurrentState == State.Alert)
+            {
+                _target = info.Source.transform;
+                EnterChase();
+            }
+        }
+
+        private void OnDied(DamageInfo info)
+        {
+            CurrentState = State.Dead;
+            _target      = null;
+            if (_agent.isOnNavMesh) _agent.ResetPath();
+            _agent.enabled = false;
+
+            foreach (var col in GetComponentsInChildren<Collider>())
+                col.enabled = false;
+
+            // Placeholder death: tip over, then clean up
+            transform.rotation = Quaternion.LookRotation(transform.forward, transform.right);
+            Destroy(gameObject, 5f);
+
+            Killed?.Invoke(this, info.Source);
         }
 
         // ── Detection ──────────────────────────────────────────────────────────
@@ -172,6 +269,7 @@ namespace ProjectFossil.Dinosaurs
             foreach (var col in cols)
             {
                 if (!col.CompareTag("Player")) continue;
+                if (!IsValidTarget(col.transform)) continue;
                 return col.transform;
             }
             return null;
@@ -196,7 +294,27 @@ namespace ProjectFossil.Dinosaurs
             return false;
         }
 
+        // Dead or destroyed targets are not worth chasing.
+        private static bool IsValidTarget(Transform target)
+        {
+            if (target == null) return false;
+            var damageable = target.GetComponentInParent<IDamageable>();
+            return damageable == null || damageable.IsAlive;
+        }
+
         // ── Helpers ────────────────────────────────────────────────────────────
+
+        private void FaceTowards(Vector3 position)
+        {
+            Vector3 dir = position - transform.position;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 0.0001f) return;
+
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                Quaternion.LookRotation(dir.normalized),
+                species.turnSpeed * Time.deltaTime);
+        }
 
         private void ApplySpeciesToAgent()
         {

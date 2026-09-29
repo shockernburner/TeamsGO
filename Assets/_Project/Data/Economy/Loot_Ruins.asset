@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20bb3da30fdd44c680bd953350f90ba2, type: 3}
+  m_Name: Loot_Ruins
+  m_EditorClassIdentifier: ProjectFossil.Economy::ProjectFossil.Economy.LootTable
+  guaranteedCurrencyMin: 20
+  guaranteedCurrencyMax: 40
+  rolls: 2
+  emptyRollChance: 0.25
+  entries:
+  - item: {fileID: 11400000, guid: c9b6dbf745564962960517d787e341a4, type: 2}
+    minAmount: 1
+    maxAmount: 2
+    weight: 2
+  - item: {fileID: 11400000, guid: aefaf7e605af469188c3a956c5b99cf3, type: 2}
+    minAmount: 1
+    maxAmount: 1
+    weight: 1
+  - item: {fileID: 11400000, guid: 3938fda80abd43728db49bff352eef55, type: 2}
+    minAmount: 1
+    maxAmount: 1
+    weight: 1
+  - item: {fileID: 0}
+    minAmount: 10
+    maxAmount: 30
+    weight: 2

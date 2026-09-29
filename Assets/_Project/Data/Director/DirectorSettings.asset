@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d71b37210d3c42a691b82460f17f9a2a, type: 3}
+  m_Name: DirectorSettings
+  m_EditorClassIdentifier: ProjectFossil.Director::ProjectFossil.Director.DirectorSettings
+  startingBudget: 0
+  startIncomePerSecond: 0.4
+  endIncomePerSecond: 2.5
+  escalationExponent: 1.5
+  gracePeriod: 60
+  minSecondsBetween: 50
+  decisionInterval: 5
+  saveUpChance: 0.5

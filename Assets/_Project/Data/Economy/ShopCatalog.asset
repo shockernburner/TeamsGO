@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d0cbc2f89184739ac93fb64f2144597, type: 3}
+  m_Name: ShopCatalog
+  m_EditorClassIdentifier: ProjectFossil.Economy::ProjectFossil.Economy.ShopCatalog
+  offers:
+  - offerId: bone_club
+    displayName: Bone Club
+    kind: 0
+    price: 25
+    item: {fileID: 11400000, guid: 3938fda80abd43728db49bff352eef55, type: 2}
+    amount: 1
+  - offerId: hunting_spear
+    displayName: Hunting Spear
+    kind: 0
+    price: 70
+    item: {fileID: 11400000, guid: aefaf7e605af469188c3a956c5b99cf3, type: 2}
+    amount: 1
+  - offerId: medkit
+    displayName: Medkit
+    kind: 0
+    price: 30
+    item: {fileID: 11400000, guid: c9b6dbf745564962960517d787e341a4, type: 2}
+    amount: 1
+  - offerId: slots_2
+    displayName: +2 inventory slots
+    kind: 1
+    price: 40
+    item: {fileID: 0}
+    amount: 2

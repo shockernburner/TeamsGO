@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c02dc29dbd44204b38699c8c7e0ba2a, type: 3}
+  m_Name: MatchRules
+  m_EditorClassIdentifier: ProjectFossil.Match::ProjectFossil.Match.MatchRules
+  matchDuration: 1500
+  extractionOpensAt: 300
+  extractionHoldTime: 8
+  extractionRadius: 8
+  survivalPayoutInterval: 60
+  survivalPayoutAmount: 10

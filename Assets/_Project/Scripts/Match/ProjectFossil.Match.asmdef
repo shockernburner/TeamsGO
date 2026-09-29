@@ -7,6 +7,7 @@
         "ProjectFossil.Director",
         "ProjectFossil.Economy",
         "ProjectFossil.Dinosaurs",
+        "ProjectFossil.Player",
         "Unity.AI.Navigation"
     ],
     "includePlatforms": [],
