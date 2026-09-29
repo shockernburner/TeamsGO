@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
 using Unity.AI.Navigation;
+using ProjectFossil.Core;
 using ProjectFossil.Generation;
 using ProjectFossil.Dinosaurs;
 using ProjectFossil.Economy;
@@ -33,9 +34,26 @@ namespace ProjectFossil.Match
         public IslandData LastData { get; private set; }
         public MatchManager Match  { get; private set; }
 
+        // Online hooks (the networking layer sets these; solo play never touches them).
+        [System.NonSerialized] public bool holdStart;       // wait for a menu choice instead of starting at once
+        [System.NonSerialized] public Vector3 spawnOffset;  // teammates land beside each other, not inside
+        // Whether this machine may start the next island, and what to show instead when it can't.
+        public System.Func<bool> CanRestart;
+        public string RestartNote;
+        // Raised after every new island is generated and the match has begun (seed).
+        public event System.Action<int> Generated;
+
         private GameObject _player;
 
+        public bool AllowsRestart => CanRestart == null || CanRestart();
+
         private void Start()
+        {
+            if (holdStart) return;
+            StartSolo();
+        }
+
+        public void StartSolo()
         {
             int usedSeed = randomSeed ? Random.Range(0, int.MaxValue) : seed;
             GenerateAndSpawn(usedSeed);
@@ -44,6 +62,7 @@ namespace ProjectFossil.Match
         // New island, new match. Used by the results screen.
         public void Restart(bool newSeed = true)
         {
+            if (!AllowsRestart) return;
             int usedSeed = newSeed ? Random.Range(0, int.MaxValue) : (LastData != null ? LastData.Seed : seed);
             GenerateAndSpawn(usedSeed);
         }
@@ -76,7 +95,7 @@ namespace ProjectFossil.Match
             Physics.SyncTransforms(); // make the new terrain collider solid before anything is placed on it
 
             BakeNavMesh(islandGO);
-            if (content.wildlife == null) SpawnDinosaurs(LastData, islandGO.transform); // otherwise the match spawns wildlife
+            if (content.wildlife == null && !NetRole.IsFollower) SpawnDinosaurs(LastData, islandGO.transform); // otherwise the match spawns wildlife
             _player = SpawnPlayer(LastData);
 
             Match = GetComponent<MatchManager>();
@@ -85,6 +104,7 @@ namespace ProjectFossil.Match
                 Match.Begin(LastData, _player, content, dinosaurPrefab, islandGO.transform);
 
             Debug.Log($"[MatchBootstrap] Seed {usedSeed} | {LastData.SpawnZones.Count} spawn zones | {LastData.PointsOfInterest.Count} POIs");
+            Generated?.Invoke(usedSeed);
         }
 
         // ── NavMesh ────────────────────────────────────────────────────────────
@@ -121,6 +141,7 @@ namespace ProjectFossil.Match
 
                     var dino = Instantiate(dinosaurPrefab, pos, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f), parent);
                     dino.name = $"Dino_Zone{zi}_{i}";
+                    DinosaurAI.AnnounceCreated(dino.GetComponent<DinosaurAI>());
                 }
             }
         }
@@ -131,7 +152,7 @@ namespace ProjectFossil.Match
         {
             if (playerPrefab == null) return null;
 
-            Vector3 spawnPos = GetSpawnPosition(data);
+            Vector3 spawnPos = GetSpawnPosition(data) + spawnOffset;
             var player = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
 
             // Gameplay components the prefab may not carry yet (inventory first: combat reads its weapon).

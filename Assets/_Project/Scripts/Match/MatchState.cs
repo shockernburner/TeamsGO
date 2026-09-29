@@ -83,6 +83,15 @@ namespace ProjectFossil.Match
             if (Elapsed >= Duration) End(MatchResult.Stranded);
         }
 
+        // Joining a match already under way: take the host's clock. Payouts and the extraction announcement
+        // pick up from there (nothing is paid for the time before joining).
+        public void FastForward(float elapsed)
+        {
+            if (Phase != MatchPhase.Active || elapsed <= Elapsed) return;
+            Elapsed = elapsed;
+            if (_payoutInterval > 0f) _payoutTimer = elapsed % _payoutInterval;
+        }
+
         public void ReportPlayerDied() => End(MatchResult.Died);
 
         private void End(MatchResult result)

@@ -21,4 +21,7 @@ namespace ProjectFossil.Core
         bool IsAlive { get; }
         void TakeDamage(DamageInfo info);
     }
+
+    // A teammate: dinosaurs can hurt it, the team's own weapons skip it.
+    public interface IFriendly { }
 }

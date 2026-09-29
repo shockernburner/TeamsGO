@@ -24,6 +24,10 @@ namespace ProjectFossil.Dinosaurs
         public static event Action<DinosaurAI, DamageInfo> Damaged;
         // Raised when a dinosaur with a sense of smell starts following someone's scent trail.
         public static event Action<DinosaurAI> PickedUpScent;
+        // Raised by spawners once a new animal's species and strength are set, before its first frame.
+        // Online, the host hands it to the network here.
+        public static event Action<DinosaurAI> Created;
+        public static void AnnounceCreated(DinosaurAI ai) { if (ai != null) Created?.Invoke(ai); }
 
         public bool IsTrackingScent { get; private set; }
         // Nose down: following a trail, or standing where it went cold and casting about for it.
@@ -40,6 +44,11 @@ namespace ProjectFossil.Dinosaurs
         public State CurrentState { get; private set; } = State.Wander;
 
         public Health Health { get; private set; }
+
+        // Online, on a machine that joined someone else's match: this is a copy of the host's animal. It thinks
+        // nothing for itself; the networking layer moves it and feeds it state, health and bites to show.
+        public bool IsRemote { get; private set; }
+        private bool _remoteReady;
 
         private NavMeshAgent _agent;
         private Transform    _target;
@@ -120,7 +129,7 @@ namespace ProjectFossil.Dinosaurs
 
         public void HearNoise(Vector3 position)
         {
-            if (species == null || !_agent.isOnNavMesh) return;
+            if (species == null || IsRemote || !_agent.isOnNavMesh) return;
             if (CurrentState != State.Wander) return; // already busy with someone
 
             if (species.temperament == Temperament.Skittish) { EnterFlee(position); return; }
@@ -144,10 +153,14 @@ namespace ProjectFossil.Dinosaurs
 
             Health = GetComponent<Health>();
             if (Health == null) Health = gameObject.AddComponent<Health>();
+
+            IsRemote = NetRole.IsFollower;
+            if (IsRemote) _agent.enabled = false; // the host's NavMesh decides where it goes
         }
 
         private void Start()
         {
+            if (IsRemote) { SetUpRemote(); return; }
             if (species == null)
             {
                 Debug.LogWarning($"[DinosaurAI] {name} has no DinosaurSpecies assigned.", this);
@@ -176,6 +189,7 @@ namespace ProjectFossil.Dinosaurs
 
         private void Update()
         {
+            if (IsRemote) { if (!_remoteReady) SetUpRemote(); return; }
             if (_trampleTimer > 0f) _trampleTimer -= Time.deltaTime;
             switch (CurrentState)
             {
@@ -185,6 +199,39 @@ namespace ProjectFossil.Dinosaurs
                 case State.Flee:   UpdateFlee();   break;
             }
             KeepOutOfPeople();
+        }
+
+        // ── Online copy ────────────────────────────────────────────────────────
+
+        // The species arrives with the spawn message; if it came late, try again next frame.
+        private void SetUpRemote()
+        {
+            if (_remoteReady || species == null) return;
+            _remoteReady = true;
+            transform.localScale = Vector3.one * species.bodyScale;
+            if (Health.Pool == null || Health.Max <= 0f) Health.Initialize(species.maxHealth);
+            Health.Damaged += OnDamaged;
+            Health.Died    += OnDied;
+            ApplySpeciesToAgent();
+        }
+
+        // What the host's animal is doing (drives the heartbeat, sniffing sounds and HUD). Death comes through
+        // health, so it plays out here exactly once.
+        public void SetRemoteState(State state, bool sniffing)
+        {
+            if (!IsRemote || CurrentState == State.Dead || state == State.Dead) return;
+            CurrentState    = state;
+            IsTrackingScent = sniffing;
+        }
+
+        public void PlayRemoteWindup(float seconds)
+        {
+            if (IsRemote && CurrentState != State.Dead) AttackWindupStarted?.Invoke(seconds);
+        }
+
+        public void PlayRemoteBite()
+        {
+            if (IsRemote && CurrentState != State.Dead) AttackLanded?.Invoke();
         }
 
         // NavMeshAgents ignore CharacterControllers, so without this a dinosaur walks straight through the player.
@@ -526,6 +573,7 @@ namespace ProjectFossil.Dinosaurs
         private void OnDamaged(DamageInfo info)
         {
             Damaged?.Invoke(this, info);
+            if (IsRemote) return;
             if (!Health.IsAlive || info.Source == null) return;
             if (_trampleDamage > 0f) return; // a stampede doesn't stop for a punch
 
@@ -552,7 +600,7 @@ namespace ProjectFossil.Dinosaurs
             ReleaseSlot();
             CurrentState = State.Dead;
             _target      = null;
-            if (_agent.isOnNavMesh) _agent.ResetPath();
+            if (_agent.enabled && _agent.isOnNavMesh) _agent.ResetPath();
             _agent.enabled = false;
 
             foreach (var col in GetComponentsInChildren<Collider>())
@@ -562,7 +610,7 @@ namespace ProjectFossil.Dinosaurs
             var visual = GetComponent<DinosaurVisual>();
             if (visual == null || !visual.IsAnimated)
                 transform.rotation = Quaternion.LookRotation(transform.forward, transform.right);
-            Destroy(gameObject, 5f);
+            if (!IsRemote) Destroy(gameObject, 5f); // a copy goes when the host removes the original
 
             Killed?.Invoke(this, info.Source);
         }

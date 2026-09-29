@@ -10,6 +10,34 @@ namespace ProjectFossil.Tests.EditMode
                            payoutInterval: 10f, payoutAmount: 3);
 
         [Test]
+        public void FastForward_JoiningLate_TakesHostClockAndOpensExtraction()
+        {
+            var s = Make();
+            int paid = 0, opened = 0;
+            s.SurvivalPayout   += a => paid += a;
+            s.ExtractionOpened += () => opened++;
+
+            s.FastForward(45f);
+            Assert.AreEqual(45f, s.Elapsed, 1e-4f);
+            Assert.AreEqual(0, paid, "no back pay for time before joining");
+
+            s.Tick(1f, false);
+            Assert.AreEqual(1, opened);
+            Assert.AreEqual(0, paid);
+            s.Tick(4f, false); // 50 s: the next payout on the host's schedule
+            Assert.AreEqual(3, paid);
+        }
+
+        [Test]
+        public void FastForward_NeverWindsBack()
+        {
+            var s = Make();
+            s.Tick(20f, false);
+            s.FastForward(10f);
+            Assert.AreEqual(20f, s.Elapsed, 1e-4f);
+        }
+
+        [Test]
         public void Extraction_ClosedEarly_DoesNotProgress()
         {
             var s = Make();

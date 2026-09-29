@@ -95,6 +95,7 @@ namespace ProjectFossil.Match
                 ai.species          = entry.species;
                 ai.healthMultiplier = _healthMultiplier;
                 ai.damageMultiplier = _damageMultiplier;
+                DinosaurAI.AnnounceCreated(ai);
                 _spawned.Add(ai);
                 made++;
             }
