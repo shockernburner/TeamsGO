@@ -117,3 +117,11 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - **Raptor run speed 10 → 8.5.** Before, raptors outran a running player (9), so running away never worked.
 - **Camera** sits over the right shoulder (camera local 0.7, 0.35, -3.2 under CameraTarget) so the body no longer blocks the middle of the screen. A small crosshair marks the centre.
 - **HUD** is a compact top-left panel with one-line bars. Key hints show for the first 60 s (and while the shop is open) along the bottom. Missed swings no longer post messages. Taking damage flashes the screen edges red, stronger on the side the hit came from.
+
+## 2026-09-29 — Third playtest tuning (first successful extraction)
+
+- The playtest extracted at 6:35 with 4 kills and 7 threats faced, so the loop works end to end.
+- **Stamina** drains 10/s (was 15) and regenerates 10/s (was 8). A full bar is now about 10 s of running instead of 6.5 s. The recording spent a lot of time "out of breath".
+- **Camera** moved further back and up (0.9, 0.6, -4.2), because the placeholder capsule still filled the lower-left of the view.
+- **Damage flash** is softer (lighter full-screen tint, thinner edges). The old one hid the fight.
+- **Species colours:** placeholder dino bodies use `DinosaurSpecies.debugColor` (raptor sandy orange, Ironjaw purple), so they stand out from the terrain and from the red bite telegraph.

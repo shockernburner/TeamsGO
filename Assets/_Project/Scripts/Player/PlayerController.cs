@@ -20,8 +20,8 @@ namespace ProjectFossil.Player
 
         [Header("Stamina")]
         public float maxStamina        = 100f;
-        public float staminaDrainRate  = 15f;   // per second while running
-        public float staminaRegenRate  = 8f;    // per second while walking (faster when still)
+        public float staminaDrainRate  = 10f;   // per second while running
+        public float staminaRegenRate  = 10f;   // per second while walking (faster when still)
         public float staminaRegenDelay = 1.2f;  // seconds after running/jumping before regen starts
         public float jumpStaminaCost   = 10f;
         [Range(0f, 1f)]
