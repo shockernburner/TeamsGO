@@ -52,3 +52,8 @@ MonoBehaviour:
   ruinsCount: 4
   minPOISpacing: 120
   spawnZoneCount: 6
+  seaLevel: 0.045
+  scatterCellSize: 7
+  maxScatterInstances: 2000
+  scatterClearance: 14
+  maxTreeSlope: 0.7

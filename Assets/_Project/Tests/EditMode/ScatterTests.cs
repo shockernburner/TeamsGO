@@ -1,0 +1,124 @@
+using System.Collections.Generic;
+using NUnit.Framework;
+using UnityEngine;
+using ProjectFossil.Generation;
+
+namespace ProjectFossil.Tests.EditMode
+{
+    // Scatter planning on hand-built islands (no noise), so each rule can be checked in isolation.
+    public class ScatterTests
+    {
+        private const int Res = 33;
+
+        private static IslandSettings Settings(float trees, float rocks)
+        {
+            var b = ScriptableObject.CreateInstance<BiomeDefinition>();
+            b.treesPerHectare = trees;
+            b.rocksPerHectare = rocks;
+            b.treeScale       = new Vector2(1f, 1f);
+
+            var s = ScriptableObject.CreateInstance<IslandSettings>();
+            s.resolution          = Res;
+            s.worldSize           = 320f;
+            s.maxHeight           = 100f;
+            s.seaLevel            = 0.045f;
+            s.scatterCellSize     = 8f;
+            s.maxScatterInstances = 5000;
+            s.scatterClearance    = 20f;
+            s.maxTreeSlope        = 0.7f;
+            s.biomes              = new List<BiomeDefinition> { b };
+            return s;
+        }
+
+        // Flat plateau at 30% height with a sea border of `border` cells.
+        private static IslandData Island(IslandSettings s, int seed, int border = 4, List<PointOfInterest> pois = null)
+        {
+            var h = new float[Res, Res];
+            var biome = new int[Res, Res];
+            var land = new bool[Res, Res];
+            for (int z = 0; z < Res; z++)
+                for (int x = 0; x < Res; x++)
+                {
+                    bool inside = x >= border && z >= border && x < Res - border && z < Res - border;
+                    h[z, x] = inside ? 0.3f : 0f;
+                    land[z, x] = inside;
+                }
+            return new IslandData(seed, s, h, biome, land, pois ?? new List<PointOfInterest>(), new List<SpawnZone>());
+        }
+
+        [Test]
+        public void SameSeed_SamePlan()
+        {
+            var s = Settings(40f, 10f);
+            var a = ScatterPlanner.Plan(Island(s, 1234));
+            var b = ScatterPlanner.Plan(Island(s, 1234));
+            Assert.That(a.Count, Is.GreaterThan(0));
+            Assert.That(b.Count, Is.EqualTo(a.Count));
+            for (int i = 0; i < a.Count; i++)
+            {
+                Assert.That(b[i].WorldPos.x, Is.EqualTo(a[i].WorldPos.x));
+                Assert.That(b[i].WorldPos.z, Is.EqualTo(a[i].WorldPos.z));
+                Assert.That(b[i].Kind, Is.EqualTo(a[i].Kind));
+            }
+        }
+
+        [Test]
+        public void DifferentSeed_DifferentPlan()
+        {
+            var s = Settings(40f, 10f);
+            var a = ScatterPlanner.Plan(Island(s, 1));
+            var b = ScatterPlanner.Plan(Island(s, 2));
+            bool differs = a.Count != b.Count;
+            for (int i = 0; !differs && i < a.Count; i++)
+                differs = a[i].WorldPos.x != b[i].WorldPos.x;
+            Assert.That(differs, Is.True);
+        }
+
+        [Test]
+        public void NothingInTheSea()
+        {
+            var s = Settings(200f, 50f);
+            var data = Island(s, 7, border: 8);
+            foreach (var inst in ScatterPlanner.Plan(data))
+                Assert.That(ScatterPlanner.SampleHeight(data, inst.WorldPos.x, inst.WorldPos.z),
+                            Is.GreaterThan(s.seaLevel), $"{inst.Kind} at {inst.WorldPos.x},{inst.WorldPos.z}");
+        }
+
+        [Test]
+        public void PointsOfInterest_StayClear()
+        {
+            var s = Settings(400f, 100f);
+            var poi = new PointOfInterest { WorldPos = new Vector3(160f, 30f, 160f), Type = POIType.LootCache };
+            var plan = ScatterPlanner.Plan(Island(s, 99, pois: new List<PointOfInterest> { poi }));
+            Assert.That(plan.Count, Is.GreaterThan(50));
+            foreach (var inst in plan)
+            {
+                float dx = inst.WorldPos.x - 160f, dz = inst.WorldPos.z - 160f;
+                Assert.That(dx * dx + dz * dz, Is.GreaterThanOrEqualTo(s.scatterClearance * s.scatterClearance));
+            }
+        }
+
+        [Test]
+        public void ZeroDensity_PlacesNothing()
+        {
+            Assert.That(ScatterPlanner.Plan(Island(Settings(0f, 0f), 5)).Count, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Density_RoughlyMatchesPerHectare()
+        {
+            // Plateau is (33 - 8 cells) * 10 m = 250 m square, about 6.25 ha. 20 trees/ha gives about 125.
+            var s = Settings(20f, 0f);
+            int trees = ScatterPlanner.Plan(Island(s, 42)).Count;
+            Assert.That(trees, Is.InRange(70, 180));
+        }
+
+        [Test]
+        public void Cap_IsRespected()
+        {
+            var s = Settings(400f, 0f);
+            s.maxScatterInstances = 30;
+            Assert.That(ScatterPlanner.Plan(Island(s, 3)).Count, Is.EqualTo(30));
+        }
+    }
+}
