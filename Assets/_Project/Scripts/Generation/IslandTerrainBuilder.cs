@@ -7,7 +7,9 @@ namespace ProjectFossil.Generation
     public static class IslandTerrainBuilder
     {
         // showPoiMarkers: big coloured debug spheres over POIs. Useful in the editor tool, noise in a match.
-        public static GameObject Build(IslandData data, Transform parent = null, bool showPoiMarkers = true)
+        // decorate: biome ground colours, sea, trees, rocks and haze (IslandDecorator).
+        public static GameObject Build(IslandData data, Transform parent = null, bool showPoiMarkers = true,
+                                       bool decorate = true)
         {
             var s   = data.Settings;
             int res = data.Resolution;
@@ -23,6 +25,7 @@ namespace ProjectFossil.Generation
             go.name     = $"Island_{data.Seed}";
             if (parent != null) go.transform.SetParent(parent, false);
 
+            if (decorate) IslandDecorator.Decorate(go, data);
             if (showPoiMarkers) AddPoiMarkers(data, go.transform);
 
             return go;
@@ -58,7 +61,7 @@ namespace ProjectFossil.Generation
             const int size = 4;
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
             var px  = new Color32[size * size];
-            for (int i = 0; i < px.Length; i++) px[i] = new Color32(100, 130, 70, 255); // earthy green
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(100, 130, 70, 20); // earthy green; low alpha = matte in URP terrain
             tex.SetPixels32(px);
             tex.Apply();
 

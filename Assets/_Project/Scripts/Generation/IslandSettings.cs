@@ -30,6 +30,19 @@ namespace ProjectFossil.Generation
         [Header("Spawning")]
         public int spawnZoneCount = 6;
 
+        [Header("Water")]
+        [Tooltip("Sea level as a fraction of maxHeight. Land starts at 0.05.")]
+        [Range(0f, 0.2f)] public float seaLevel = 0.045f;
+
+        [Header("Scatter (trees and rocks)")]
+        [Tooltip("One candidate per cell; smaller cells = denser possible placement.")]
+        public float scatterCellSize = 7f;
+        public int   maxScatterInstances = 2000;
+        [Tooltip("Metres kept clear around points of interest and the player spawn.")]
+        public float scatterClearance = 14f;
+        [Tooltip("Max rise over run for trees (0.7 is about 35 degrees). Rocks allow twice this.")]
+        public float maxTreeSlope = 0.7f;
+
         private void OnEnable()
         {
             if (heightRemap == null || heightRemap.keys.Length == 0)

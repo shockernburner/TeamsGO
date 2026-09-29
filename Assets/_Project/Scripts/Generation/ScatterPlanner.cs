@@ -1,0 +1,136 @@
+using System.Collections.Generic;
+using UnityEngine;
+using ProjectFossil.Core;
+
+namespace ProjectFossil.Generation
+{
+    public enum ScatterKind { Tree, Rock }
+
+    public struct ScatterInstance
+    {
+        public ScatterKind Kind;
+        public Vector3     WorldPos;  // y is the heightmap estimate; builders snap to the real terrain
+        public float       Scale;
+        public float       Yaw;       // degrees
+        public int         BiomeIndex;
+    }
+
+    // Decides where trees and rocks go. Pure and deterministic: same island data and seed, same result.
+    // Jittered grid (one candidate per cell) keeps things evenly spread without clumping into walls.
+    public static class ScatterPlanner
+    {
+        private const int SaltSeed = 0x5CA7;
+
+        public static List<ScatterInstance> Plan(IslandData data)
+        {
+            var s      = data.Settings;
+            var rng    = new RNGService(unchecked(data.Seed * 31 + SaltSeed));
+            var result = new List<ScatterInstance>();
+            var biomes = s.biomes;
+            if (biomes == null || biomes.Count == 0 || s.scatterCellSize <= 0f) return result;
+
+            float cell      = s.scatterCellSize;
+            float cellArea  = cell * cell;
+            int   cells     = Mathf.FloorToInt(s.worldSize / cell);
+            float clear2    = s.scatterClearance * s.scatterClearance;
+            float minHeight = Mathf.Max(s.seaLevel, 0.05f) + 0.01f; // keep off the waterline
+
+            // Clearings: every point of interest plus the player spawn (spawn zone 0).
+            var clearings = new List<Vector3>();
+            foreach (var poi in data.PointsOfInterest) clearings.Add(poi.WorldPos);
+            if (data.SpawnZones.Count > 0) clearings.Add(data.SpawnZones[0].WorldCenter);
+
+            for (int cz = 0; cz < cells && result.Count < s.maxScatterInstances; cz++)
+            {
+                for (int cx = 0; cx < cells && result.Count < s.maxScatterInstances; cx++)
+                {
+                    // Always draw the same number of values per cell so one change doesn't reshuffle the island.
+                    float jx = rng.NextFloat(), jz = rng.NextFloat();
+                    float roll = rng.NextFloat();
+                    float scaleT = rng.NextFloat();
+                    float yaw = rng.NextFloat() * 360f;
+
+                    float x = (cx + jx) * cell;
+                    float z = (cz + jz) * cell;
+
+                    float h = SampleHeight(data, x, z);
+                    if (h < minHeight) continue;
+
+                    int biome = SampleBiome(data, x, z);
+                    var b = biome >= 0 && biome < biomes.Count ? biomes[biome] : null;
+                    if (b == null) continue;
+
+                    float pTree = b.treesPerHectare * cellArea / 10000f;
+                    float pRock = b.rocksPerHectare * cellArea / 10000f;
+                    ScatterKind kind;
+                    if (roll < pTree) kind = ScatterKind.Tree;
+                    else if (roll < pTree + pRock) kind = ScatterKind.Rock;
+                    else continue;
+
+                    float slope = SampleSlope(data, x, z);
+                    float maxSlope = kind == ScatterKind.Tree ? s.maxTreeSlope : s.maxTreeSlope * 2f;
+                    if (slope > maxSlope) continue;
+
+                    if (InClearing(clearings, x, z, clear2)) continue;
+
+                    float scale = kind == ScatterKind.Tree
+                        ? Mathf.Lerp(b.treeScale.x, b.treeScale.y, scaleT)
+                        : Mathf.Lerp(0.6f, 2.2f, scaleT * scaleT); // mostly small rocks, a few boulders
+
+                    result.Add(new ScatterInstance
+                    {
+                        Kind       = kind,
+                        WorldPos   = new Vector3(x, h * s.maxHeight, z),
+                        Scale      = scale,
+                        Yaw        = yaw,
+                        BiomeIndex = biome,
+                    });
+                }
+            }
+            return result;
+        }
+
+        private static bool InClearing(List<Vector3> clearings, float x, float z, float clear2)
+        {
+            foreach (var c in clearings)
+            {
+                float dx = c.x - x, dz = c.z - z;
+                if (dx * dx + dz * dz < clear2) return true;
+            }
+            return false;
+        }
+
+        // ── Heightmap sampling (heightmap is [row = z, col = x], normalized) ──
+
+        public static float SampleHeight(IslandData data, float worldX, float worldZ)
+        {
+            int   res = data.Resolution;
+            float gx  = Mathf.Clamp(worldX / data.Settings.worldSize * (res - 1), 0f, res - 1.001f);
+            float gz  = Mathf.Clamp(worldZ / data.Settings.worldSize * (res - 1), 0f, res - 1.001f);
+            int   x0  = (int)gx, z0 = (int)gz;
+            float tx  = gx - x0, tz = gz - z0;
+            var   hm  = data.Heightmap;
+            float a   = Mathf.Lerp(hm[z0, x0],     hm[z0, x0 + 1],     tx);
+            float b   = Mathf.Lerp(hm[z0 + 1, x0], hm[z0 + 1, x0 + 1], tx);
+            return Mathf.Lerp(a, b, tz);
+        }
+
+        public static int SampleBiome(IslandData data, float worldX, float worldZ)
+        {
+            int res = data.Resolution;
+            int gx  = Mathf.Clamp(Mathf.RoundToInt(worldX / data.Settings.worldSize * (res - 1)), 0, res - 1);
+            int gz  = Mathf.Clamp(Mathf.RoundToInt(worldZ / data.Settings.worldSize * (res - 1)), 0, res - 1);
+            return data.BiomeMap[gz, gx];
+        }
+
+        // Rise over run in world units, from the steepest of the two axes.
+        public static float SampleSlope(IslandData data, float worldX, float worldZ)
+        {
+            float step = data.Settings.worldSize / (data.Resolution - 1);
+            float hx = SampleHeight(data, worldX + step, worldZ) - SampleHeight(data, worldX - step, worldZ);
+            float hz = SampleHeight(data, worldX, worldZ + step) - SampleHeight(data, worldX, worldZ - step);
+            float rise = Mathf.Max(Mathf.Abs(hx), Mathf.Abs(hz)) * data.Settings.maxHeight;
+            return rise / (2f * step);
+        }
+    }
+}

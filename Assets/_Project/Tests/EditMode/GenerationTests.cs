@@ -172,5 +172,32 @@ namespace ProjectFossil.Tests.EditMode
             // Allow up to 2 failures in 30 seeds (occasional degenerate noise combinations)
             Assert.LessOrEqual(fail, 2, $"{fail}/30 seeds failed validation");
         }
+
+        [Test]
+        public void Scatter_AcrossSeeds_StaysOnLandAndClearOfPOIs()
+        {
+            var s = MakeSettings();
+            s.biomes[0].treesPerHectare = 30f;
+            s.biomes[0].rocksPerHectare = 8f;
+            float clear2 = s.scatterClearance * s.scatterClearance;
+
+            for (int seed = 0; seed < 20; seed++)
+            {
+                var data = new IslandGenerator(seed, s).Generate();
+                var plan = ScatterPlanner.Plan(data);
+                Assert.LessOrEqual(plan.Count, s.maxScatterInstances);
+
+                foreach (var inst in plan)
+                {
+                    Assert.Greater(ScatterPlanner.SampleHeight(data, inst.WorldPos.x, inst.WorldPos.z), s.seaLevel,
+                                   $"Seed {seed}: {inst.Kind} below sea level");
+                    foreach (var poi in data.PointsOfInterest)
+                    {
+                        float dx = poi.WorldPos.x - inst.WorldPos.x, dz = poi.WorldPos.z - inst.WorldPos.z;
+                        Assert.GreaterOrEqual(dx * dx + dz * dz, clear2, $"Seed {seed}: {inst.Kind} blocks a {poi.Type}");
+                    }
+                }
+            }
+        }
     }
 }

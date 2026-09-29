@@ -125,3 +125,14 @@ The director exposes three surface points regardless of whether the buyer is AI 
 - **Camera** moved further back and up (0.9, 0.6, -4.2), because the placeholder capsule still filled the lower-left of the view.
 - **Damage flash** is softer (lighter full-screen tint, thinner edges). The old one hid the fight.
 - **Species colours:** placeholder dino bodies use `DinosaurSpecies.debugColor` (raptor sandy orange, Ironjaw purple), so they stand out from the terrain and from the red bite telegraph.
+
+## 2026-09-29 — Island look, step 1 (ground, sea, trees, rocks)
+
+- **Why the ground looked like snow:** URP terrain reads smoothness from the diffuse texture's alpha. The old placeholder layer had full alpha, so the ground was a mirror reflecting the sky. Terrain layers now use low alpha and are matte.
+- **Ground colours:** `BiomeDefinition` gains `groundColor`, `foliageColor` and `rockColor`. `IslandDecorator.PaintTerrain` builds one terrain layer per biome (a small noisy texture, so it isn't flat plastic) plus a grey cliff layer that takes over on steep slopes. Neighbouring biomes blend over a few metres.
+- **Sea:** a large transparent plane at `IslandSettings.seaLevel` (0.045 × maxHeight, just under where land starts). It has no collider.
+- **Trees and rocks:** `ScatterPlanner` (pure, deterministic from the island seed) uses a jittered grid (`scatterCellSize` 7 m). Each biome sets `treesPerHectare`, `rocksPerHectare`, a tree scale range and a `TreeShape` (Round, Tall, Dead). Placement skips water, slopes over `maxTreeSlope` (rocks allow double), and anything within `scatterClearance` (14 m) of a point of interest or the player spawn. The total is capped at `maxScatterInstances` (2000).
+  - Current densities per hectare (trees / rocks): jungle 40/4, swamp 12/2 dead trees, plains 4/5, beach 1.5/3, volcanic 0.8/14.
+- **Placeholder models** are primitives: trunk plus sphere crowns, a tall capsule crown, a dead trunk with a branch, and tilted boxes for rocks. Trunks and rocks keep colliders, so they block the player and become NavMesh obstacles. Crowns have no colliders. Swapping in real prefabs only touches the `Make*` methods in `IslandDecorator`.
+- **Haze:** exponential fog is turned on at runtime (play mode only) for depth. It isn't saved to the scene.
+- Tests: `ScatterTests` covers determinism, sea, clearance, density, and the cap. `GenerationTests` checks scatter across 20 generated seeds.
