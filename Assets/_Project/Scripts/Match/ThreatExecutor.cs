@@ -75,7 +75,12 @@ namespace ProjectFossil.Match
                     Vector3 through = e.Target.Position + side * ((i - (count - 1) * 0.5f) * 3.5f);
                     ai.StartCoroutine(StampedeNextFrame(ai, through, def.trampleDamage));
                 }
-                else if (e.Target.Focus != null) ai.Hunt(e.Target.Focus);
+                else if (e.Target.Focus != null)
+                {
+                    // Predators with a nose stalk: they roam in and follow the scent trail instead of homing in.
+                    if (ai.species != null && ai.species.smellRange > 0f) ai.Track(e.Target.Focus);
+                    else ai.Hunt(e.Target.Focus);
+                }
             }
         }
 

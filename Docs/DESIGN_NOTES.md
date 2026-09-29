@@ -217,3 +217,12 @@ Playtest: extraction opened with the nearest of the two beacons 313 m away and a
 
 - When extraction opens and no beacon is within `MatchRules.flareIfFartherThan` (150 m), a rescue flare adds an open beacon 70 to 110 m from the player (`flareDistance`) on NavMesh ground above the waterline. The spot comes from its own seeded RNG stream (seed x 41 + 11). The HUD marker already points at the nearest beacon, so it picks the flare up.
 - `CameraRig` also hides plants within 1.2 m of the camera, which were filling the edges of the frame.
+
+## Stealth and atmosphere (2026-09-29)
+
+Firdous's direction: keep it hard; the game is team stealth survival. The big predator sniffs around, the team hides and runs between shelters, and a helicopter takes them off the island. Full plan: `/mnt/project-files/plans/co-op-vision.md`.
+
+- **Wind.** `IslandWind` (Generation, on the island root) bends plants and leans trees within 45 m of the camera, with slow gusts and a per-island wind direction from the seed. Trees sway through a child "Sway" pivot so their trunk collider never moves. It uses the `ViewBlockers` plant grid, which now also stores each plant's root and rest rotation. A shader-based wind can replace it later; this version needs no new assets.
+- **Hiding in plants.** Plants at least 1.1 m wide and 0.7 m tall register as cover. Inside one, `PlayerController.VisibilityMultiplier` is scaled by 0.6 standing and 0.4 crouching or crawling (for example, a crouching player in a bush is seen from 30% of the normal sight range). The HUD says "HIDDEN" or "In cover (crouch to hide)".
+- **Scent.** `ScentTrail` (Core, pure) drops a mark every 2 s at the player's feet. Marks fade after 90 s, and none are dropped while wading in the sea, a river or a lake (`ViewBlockers.InWater`). A species with `smellRange > 0` (Ironjaw: 60 m) follows the freshest mark it can smell at 1.3x walk speed and loses the trail where it breaks. Threats with such a species now `Track` instead of `Hunt`: the predator roams toward the target's area and finds them by scent, sight or sound, instead of homing in. The first pickup in 30 s announces "Something has your scent".
+- **Helicopter extraction.** Each extraction zone has a rescue helicopter (placeholder primitives) that flies in over 10 s when extraction opens and lands on the pad. Boarding (the 8 s hold) only counts once it has landed. While landed, it makes noise every 6 s: wandering dinosaurs within 70 m come to look (`DinosaurAI.NoiseAt`), and skittish ones bolt.

@@ -37,6 +37,8 @@ namespace ProjectFossil.Dinosaurs
         [Range(0f, 180f)]
         public float sightAngle   = 110f; // half-angle FOV
         public float hearingRange = 15f;
+        [Tooltip("0 = no sense of smell. Otherwise it follows a player's scent trail from this far away")]
+        public float smellRange   = 0f;
 
         [Header("Chase / Combat")]
         public float chaseRange   = 40f;  // give-up distance

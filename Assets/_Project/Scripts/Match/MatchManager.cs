@@ -52,6 +52,8 @@ namespace ProjectFossil.Match
 
         private ThreatExecutor _executor;
         private Transform  _islandRoot;
+        private ScentTrail _scent;
+        private float      _lastScentWarning;
         private RNGService _flareRng;
         private Vector3 _playerSpawn;
         private PlayerMenuInput _menuInput;
@@ -102,6 +104,10 @@ namespace ProjectFossil.Match
 
             DinosaurAI.Killed  += OnDinosaurKilled;
             DinosaurAI.Damaged += OnDinosaurDamaged;
+            DinosaurAI.PickedUpScent += OnPickedUpScent;
+            ExtractionZone.Noise += DinosaurAI.NoiseAt;
+            ScentTrail.Active = _scent = new ScentTrail();
+            _lastScentWarning = float.NegativeInfinity;
 
             Announce(level > 0 ? $"Survivor rank {level}: the island fights harder. Survive, scavenge, extract."
                                : "Survive. Scavenge caches for coins. Extraction opens later.");
@@ -210,13 +216,21 @@ namespace ProjectFossil.Match
             foreach (var zone in _zones)
             {
                 zone.SetOpen(open);
-                if (Player != null && zone.Contains(Player.transform.position)) inZone = true;
+                // Boarding starts once the helicopter is down.
+                if (Player != null && zone.HelicopterLanded && zone.Contains(Player.transform.position)) inZone = true;
             }
 
             State.Tick(Time.deltaTime, inZone);
             if (!IsRunning) return;
 
             RescueIfFallenThroughWorld();
+
+            // The player's scent: a mark every couple of seconds, none while wading (water breaks the trail).
+            if (_scent != null && Player != null && PlayerHealth != null && PlayerHealth.IsAlive)
+            {
+                Vector3 p = Player.transform.position;
+                _scent.Tick(p, State.Elapsed, !ViewBlockers.InWater(p));
+            }
 
             ThreatTarget? target = null;
             if (Player != null && PlayerHealth != null && PlayerHealth.IsAlive)
@@ -256,9 +270,17 @@ namespace ProjectFossil.Match
             Announce(e.Threat.announcement);
         }
 
+        private void OnPickedUpScent(DinosaurAI dino)
+        {
+            if (dino == null || dino.species == null || State == null) return;
+            if (State.Elapsed - _lastScentWarning < 30f) return; // one warning per stalk, not per sniff
+            _lastScentWarning = State.Elapsed;
+            Announce("Something has your scent. Hide, or wade through water.");
+        }
+
         private void OnExtractionOpened()
         {
-            Announce("Extraction is open. Reach a green beacon and hold position.");
+            Announce("Extraction open: helicopters are landing. Their noise draws dinosaurs.");
             if (TryDropRescueFlare(out float distance))
                 Announce($"The beacons are far off. A rescue flare landed {Mathf.RoundToInt(distance)} m away.");
         }
@@ -373,6 +395,10 @@ namespace ProjectFossil.Match
         {
             DinosaurAI.Killed  -= OnDinosaurKilled;
             DinosaurAI.Damaged -= OnDinosaurDamaged;
+            DinosaurAI.PickedUpScent -= OnPickedUpScent;
+            ExtractionZone.Noise -= DinosaurAI.NoiseAt;
+            if (ScentTrail.Active == _scent) ScentTrail.Active = null;
+            _scent = null;
             if (Director != null)     Director.OnThreatTriggered -= OnThreatTriggered;
             if (PlayerHealth != null) PlayerHealth.Died -= OnPlayerDied;
             if (PlayerHealth != null) PlayerHealth.Damaged -= OnPlayerDamaged;
