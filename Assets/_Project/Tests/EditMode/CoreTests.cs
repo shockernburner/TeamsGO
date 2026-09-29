@@ -105,5 +105,78 @@ namespace ProjectFossil.Tests.EditMode
             ViewBlockers.Clear();
             Assert.IsTrue(float.IsNegativeInfinity(ViewBlockers.WaterHeight));
         }
+    
+
+        [Test]
+        public void ViewBlockers_CoverOnlyInsideBigPlants()
+        {
+            ViewBlockers.Clear();
+            ViewBlockers.Register(new Vector3(0f, 0.5f, 0f), 1f, new Renderer[1], null, 1f, cover: true);
+            ViewBlockers.Register(new Vector3(20f, 0.2f, 0f), 1f, new Renderer[1], null, 1f, cover: false);
+
+            Assert.IsTrue(ViewBlockers.InCover(new Vector3(0.3f, 0f, 0.2f)));
+            Assert.IsFalse(ViewBlockers.InCover(new Vector3(0.95f, 0f, 0f)), "brushing the edge isn't hiding");
+            Assert.IsFalse(ViewBlockers.InCover(new Vector3(20f, 0f, 0f)), "grass isn't cover");
+            ViewBlockers.Clear();
+        }
+
+        [Test]
+        public void ViewBlockers_InWater_SeaRiversAndLakes()
+        {
+            ViewBlockers.Clear();
+            ViewBlockers.SetWaterHeight(2f);
+            ViewBlockers.RegisterWater(new Vector3(50f, 10f, 50f), 4f); // a river 8 m above the sea
+
+            Assert.IsTrue(ViewBlockers.InWater(new Vector3(0f, 1.5f, 0f)), "wading in the sea");
+            Assert.IsFalse(ViewBlockers.InWater(new Vector3(0f, 3f, 0f)), "on the beach");
+            Assert.IsTrue(ViewBlockers.InWater(new Vector3(51f, 9.6f, 50f)), "standing in the river");
+            Assert.IsFalse(ViewBlockers.InWater(new Vector3(51f, 11f, 50f)), "on a bank above it");
+            Assert.IsFalse(ViewBlockers.InWater(new Vector3(60f, 9.6f, 50f)), "beside it");
+            ViewBlockers.Clear();
+        }
+
+        // ── Scent trail ────────────────────────────────────────────────────────
+
+        [Test]
+        public void ScentTrail_DropsMarksOnInterval_AndTheyFade()
+        {
+            var trail = new ScentTrail(lifetime: 10f, dropInterval: 2f);
+            for (int t = 0; t <= 6; t++) trail.Tick(new Vector3(t, 0f, 0f), t);
+            Assert.AreEqual(4, trail.Count); // t = 0, 2, 4, 6
+
+            trail.Tick(new Vector3(100f, 0f, 0f), 13f);
+            Assert.AreEqual(3, trail.Count, "marks older than the lifetime are gone (0 and 2), a new one added");
+        }
+
+        [Test]
+        public void ScentTrail_FollowingFreshestMarks_LeadsToThePlayer()
+        {
+            var trail = new ScentTrail(lifetime: 60f, dropInterval: 1f);
+            for (int t = 0; t < 20; t++) trail.Tick(new Vector3(t * 3f, 0f, 0f), t); // walking +x, 3 m a second
+
+            // A nose with 10 m range picks the freshest mark it can reach, then the next one from there.
+            Vector3 at = new Vector3(-5f, 0f, 0f);
+            float newer = float.NegativeInfinity;
+            int steps = 0;
+            while (trail.TryFindFreshest(at, 10f, newer, out var mark, out float time) && steps < 50)
+            {
+                Assert.Greater(time, newer);
+                at = mark; newer = time; steps++;
+            }
+            Assert.AreEqual(57f, at.x, 1e-3f, "ends on the newest mark");
+            Assert.Less(steps, 20, "skips ahead instead of stepping on every mark");
+        }
+
+        [Test]
+        public void ScentTrail_WaterBreaksTheTrail()
+        {
+            var trail = new ScentTrail(lifetime: 60f, dropInterval: 1f);
+            for (int t = 0; t < 5; t++)  trail.Tick(new Vector3(t * 3f, 0f, 0f), t);
+            for (int t = 5; t < 10; t++) trail.Tick(new Vector3(t * 3f, 0f, 0f), t, leavesScent: false); // wading
+            for (int t = 10; t < 15; t++) trail.Tick(new Vector3(t * 3f, 0f, 0f), t);
+
+            Assert.IsTrue(trail.TryFindFreshest(new Vector3(12f, 0f, 0f), 6f, 4f, out _, out _) == false,
+                "from the water's edge the next marks are out of reach");
+        }
     }
 }

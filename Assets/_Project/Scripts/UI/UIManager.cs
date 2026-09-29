@@ -540,11 +540,13 @@ namespace ProjectFossil.UI
 
         private static string MovementLabel(PlayerController c)
         {
+            if (c.IsHidden) return c.Stance == Stance.Prone ? "HIDDEN (crawling)" : "HIDDEN (crouching)";
             switch (c.Stance)
             {
                 case Stance.Prone:     return "Crawling";
                 case Stance.Crouching: return "Crouching";
             }
+            if (c.InCover) return "In cover (crouch to hide)";
             if (c.IsExhausted) return "Out of breath";
             if (c.IsSprinting) return "Running";
             return c.RunToggled ? "Run on" : "Walking";

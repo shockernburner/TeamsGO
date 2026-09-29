@@ -27,6 +27,7 @@ MonoBehaviour:
   sightRange: 40
   sightAngle: 100
   hearingRange: 25
+  smellRange: 60
   chaseRange: 80
   attackRange: 4
   attackDamage: 60

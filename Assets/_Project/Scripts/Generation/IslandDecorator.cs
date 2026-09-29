@@ -27,6 +27,12 @@ namespace ProjectFossil.Generation
             AddWater(islandGO.transform, data);
             AddInlandWater(islandGO.transform, data);
             if (terrain != null) AddScatter(islandGO.transform, terrain, data, ScatterPlanner.Plan(data));
+            if (Application.isPlaying)
+            {
+                var wind = islandGO.GetComponent<IslandWind>();
+                if (wind == null) wind = islandGO.AddComponent<IslandWind>();
+                wind.SetDirection((data.Seed & 0x7fffffff) % 360); // each island has its own wind
+            }
             if (Application.isPlaying) ApplyAtmosphere(); // don't rewrite the open scene's lighting from the editor tool
         }
 
@@ -149,6 +155,13 @@ namespace ProjectFossil.Generation
                 if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river));
             foreach (var lake in data.Lakes)
                 AddMesh(root, "Lake", DiscMesh(lake.Center, lake.Radius + 4f, 32));
+
+            // Wading through inland water breaks a scent trail too.
+            foreach (var river in data.Rivers)
+                for (int i = 0; i < river.Points.Count; i += 2)
+                    ViewBlockers.RegisterWater(parent.TransformPoint(river.Points[i]), river.HalfWidths[i] + 0.5f);
+            foreach (var lake in data.Lakes)
+                ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), lake.Radius + 2f);
         }
 
         private static void AddMesh(Transform root, string name, Mesh mesh)
@@ -277,6 +290,13 @@ namespace ProjectFossil.Generation
             // Collision (and NavMesh carving) for trunks and rocks only; plants are walk-through.
             if (inst.Kind == ScatterKind.Tree)
             {
+                if (Application.isPlaying)
+                {
+                    // Sway the model, not the root: the trunk collider has to stay put or physics re-inserts it
+                    // every frame.
+                    var pivot = SwayPivot(go.transform);
+                    if (pivot != null) ViewBlockers.RegisterSwaying(go.transform.position, pivot, 0.3f);
+                }
                 var col = go.AddComponent<CapsuleCollider>();
                 col.radius = 0.35f / s * inst.Scale;
                 col.height = b.size.y * 0.5f;
@@ -299,7 +319,10 @@ namespace ProjectFossil.Generation
                 {
                     var wb = renderers[0].bounds;
                     for (int i = 1; i < renderers.Length; i++) wb.Encapsulate(renderers[i].bounds);
-                    ViewBlockers.Register(wb.center, Mathf.Max(wb.extents.x, wb.extents.z), renderers);
+                    float radius = Mathf.Max(wb.extents.x, wb.extents.z);
+                    // Bushes and tall ferns you can crouch in count as cover; ankle-high grass doesn't.
+                    bool cover = radius >= 0.55f && wb.size.y >= 0.7f;
+                    ViewBlockers.Register(wb.center, radius, renderers, go.transform, 1f, cover);
                 }
             }
 
@@ -308,6 +331,21 @@ namespace ProjectFossil.Generation
             var lod = go.AddComponent<LODGroup>();
             lod.SetLODs(new[] { new LOD(cullBelow, go.GetComponentsInChildren<Renderer>()) });
             lod.RecalculateBounds();
+        }
+
+        // Moves a model's children under a new child at its base and returns that, so the whole model can lean in the
+        // wind while the root (and its collider) stays still. Null when the root draws the mesh itself.
+        private static Transform SwayPivot(Transform model)
+        {
+            if (model.GetComponent<Renderer>() != null || model.childCount == 0) return null;
+            var pivot = new GameObject("Sway").transform;
+            pivot.SetParent(model, false);
+            for (int i = model.childCount - 1; i >= 0; i--)
+            {
+                var child = model.GetChild(i);
+                if (child != pivot) child.SetParent(pivot, true);
+            }
+            return pivot;
         }
 
         private static void Place(GameObject go, Transform root, Vector3 pos, ScatterInstance inst)

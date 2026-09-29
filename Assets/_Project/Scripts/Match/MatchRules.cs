@@ -12,6 +12,10 @@ namespace ProjectFossil.Match
 
         [Header("Extraction")]
         public float extractionRadius = 8f;
+        [Tooltip("When extraction opens and every beacon is farther than this, a rescue flare adds one near the player")]
+        public float flareIfFartherThan = 150f;
+        [Tooltip("How far from the player the rescue flare lands (min, max metres)")]
+        public Vector2 flareDistance = new Vector2(70f, 110f);
 
         [Header("Survival income")]
         public float survivalPayoutInterval = 60f;

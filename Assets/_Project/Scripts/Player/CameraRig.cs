@@ -15,6 +15,7 @@ namespace ProjectFossil.Player
         public float minDistance   = 0.9f;   // never closer to the head than this
         public float returnSpeed   = 5f;     // metres per second back out once the way is clear
         public float plantPadding  = 0.35f;  // plants this close to the line of sight hide
+        public float plantClearance = 1.2f;  // and plants this close to the camera itself, which fill the frame edges
         public float aboveWater    = 0.35f;
 
         private Transform _pivot;
@@ -24,6 +25,7 @@ namespace ProjectFossil.Player
 
         private readonly RaycastHit[]     _hits    = new RaycastHit[16];
         private readonly List<Renderer[]> _near    = new List<Renderer[]>();
+        private readonly List<Renderer[]> _around  = new List<Renderer[]>();
         private readonly HashSet<Renderer> _hidden = new HashSet<Renderer>();
         private readonly HashSet<Renderer> _still  = new HashSet<Renderer>();
 
@@ -82,11 +84,11 @@ namespace ProjectFossil.Player
             // Stop a little short of the head so plants right at the player's feet stay visible.
             Vector3 end = Vector3.Lerp(cameraPos, target, 0.85f);
             ViewBlockers.Overlapping(cameraPos, end, plantPadding, _near);
+            ViewBlockers.Overlapping(cameraPos, cameraPos, plantClearance, _around);
 
             _still.Clear();
-            foreach (var group in _near)
-                foreach (var r in group)
-                    if (r != null) _still.Add(r);
+            Collect(_near);
+            Collect(_around);
 
             foreach (var r in _hidden)
                 if (r != null && !_still.Contains(r)) r.forceRenderingOff = false;
@@ -95,6 +97,13 @@ namespace ProjectFossil.Player
 
             _hidden.Clear();
             _hidden.UnionWith(_still);
+        }
+
+        private void Collect(List<Renderer[]> groups)
+        {
+            foreach (var group in groups)
+                foreach (var r in group)
+                    if (r != null) _still.Add(r);
         }
 
         private void OnDisable()

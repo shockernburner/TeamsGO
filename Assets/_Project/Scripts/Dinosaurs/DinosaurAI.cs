@@ -22,6 +22,10 @@ namespace ProjectFossil.Dinosaurs
         public static event Action<DinosaurAI, GameObject> Killed;
         // Raised when any dinosaur takes damage (amount actually applied, and who dealt it).
         public static event Action<DinosaurAI, DamageInfo> Damaged;
+        // Raised when a dinosaur with a sense of smell starts following someone's scent trail.
+        public static event Action<DinosaurAI> PickedUpScent;
+
+        public bool IsTrackingScent { get; private set; }
 
         // Presentation hooks (DinosaurFeedback listens). Windup passes its duration in seconds.
         public event Action<float> AttackWindupStarted;
@@ -46,9 +50,45 @@ namespace ProjectFossil.Dinosaurs
         private Transform    _slotTarget;    // the person this dinosaur holds a bite slot on
         private float        _circleSide;    // +1 / -1: which way it circles while waiting its turn
         private static int   _spawnCounter;  // alternates circling direction between animals
+        private Transform    _quarry;        // set by Track: roams toward this person and follows their scent
+        private float        _scentCheck;
+        private float        _scentTime = float.NegativeInfinity; // time stamp of the last mark it followed
 
         private static readonly Dictionary<Transform, List<DinosaurAI>> Attackers =
             new Dictionary<Transform, List<DinosaurAI>>();
+
+        private static readonly List<DinosaurAI> Living = new List<DinosaurAI>();
+        private void OnEnable()  => Living.Add(this);
+        private void OnDisable() => Living.Remove(this);
+
+        // A loud noise (a helicopter, an explosion): wandering animals within `radius` react to it. Hunters come to
+        // look, skittish ones bolt away. Animals already busy with someone ignore it.
+        public static void NoiseAt(Vector3 position, float radius)
+        {
+            float r2 = radius * radius;
+            for (int i = Living.Count - 1; i >= 0; i--)
+            {
+                var ai = Living[i];
+                if (ai == null || (ai.transform.position - position).sqrMagnitude > r2) continue;
+                ai.HearNoise(position);
+            }
+        }
+
+        public void HearNoise(Vector3 position)
+        {
+            if (species == null || !_agent.isOnNavMesh) return;
+            if (CurrentState != State.Wander) return; // already busy with someone
+
+            if (species.temperament == Temperament.Skittish) { EnterFlee(position); return; }
+
+            // Come and see: to a spot near the noise, at a brisk walk, then wander from there.
+            Vector3 near = position + UnityEngine.Random.insideUnitSphere * 10f;
+            if (!NavMesh.SamplePosition(near, out var hit, 15f, NavMesh.AllAreas)) return;
+            IsTrackingScent = false;
+            _agent.speed = species.walkSpeed * 1.5f;
+            _agent.SetDestination(hit.position);
+            _waitTimer = UnityEngine.Random.Range(species.wanderWaitMin, species.wanderWaitMax) + 3f;
+        }
 
         // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -165,6 +205,15 @@ namespace ProjectFossil.Dinosaurs
             if (species != null && _agent.isOnNavMesh) EnterChase();
         }
 
+        // Stalk a target (used by threats for predators with a nose): no homing, it roams toward where the target
+        // is and follows the scent trail once it crosses it. Sight or sound then turns it into a normal chase.
+        public void Track(Transform quarry)
+        {
+            if (quarry == null || CurrentState == State.Dead || species == null || !_agent.isOnNavMesh) return;
+            _quarry = quarry;
+            EnterWander();
+        }
+
         // Stampede (used by threats): run flat out through a point and keep going, trampling anyone in the way.
         public void Stampede(Vector3 through, float trampleDamage)
         {
@@ -231,6 +280,8 @@ namespace ProjectFossil.Dinosaurs
                 return;
             }
 
+            if (FollowScent()) return;
+
             if (!_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance)
             {
                 _waitTimer -= Time.deltaTime;
@@ -239,13 +290,51 @@ namespace ProjectFossil.Dinosaurs
             }
         }
 
+        // Nose down along the trail: head for the freshest mark in smelling range, then the next one.
+        // Returns true while it's on a trail (the trail decides where it goes, not wandering).
+        private bool FollowScent()
+        {
+            var trail = ScentTrail.Active;
+            if (species.smellRange <= 0f || trail == null) return false;
+
+            _scentCheck -= Time.deltaTime;
+            if (_scentCheck > 0f) return IsTrackingScent;
+            _scentCheck = 1f;
+
+            if (trail.TryFindFreshest(transform.position, species.smellRange, _scentTime, out var mark, out float time))
+            {
+                _scentTime = time;
+                _agent.speed = species.walkSpeed * 1.3f; // purposeful, but a walk: it's sniffing, not charging
+                _agent.SetDestination(mark);
+                if (!IsTrackingScent)
+                {
+                    IsTrackingScent = true;
+                    PickedUpScent?.Invoke(this);
+                }
+                return true;
+            }
+
+            if (IsTrackingScent && !_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance + 0.5f)
+            {
+                // End of the trail (it faded, or went through water): cast about from here.
+                IsTrackingScent = false;
+                _scentTime = float.NegativeInfinity;
+                _agent.speed = species.walkSpeed;
+                _waitTimer = 1.5f;
+            }
+            return IsTrackingScent;
+        }
+
         private void SetRandomWanderDestination()
         {
             _waitTimer = UnityEngine.Random.Range(species.wanderWaitMin, species.wanderWaitMax);
 
-            Vector3 randomDir = UnityEngine.Random.insideUnitSphere * species.wanderRadius;
-            randomDir += transform.position;
-            if (NavMesh.SamplePosition(randomDir, out var hit, species.wanderRadius, NavMesh.AllAreas))
+            if (_quarry != null && !IsValidTarget(_quarry)) _quarry = null;
+            float radius = _quarry != null ? Mathf.Max(40f, species.wanderRadius) : species.wanderRadius;
+            Vector3 randomDir = UnityEngine.Random.insideUnitSphere * radius;
+            // A stalker drifts toward its quarry's area instead of wherever it happens to be.
+            randomDir += _quarry != null ? _quarry.position : transform.position;
+            if (NavMesh.SamplePosition(randomDir, out var hit, radius, NavMesh.AllAreas))
                 _agent.SetDestination(hit.position);
         }
 
@@ -274,6 +363,8 @@ namespace ProjectFossil.Dinosaurs
         private void EnterChase()
         {
             CurrentState = State.Chase;
+            IsTrackingScent = false;
+            _scentTime = float.NegativeInfinity;
             _agent.speed = species.runSpeed;
         }
 

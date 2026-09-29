@@ -38,6 +38,9 @@ namespace ProjectFossil.Player
         public float proneNoise  = 0.25f;
         public float crouchVisibility = 0.75f;
         public float proneVisibility  = 0.5f;
+        [Tooltip("Visibility multiplier inside a bush or tall fern: standing / crouching or crawling")]
+        public float coverStanding = 0.6f;
+        public float coverLow      = 0.4f;
 
         [Header("Camera")]
         public Transform cameraTarget;
@@ -67,8 +70,13 @@ namespace ProjectFossil.Player
             IsSprinting ? runNoise : 1f;
 
         public float VisibilityMultiplier =>
-            Stance == Stance.Prone ? proneVisibility :
-            Stance == Stance.Crouching ? crouchVisibility : 1f;
+            (Stance == Stance.Prone ? proneVisibility :
+             Stance == Stance.Crouching ? crouchVisibility : 1f) *
+            (InCover ? (Stance == Stance.Standing ? coverStanding : coverLow) : 1f);
+
+        // Inside a bush or tall fern (from the island's plant registry).
+        public bool InCover { get; private set; }
+        public bool IsHidden => InCover && Stance != Stance.Standing;
 
         // Set by UI (shop, results screen) to freeze movement/look and free the cursor.
         public bool InputBlocked
@@ -191,6 +199,7 @@ namespace ProjectFossil.Player
         private void Update()
         {
             IsGrounded = _cc.isGrounded;
+            InCover    = ViewBlockers.InCover(transform.position);
 
             // The Editor (or Alt-Tab) can drop the cursor lock; a click in the game takes it back.
             if (!_inputBlocked && Cursor.lockState != CursorLockMode.Locked && Application.isFocused &&
