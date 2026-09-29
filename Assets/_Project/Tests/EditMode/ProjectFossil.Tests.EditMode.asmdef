@@ -7,7 +7,8 @@
         "ProjectFossil.Core",
         "ProjectFossil.Generation",
         "ProjectFossil.Director",
-        "ProjectFossil.Economy"
+        "ProjectFossil.Economy",
+        "ProjectFossil.Match"
     ],
     "includePlatforms": [
         "Editor"
