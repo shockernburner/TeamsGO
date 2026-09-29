@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: ProjectFossil.Dinosaurs::ProjectFossil.Dinosaurs.DinosaurSpecies
   speciesName: Raptor
   debugColor: {r: 0.2, g: 0.8, b: 0.2, a: 1}
+  bodyScale: 1
   walkSpeed: 4
   runSpeed: 10
   turnSpeed: 200
@@ -27,3 +28,8 @@ MonoBehaviour:
   attackRange: 2
   attackDamage: 25
   attackCooldown: 1.2
+  maxHealth: 60
+  fleeHealthFraction: 0.25
+  fleeDistance: 30
+  fleeDuration: 6
+  killReward: 15

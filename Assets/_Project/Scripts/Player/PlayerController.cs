@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Player
 {
@@ -31,6 +32,20 @@ namespace ProjectFossil.Player
         public bool  IsCrouching  { get; private set; }
         public bool  IsGrounded   { get; private set; }
 
+        // Set by UI (shop, results screen) to freeze movement/look and free the cursor.
+        public bool InputBlocked
+        {
+            get => _inputBlocked;
+            set
+            {
+                _inputBlocked    = value;
+                Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
+                Cursor.visible   = value;
+            }
+        }
+
+        public Health Health { get; private set; }
+
         private CharacterController _cc;
         private Vector2 _moveInput;
         private Vector2 _lookInput;
@@ -40,17 +55,34 @@ namespace ProjectFossil.Player
         private float   _verticalVelocity;
         private float   _pitch;
         private float   _staminaRegenTimer;
+        private bool    _inputBlocked;
 
         private void Awake()
         {
             _cc      = GetComponent<CharacterController>();
             Stamina  = maxStamina;
+
+            Health = GetComponent<Health>();
+            if (Health == null) Health = gameObject.AddComponent<Health>();
+            Health.Died += OnDied;
+        }
+
+        private void OnDestroy()
+        {
+            if (Health != null) Health.Died -= OnDied;
+        }
+
+        private void OnDied(DamageInfo info)
+        {
+            // Stop all control; the match flow decides what happens next.
+            _moveInput = Vector2.zero;
+            _lookInput = Vector2.zero;
+            enabled    = false;
         }
 
         private void OnEnable()
         {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible   = false;
+            InputBlocked = _inputBlocked;
         }
 
         private void OnDisable()
@@ -72,6 +104,14 @@ namespace ProjectFossil.Player
         private void Update()
         {
             IsGrounded = _cc.isGrounded;
+
+            if (_inputBlocked)
+            {
+                _moveInput   = Vector2.zero;
+                _lookInput   = Vector2.zero;
+                _jumpPressed = false;
+                _sprintHeld  = false;
+            }
 
             HandleLook();
             HandleStamina();
