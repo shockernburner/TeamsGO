@@ -515,6 +515,12 @@ namespace ProjectFossil.UI
                 y += 40f;
             }
 
+            // The pilot's call, as a subtitle, for a few seconds after the helicopter arrives.
+            float sinceOpen = state.Elapsed - state.ExtractionOpensAt;
+            if (state.IsExtractionOpen && sinceOpen >= 0f && sinceOpen < 7f && !state.IsExtracting)
+                GUI.Label(new Rect(0f, Screen.height * 0.74f, Screen.width, 32f),
+                          "PILOT: Your escape helicopter has arrived. Go to the extraction zone.", _banner);
+
             if (state.IsExtracting)
             {
                 float left = state.ExtractionHoldTime - state.ExtractionProgress;

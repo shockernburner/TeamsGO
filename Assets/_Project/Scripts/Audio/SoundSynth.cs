@@ -196,6 +196,54 @@ namespace ProjectFossil.Audio
             return Finish(s, 0.5f);
         }
 
+        // Death: a last few heartbeats that slow and stop, under a low minor-chord swell that dies away.
+        public static float[] Lament()
+        {
+            var s = Buffer(6f);
+            var rng = new Random(9700);
+            var lp = new OnePole(900f);
+            float[] chord = { 110f, 130.81f, 164.81f, 220f }; // A minor, low
+            float[] beats = { 0f, 0.95f, 2.1f, 3.6f };         // slowing, then nothing
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i), pad = 0f;
+                foreach (var f in chord)
+                    for (int d = -1; d <= 1; d++) // three slightly detuned voices per note: a soft string section
+                    {
+                        double ph = Tau * f * (1f + d * 0.004f) * t;
+                        pad += (float)(Math.Sin(ph) + 0.35 * Math.Sin(2 * ph) + 0.15 * Math.Sin(3 * ph));
+                    }
+                float swell = Adsr(t - 0.6f, 1.6f, 1.5f, 0.6f, 5.4f, 2.6f);
+                float v = lp.Next(pad * 0.06f * swell * (1f + 0.08f * (float)Math.Sin(Tau * 4.5f * t)));
+                for (int b = 0; b < beats.Length; b++)
+                {
+                    float tb = t - beats[b], k = 1f - b * 0.22f;
+                    if (tb < 0f || tb > 0.5f) continue;
+                    v += k * (float)Math.Sin(Tau * 48f * tb) * Exp(tb, 0.004f, 0.07f);
+                    float t2 = tb - 0.24f;
+                    if (t2 > 0f) v += 0.7f * k * (float)Math.Sin(Tau * 42f * t2) * Exp(t2, 0.004f, 0.08f);
+                }
+                s[i] = v + Noise(rng) * 0.002f;
+            }
+            return Finish(s, 0.7f);
+        }
+
+        // A radio opening: a click, a short burst of band-limited static, then a quieter hiss that holds.
+        public static float[] RadioSquelch()
+        {
+            var s = Buffer(0.9f);
+            var rng = new Random(9800);
+            var bp = new Bandpass(1800f, 0.8f);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i);
+                float level = t < 0.012f ? 1f : t < 0.22f ? 0.55f : 0.12f * (1f - (t - 0.22f) / 0.68f);
+                float click = t < 0.004f ? 1f - t / 0.004f : 0f;
+                s[i] = bp.Next(Noise(rng)) * level + click * 0.6f;
+            }
+            return Finish(s, 0.45f);
+        }
+
         // A big animal sniffing: two or three quick wet inhales, then a snort out through the nose.
         public static float[] Sniff(int variant)
         {

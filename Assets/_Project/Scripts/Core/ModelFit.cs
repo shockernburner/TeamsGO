@@ -26,6 +26,7 @@ namespace ProjectFossil.Core
 
             float yaw = def.yawOffset;
             if (def.faceHeadForward) yaw += HeadYaw(go.transform);
+            else yaw += HumanoidYaw(go); // a humanoid rig knows its own left and right: face its chest forward
             go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
 
             var b = MeasureLocal(go, parent);
@@ -33,6 +34,22 @@ namespace ProjectFossil.Core
             go.transform.localScale = Vector3.one * s;
             go.transform.localPosition = new Vector3(-b.center.x * s, -b.min.y * s, -b.center.z * s);
             return go;
+        }
+
+        // For a humanoid rig: the turn that makes its chest face +Z, found from its shoulders (forward = right x up).
+        // 0 for anything else. Character packs differ in which way their prefabs face, so this beats a fixed offset.
+        private static float HumanoidYaw(GameObject go)
+        {
+            var anim = go.GetComponentInChildren<Animator>();
+            if (anim == null || !anim.isHuman) return 0f;
+            var l = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var r = anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (l == null || r == null) return 0f;
+            Vector3 right = go.transform.InverseTransformPoint(r.position) - go.transform.InverseTransformPoint(l.position);
+            right.y = 0f;
+            if (right.sqrMagnitude < 1e-6f) return 0f;
+            Vector3 fwd = Vector3.Cross(right, Vector3.up);
+            return -Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
         }
 
         // Puts every skinned mesh of `attachment` onto `model`'s skeleton, matching bones by name.

@@ -377,3 +377,13 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - Every everyday sound can now come from a recording: Step, SoftStep, Bite, Swing, Hit, Hurt, DayAmbience and
   NightAmbience join the recorded sets, each falling back to its synthesized version. The synthesized day ambience
   (wind plus whistled bird chirps) is the main "cartoon" sound in playtests, so a real forest recording replaces it first.
+
+## Facing, a sadder death, the pilot's call
+
+- Humanoid models are turned by their own shoulders (forward = right x up) instead of a fixed yaw, because the
+  Survivalist prefabs face the other way from the Quaternius ones; the survivor walked backwards.
+- Death plays `Lament` (slowing heartbeats under a low A-minor string swell), or a recorded `Death` clip.
+- When the helicopter arrives: radio static, then a recorded `Radio_*` pilot line if present, and the subtitle
+  "PILOT: Your escape helicopter has arrived. Go to the extraction zone." The bell chime is gone.
+- The coin ding on every hit made fights sound like an arcade: now soft and at most every 2 s.
+- Flyer calls use the recorded screeches pitched up when the sound library is present.
