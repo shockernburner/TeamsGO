@@ -26,6 +26,8 @@ namespace ProjectFossil.Tests.EditMode
             yield return new TestCaseData(SoundSynth.Heartbeat(), 0.3f, 0.8f).SetName("Heartbeat");
             yield return new TestCaseData(SoundSynth.Rotor(), 1.5f, 2.5f).SetName("Rotor");
             yield return new TestCaseData(SoundSynth.Victory(), 2f, 4f).SetName("Victory");
+            yield return new TestCaseData(SoundSynth.Lament(), 5f, 7f).SetName("Lament");
+            yield return new TestCaseData(SoundSynth.RadioSquelch(), 0.5f, 1.5f).SetName("RadioSquelch");
         }
 
         [TestCaseSource(nameof(AllSounds))]

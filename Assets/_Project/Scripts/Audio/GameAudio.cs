@@ -41,10 +41,12 @@ namespace ProjectFossil.Audio
         private const int Variants = 4;
 
         private AudioClip[] _steps, _softSteps, _screeches, _roars, _bites, _swings, _hits, _hurts, _sniffs;
-        private AudioClip _coin, _sting, _chime, _ambience, _heartbeat, _rotor, _victory, _nightAmbience, _rainLoop;
+        private AudioClip _coin, _sting, _ambience, _heartbeat, _rotor, _victory, _nightAmbience, _rainLoop;
         private AudioClip[] _thunders, _skyCalls;
         private AudioClip[] _growls, _breaths;   // recorded only; null without the sound library
-        private AudioClip _stormLoop, _windLoop;
+        private AudioClip _stormLoop, _windLoop, _lament, _squelch;
+        private AudioClip[] _radio;     // recorded pilot calls; null without them
+        private float _nextCoin;
         private AudioSource _rain;      // 2D loop, louder in a storm
         private AudioSource _wind;      // 2D loop, storms only
         private float _rainTarget, _windTarget;
@@ -105,7 +107,6 @@ namespace ProjectFossil.Audio
             _hurts     = SoundLibrary.Get("Hurt")  ?? Make("Hurt",     SoundSynth.Hurt);
             _coin      = Clip("Coin",     SoundSynth.Coin());
             _sting     = Clip("Sting",    SoundSynth.ThreatSting());
-            _chime     = Clip("Chime",    SoundSynth.Chime());
             _ambience  = SoundLibrary.One("DayAmbience") ?? Clip("Ambience", SoundSynth.Ambience());
             _sniffs    = Make("Sniff",    SoundSynth.Sniff);
             _heartbeat = Clip("Heartbeat", SoundSynth.Heartbeat());
@@ -116,7 +117,11 @@ namespace ProjectFossil.Audio
             _stormLoop = SoundLibrary.One("StormLoop") ?? _rainLoop;
             _windLoop  = SoundLibrary.One("WindLoop");
             _thunders  = SoundLibrary.Get("Thunder") ?? Make("Thunder", SoundSynth.Thunder);
-            _skyCalls  = Make("SkyCall",  SoundSynth.SkyCall);
+            // Real screeches pitched up read as distant flyers; the synthesized calls only when there are none.
+            _skyCalls  = SoundLibrary.Get("SkyCall") ?? SoundLibrary.Get("Screech") ?? Make("SkyCall", SoundSynth.SkyCall);
+            _lament    = SoundLibrary.One("Death") ?? Clip("Lament", SoundSynth.Lament());
+            _squelch   = Clip("Squelch", SoundSynth.RadioSquelch());
+            _radio     = SoundLibrary.Get("Radio");
 
             _ui = gameObject.AddComponent<AudioSource>();
             _ui.playOnAwake = false;
@@ -176,7 +181,7 @@ namespace ProjectFossil.Audio
         }
 
         private void OnSkyCall(Vector3 position) =>
-            Play3D(Pick(_skyCalls), position, 0.7f, Random.Range(0.9f, 1.15f), 260f);
+            Play3D(Pick(_skyCalls), position, 0.7f, Random.Range(1.35f, 1.6f), 260f);
 
         private void UpdateRain()
         {
@@ -336,7 +341,10 @@ namespace ProjectFossil.Audio
 
         private void OnBalanceChanged(int balance, int delta)
         {
-            if (delta > 0) Play2D(_coin, 0.6f, 1f);
+            // Coins arrive on every hit; a ding each time turns a fight into an arcade. Soft, and at most every 2 s.
+            if (delta <= 0 || Time.time < _nextCoin) return;
+            _nextCoin = Time.time + 2f;
+            Play2D(_coin, 0.18f, 1f);
         }
 
         // ── Match ──────────────────────────────────────────────────────────────
@@ -380,7 +388,7 @@ namespace ProjectFossil.Audio
             var state = _match.State;
             if (state == null) return;
             bool open = state.IsExtractionOpen;
-            if (open && !_extractionWasOpen && _match.IsRunning) Play2D(_chime, 0.8f, 1f);
+            if (open && !_extractionWasOpen && _match.IsRunning) StartCoroutine(RadioCall());
             _extractionWasOpen = open;
         }
 
@@ -388,8 +396,18 @@ namespace ProjectFossil.Audio
         {
             _ambient.Stop();
             if (stats.Result == MatchResult.Extracted) { Play2D(_victory, 1f, 1f); return; }
-            // Low and slow if you didn't make it. Positional so the pitch doesn't touch the shared 2D source.
-            if (_player != null) Play3D(_chime, _player.transform.position, 0.8f, 0.6f, 50f);
+            // A last few heartbeats and a low swell if you didn't make it.
+            Play2D(_lament, 0.9f, 1f);
+        }
+
+        // The pilot calls in: static opens the channel, then the recorded line if there is one. The words are on
+        // screen too (UIManager), so the call works without a recording.
+        private IEnumerator RadioCall()
+        {
+            Play2D(_squelch, 0.5f, 1f);
+            if (_radio == null) yield break;
+            yield return new WaitForSeconds(0.35f);
+            Play2D(Pick(_radio), 1f, 1f);
         }
 
         // The stalker announces itself from where it starts, far off.
