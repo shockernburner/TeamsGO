@@ -365,3 +365,12 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
   - On extraction this follows the "YOU MADE IT OUT!" banner.
   - On death it takes 2.5 s.
   - The rotor sound fades away behind it.
+
+## Bought-pack setup never stops early
+
+- The forest pack's "import the URP version" question used to end the setup, every run, because a few forest
+  materials stay non-URP even after that import. So the survivor and helicopter were never set up. Now the question
+  is asked once per project and the setup always carries on and always writes `Logs/BoughtArtReport.txt`.
+- Recorded sounds must sit in `Assets/SoundLibrary/Resources/SoundLibrary`. The setup (and the automatic run on
+  Editor start) now moves our clips (Roar_1, RainLoop, ...) there from anywhere under `Assets/SoundLibrary` and
+  reports how many are ready.
