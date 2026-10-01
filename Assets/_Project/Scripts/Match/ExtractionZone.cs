@@ -9,7 +9,7 @@ namespace ProjectFossil.Match
     // helicopter. When extraction opens the chopper flies in with its searchlight on, then hovers low over the pad
     // with a rope ladder down, kicking up dust. Its rotor noise carries: every few seconds it draws dinosaurs toward
     // the pad, so the wait to get aboard is a fight. When someone makes it, it lifts off with them on the ladder.
-    // Placeholder art from primitives, like the rest of the prototype.
+    // Uses the bought helicopter model where this machine has one (BoughtArt), primitives otherwise.
     public class ExtractionZone : MonoBehaviour
     {
         public float radius = 8f;
@@ -127,8 +127,8 @@ namespace ProjectFossil.Match
             else UpdateHover();
 
             float spin = _landed || _leaving ? 1100f : 1300f;
-            if (_rotor != null)     _rotor.Rotate(Vector3.up, spin * Time.deltaTime, Space.Self);
-            if (_tailRotor != null) _tailRotor.Rotate(Vector3.right, spin * 1.6f * Time.deltaTime, Space.Self);
+            if (_rotor != null)     _rotor.Rotate(_rotorAxis, spin * Time.deltaTime, Space.Self);
+            if (_tailRotor != null) _tailRotor.Rotate(_tailAxis, spin * 1.6f * Time.deltaTime, Space.Self);
             // Blades only show as a ghost flicker inside the blur.
             bool ghost = Mathf.Repeat(_time * 7f, 1f) < 0.25f;
             foreach (var b in _blades) if (b != null) b.enabled = ghost;
@@ -212,15 +212,144 @@ namespace ProjectFossil.Match
 
         // ── Model ──────────────────────────────────────────────────────────────
 
-        // A rescue chopper from primitives: rounded cabin with an open side door, glass nose, engine hump, tapered
-        // tail with fin and stabiliser, skids, four-blade main rotor, tail rotor, blinking lights, a searchlight and a
-        // rope ladder on the door side.
+        // Where the shared fittings go on whichever body the helicopter has (helicopter-local, nose along +Z).
+        private struct Fittings
+        {
+            public Vector3 lamp;      // searchlight under the nose
+            public Vector3 door;      // top of the rope ladder, on the right side
+            public Vector3 boxCenter, boxSize;
+        }
+
+        // The bought model when this machine has one (see BoughtArt), otherwise one built from primitives. Either way
+        // it gets a searchlight, a rope ladder on the right side, a collider and rotor dust.
         private void BuildHelicopter()
         {
             _heli = new GameObject("Helicopter").transform;
             _heli.SetParent(transform, false);
             _heli.localPosition = new Vector3(ApproachX, SkyHeight, 0f);
             _heli.localRotation = Quaternion.Euler(0f, 90f, 0f);
+
+            var art = BoughtArt.Current;
+            var fit = art != null && art.helicopter != null ? BuildBoughtBody(art) : BuildPrimitiveBody();
+
+            // Searchlight under the nose.
+            var lamp = new GameObject("Searchlight").transform;
+            lamp.SetParent(_heli, false);
+            lamp.localPosition = fit.lamp;
+            lamp.localRotation = Quaternion.Euler(55f, 0f, 0f);
+            _searchlight = lamp.gameObject.AddComponent<Light>();
+            _searchlight.type      = LightType.Spot;
+            _searchlight.color     = new Color(1f, 0.95f, 0.85f);
+            _searchlight.intensity = 60f;
+            _searchlight.range     = 60f;
+            _searchlight.spotAngle = 34f;
+            _searchlight.shadows   = LightShadows.None;
+
+            // Rope ladder from the door to the ground.
+            _ladder = new GameObject("Ladder").transform;
+            _ladder.SetParent(_heli, false);
+            _ladder.localPosition = fit.door;
+            var rope = new Color(0.45f, 0.35f, 0.2f);
+            float length = fit.door.y + HoverHeight - 0.1f;
+            Part(PrimitiveType.Cylinder, _ladder, new Vector3(0f, -length * 0.5f, -0.3f), Vector3.zero, new Vector3(0.05f, length * 0.5f, 0.05f), rope);
+            Part(PrimitiveType.Cylinder, _ladder, new Vector3(0f, -length * 0.5f, 0.3f),  Vector3.zero, new Vector3(0.05f, length * 0.5f, 0.05f), rope);
+            for (float y = -0.4f; y > -length; y -= 0.45f)
+                Part(PrimitiveType.Cube, _ladder, new Vector3(0f, y, 0f), Vector3.zero, new Vector3(0.06f, 0.05f, 0.62f), rope);
+            _ladderGrip = new GameObject("Grip").transform;
+            _ladderGrip.SetParent(_ladder, false);
+            _ladderGrip.localPosition = new Vector3(0.25f, -length + 1.4f, 0f);
+            _ladderGrip.localRotation = Quaternion.Euler(0f, -90f, 0f); // facing the ladder
+            _ladder.gameObject.SetActive(false);
+
+            // The body is solid for the camera (it won't clip inside), and high enough that nobody walks into it.
+            var box = _heli.gameObject.AddComponent<BoxCollider>();
+            box.center = fit.boxCenter;
+            box.size   = fit.boxSize;
+
+            _dust = MakeDust(transform);
+            _heli.gameObject.SetActive(false);
+        }
+
+        // ── Bought model ──
+
+        // Spin axes of the bought model's rotors, in each rotor's own space.
+        private Vector3 _rotorAxis = Vector3.up, _tailAxis = Vector3.right;
+
+        private Fittings BuildBoughtBody(BoughtArt art)
+        {
+            var model = Instantiate(art.helicopter, _heli, false);
+            model.name = art.helicopter.name;
+            var t = model.transform;
+            t.localRotation = Quaternion.Euler(0f, art.helicopterYaw, 0f);
+            t.localScale    = Vector3.one;
+            var b = ModelFit.MeasureLocal(model, _heli);
+            float s = b.size.z > 0.01f ? art.helicopterLength / b.size.z : 1f;
+            t.localScale = Vector3.one * s;
+            b = ModelFit.MeasureLocal(model, _heli);
+            t.localPosition = new Vector3(-b.center.x, -b.min.y, -b.center.z); // skids on the pivot, centred
+            b = ModelFit.MeasureLocal(model, _heli);
+
+            FindRotors(t);
+            if (_rotor != null)
+            {
+                // The blades spin too fast for a camera to see: a faint disc where they sweep.
+                Vector3 hub = _heli.InverseTransformPoint(_rotor.position);
+                var rb = ModelFit.MeasureLocal(_rotor.gameObject, _heli);
+                float diameter = Mathf.Max(rb.size.x, rb.size.z);
+                if (diameter < b.size.z * 0.5f) diameter = b.size.z * 0.9f; // blades drawn by bones: guess from the body
+                _discs.Add(Disc(_heli, new Vector3(hub.x, hub.y + 0.05f, hub.z), Vector3.zero, diameter, 0.16f));
+            }
+
+            return new Fittings
+            {
+                lamp      = new Vector3(0f, b.min.y + 0.5f, b.max.z * 0.7f),
+                door      = new Vector3(b.max.x * 0.8f + 0.1f, b.min.y + b.size.y * 0.4f, b.center.z + b.size.z * 0.1f),
+                boxCenter = new Vector3(0f, b.min.y + b.size.y * 0.4f, b.center.z),
+                boxSize   = new Vector3(Mathf.Min(b.size.x, 3f), b.size.y * 0.6f, b.size.z * 0.6f),
+            };
+        }
+
+        // Rotors are found by name (main rotor highest up, tail rotor farthest back). A part inside another match
+        // (blades under a hub) turns with it, so only the outermost matches spin.
+        private void FindRotors(Transform model)
+        {
+            var found = new System.Collections.Generic.List<Transform>();
+            foreach (var c in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (c == model) continue;
+                string n = c.name.ToLowerInvariant();
+                if (!(n.Contains("rotor") || n.Contains("blade") || n.Contains("prop") || n.Contains("fan"))) continue;
+                bool inside = false;
+                for (var p = c.parent; p != null && p != model; p = p.parent)
+                    if (found.Contains(p)) { inside = true; break; }
+                if (!inside) found.Add(c);
+            }
+            if (found.Count == 0) { Debug.Log("[ExtractionZone] Bought helicopter: no rotor parts found by name."); return; }
+
+            Transform main = null, tail = null;
+            foreach (var c in found)
+            {
+                Vector3 p = _heli.InverseTransformPoint(c.position);
+                if (main == null || p.y > _heli.InverseTransformPoint(main.position).y) main = c;
+            }
+            foreach (var c in found)
+            {
+                if (c == main || c.IsChildOf(main) || main.IsChildOf(c)) continue;
+                Vector3 p = _heli.InverseTransformPoint(c.position);
+                if (tail == null || p.z < _heli.InverseTransformPoint(tail.position).z) tail = c;
+            }
+            _rotor = main;
+            _tailRotor = tail;
+            _rotorAxis = main.InverseTransformDirection(_heli.up).normalized;
+            if (tail != null) _tailAxis = tail.InverseTransformDirection(_heli.right).normalized;
+        }
+
+        // ── Primitive model ──
+
+        // A rescue chopper from primitives: rounded cabin with an open side door, glass nose, engine hump, tapered
+        // tail with fin and stabiliser, skids, four-blade main rotor, tail rotor and blinking lights.
+        private Fittings BuildPrimitiveBody()
+        {
 
             // Matte military olive with a darker band: bright rescue orange read as a toy against the real forest.
             var body   = new Color(0.22f, 0.25f, 0.19f);
@@ -276,42 +405,13 @@ namespace ProjectFossil.Match
             _navGreen = Glow(_heli, new Vector3(1.1f, 1.3f, 1.6f),   0.18f);
             _strobe   = Glow(_heli, new Vector3(0f, 3.85f, -6.85f),  0.16f);
 
-            // Searchlight under the nose.
-            var lamp = new GameObject("Searchlight").transform;
-            lamp.SetParent(_heli, false);
-            lamp.localPosition = new Vector3(0f, 0.6f, 1.9f);
-            lamp.localRotation = Quaternion.Euler(55f, 0f, 0f);
-            _searchlight = lamp.gameObject.AddComponent<Light>();
-            _searchlight.type      = LightType.Spot;
-            _searchlight.color     = new Color(1f, 0.95f, 0.85f);
-            _searchlight.intensity = 60f;
-            _searchlight.range     = 60f;
-            _searchlight.spotAngle = 34f;
-            _searchlight.shadows   = LightShadows.None;
-
-            // Rope ladder from the door to the ground.
-            _ladder = new GameObject("Ladder").transform;
-            _ladder.SetParent(_heli, false);
-            _ladder.localPosition = new Vector3(1.35f, 1.3f, -0.2f);
-            var rope = new Color(0.45f, 0.35f, 0.2f);
-            float length = HoverHeight + 1.2f;
-            Part(PrimitiveType.Cylinder, _ladder, new Vector3(0f, -length * 0.5f, -0.3f), Vector3.zero, new Vector3(0.05f, length * 0.5f, 0.05f), rope);
-            Part(PrimitiveType.Cylinder, _ladder, new Vector3(0f, -length * 0.5f, 0.3f),  Vector3.zero, new Vector3(0.05f, length * 0.5f, 0.05f), rope);
-            for (float y = -0.4f; y > -length; y -= 0.45f)
-                Part(PrimitiveType.Cube, _ladder, new Vector3(0f, y, 0f), Vector3.zero, new Vector3(0.06f, 0.05f, 0.62f), rope);
-            _ladderGrip = new GameObject("Grip").transform;
-            _ladderGrip.SetParent(_ladder, false);
-            _ladderGrip.localPosition = new Vector3(0.25f, -length + 1.4f, 0f);
-            _ladderGrip.localRotation = Quaternion.Euler(0f, -90f, 0f); // facing the ladder
-            _ladder.gameObject.SetActive(false);
-
-            // The body is solid for the camera (it won't clip inside), and high enough that nobody walks into it.
-            var box = _heli.gameObject.AddComponent<BoxCollider>();
-            box.center = new Vector3(0f, 2.0f, 0f);
-            box.size   = new Vector3(2.5f, 2.4f, 5f);
-
-            _dust = MakeDust(transform);
-            _heli.gameObject.SetActive(false);
+            return new Fittings
+            {
+                lamp      = new Vector3(0f, 0.6f, 1.9f),
+                door      = new Vector3(1.35f, 1.3f, -0.2f),
+                boxCenter = new Vector3(0f, 2.0f, 0f),
+                boxSize   = new Vector3(2.5f, 2.4f, 5f),
+            };
         }
 
         private readonly System.Collections.Generic.List<Renderer> _blades = new System.Collections.Generic.List<Renderer>();

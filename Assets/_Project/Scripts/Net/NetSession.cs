@@ -126,6 +126,7 @@ namespace ProjectFossil.Net
             _boot.CanRestart = null;
             _boot.RestartNote = null;
             _boot.spawnOffset = Vector3.zero;
+            _boot.playerSlot  = 0;
             _mode = Mode.Solo;
             _boot.StartSolo();
         }
@@ -140,6 +141,7 @@ namespace ProjectFossil.Net
             _boot.CanRestart = null;
             _boot.RestartNote = "A new island takes your whole team with you.";
             _boot.spawnOffset = Vector3.zero;
+            _boot.playerSlot  = 0;
             _mode = Mode.StartingHost;
             _status = "Starting the host...";
             _lanAddress = LocalAddress();
@@ -332,6 +334,7 @@ namespace ProjectFossil.Net
             int id = _net.ClientManager.Connection != null ? _net.ClientManager.Connection.ClientId : 1;
             float angle = id * 90f * Mathf.Deg2Rad;
             _boot.spawnOffset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 2.5f;
+            _boot.playerSlot  = id;
             _flares.Clear();
             WorldConditions.Override((DayTime)msg.Time, (Weather)msg.Weather, msg.Wind); // the host's sky
             _boot.GenerateAndSpawn(msg.Seed);

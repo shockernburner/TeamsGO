@@ -37,6 +37,7 @@ namespace ProjectFossil.Match
         // Online hooks (the networking layer sets these; solo play never touches them).
         [System.NonSerialized] public bool holdStart;       // wait for a menu choice instead of starting at once
         [System.NonSerialized] public Vector3 spawnOffset;  // teammates land beside each other, not inside
+        [System.NonSerialized] public int playerSlot;       // online client number: picks this player's outfit
         // Whether this machine may start the next island, and what to show instead when it can't.
         public System.Func<bool> CanRestart;
         public string RestartNote;
@@ -173,7 +174,7 @@ namespace ProjectFossil.Match
             EnsureComponent<PlayerCombat>(player);
             EnsureComponent<PlayerInteractor>(player);
             EnsureComponent<PlayerMenuInput>(player);
-            PlayerVisual.Attach(player, content != null ? content.playerModel : null);
+            PlayerVisual.Attach(player, BoughtArt.Survivor(playerSlot, content != null ? content.playerModel : null));
             return player;
         }
 

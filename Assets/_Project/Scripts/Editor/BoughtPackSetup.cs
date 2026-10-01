@@ -14,6 +14,8 @@ namespace ProjectFossil.Editor
     //   - the dinosaur pack: materials switched to URP Lit, clean model prefabs without the pack's own scripts,
     //     our own Animator controllers (Speed / Attack / Dead), one per species, plus a flying reptile for the sky
     //   - the forest pack and the dinosaur pack's tropical plants: trees, plants, rocks and ground textures per biome
+    //   - the survivor pack: one player look per outfit, animated by our own (humanoid) survivor controller
+    //   - the helicopter pack: the rescue helicopter, its rotors spun by our flight code
     // Everything it writes goes to Assets/_Project/Art/Bought (git-ignored), ending in Resources/BoughtArt.asset,
     // which the game reads at runtime. Machines without the packs keep the free models.
     // A report of what it found (animation names, shaders) goes to Logs/BoughtArtReport.txt.
@@ -48,11 +50,15 @@ namespace ProjectFossil.Editor
             string creatures = FindDir("Creatures/VOLI");
             string forest    = FindDir("Forest Environment Dynamic Nature");
             string dinoPack  = creatures != null ? Parent(Parent(creatures)) : null;
+            string survivors = FindDir("Survivalist");
+            string heliPack  = FindDir("OH-1_Basic");
             Log.AppendLine($"Dinosaur pack: {dinoPack ?? "not found"}");
             Log.AppendLine($"Forest pack:   {forest ?? "not found"}");
-            if (dinoPack == null && forest == null)
+            Log.AppendLine($"Survivor pack: {survivors ?? "not found"}");
+            Log.AppendLine($"Heli pack:     {heliPack ?? "not found"}");
+            if (dinoPack == null && forest == null && survivors == null && heliPack == null)
             {
-                EditorUtility.DisplayDialog("Bought packs", "Neither the dinosaur pack nor the forest pack is imported.", "OK");
+                EditorUtility.DisplayDialog("Bought packs", "None of the art packs is imported.", "OK");
                 return;
             }
             if (forest != null && OfferForestUrpPackage(forest)) return;
@@ -76,6 +82,14 @@ namespace ProjectFossil.Editor
                     SetUpDinosaurs(art, creatures);
                 }
                 SetUpNature(art, forest, dinoPack);
+                if (survivors != null) SetUpSurvivors(art, survivors);
+                else art.survivors = new ModelDefinition[0];
+                if (heliPack != null)
+                {
+                    ConvertMaterials(heliPack, "helicopter-pack", path => path.Contains("/specular/"));
+                    SetUpHelicopter(art, heliPack);
+                }
+                else art.helicopter = null;
             }
             finally
             {
@@ -93,7 +107,7 @@ namespace ProjectFossil.Editor
 
         // The dinosaur pack ships built-in pipeline materials. Its ReadMe says to use URP's default shader,
         // so every material that URP can't draw is switched to URP Lit, keeping its textures.
-        private static void ConvertMaterials(string pack)
+        private static void ConvertMaterials(string pack, string label = "dinosaur-pack", System.Func<string, bool> skip = null)
         {
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             int converted = 0;
@@ -101,6 +115,7 @@ namespace ProjectFossil.Editor
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 if (path.Contains("/SceneFx/")) continue; // demo sky, water and particles: not used
+                if (skip != null && skip(path)) continue;
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (mat == null || IsUrp(mat.shader)) continue;
 
@@ -112,6 +127,9 @@ namespace ProjectFossil.Editor
                 Color tint   = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
                 // Leaves and fronds in the plant atlas are cut out of the texture.
                 bool cutout  = path.Contains("terrainDetails") || mat.name.ToLowerInvariant().Contains("atlas");
+                bool glass   = mat.name.ToLowerInvariant().Contains("glass");
+                var metal    = FirstTexture(mat, names, "_MetallicGlossMap") ?? TextureLike(mat, names, "metal");
+                var occlusion = FirstTexture(mat, names, "_OcclusionMap") ?? TextureLike(mat, names, "occlusion", "_ao");
                 string was   = mat.shader != null ? mat.shader.name : "missing";
 
                 mat.shader = lit;
@@ -125,6 +143,31 @@ namespace ProjectFossil.Editor
                     mat.EnableKeyword("_NORMALMAP");
                 }
                 mat.SetFloat("_Smoothness", cutout ? 0.1f : 0.3f);
+                if (metal != null)
+                {
+                    mat.SetTexture("_MetallicGlossMap", metal);
+                    mat.EnableKeyword("_METALLICSPECGLOSSMAP");
+                    mat.SetFloat("_Smoothness", 1f); // scales the map's own smoothness
+                }
+                if (occlusion != null)
+                {
+                    mat.SetTexture("_OcclusionMap", occlusion);
+                    mat.EnableKeyword("_OCCLUSIONMAP");
+                }
+                if (glass)
+                {
+                    // Canopy glass: dark, glossy and mostly see-through.
+                    mat.SetFloat("_Surface", 1f);
+                    mat.SetFloat("_Blend", 0f);
+                    mat.SetFloat("_ZWrite", 0f);
+                    mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    mat.SetColor("_BaseColor", new Color(tint.r * 0.3f, tint.g * 0.35f, tint.b * 0.4f, 0.35f));
+                    mat.SetFloat("_Smoothness", 0.95f);
+                    mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    mat.SetOverrideTag("RenderType", "Transparent");
+                }
                 if (cutout)
                 {
                     mat.SetFloat("_AlphaClip", 1f);
@@ -139,7 +182,7 @@ namespace ProjectFossil.Editor
                 converted++;
                 Log.AppendLine($"  material {path}: {was} -> URP Lit (base {(baseTex != null ? baseTex.name : "none")}, normal {(normal != null ? normal.name : "none")})");
             }
-            Log.AppendLine($"Converted {converted} dinosaur-pack materials to URP Lit.");
+            Log.AppendLine($"Converted {converted} {label} materials to URP Lit.");
         }
 
         private static bool IsUrp(Shader s) =>
@@ -463,6 +506,148 @@ namespace ProjectFossil.Editor
             string path = $"{Out}/Animators/{name}.controller";
             if (AssetDatabase.LoadAssetAtPath<AnimatorController>(path) != null) AssetDatabase.DeleteAsset(path);
             return AnimatorController.CreateAnimatorControllerAtPath(path);
+        }
+
+        // ── Survivors ──────────────────────────────────────────────────────────
+
+        // Each outfit prefab of the survivor pack becomes a player look. The body is imported as a humanoid so the
+        // survivor controller built from the free animation library (Set Up Model Packs) drives it.
+        private static void SetUpSurvivors(BoughtArt art, string dir)
+        {
+            Log.AppendLine();
+            Log.AppendLine($"Survivors <- {dir}");
+            var avatar = HumanAvatar(dir);
+
+            var template = AssetDatabase.LoadAssetAtPath<ModelDefinition>($"{ModelData}/Model_Survivor.asset");
+            if (template == null || template.animator == null)
+                Log.AppendLine("  Model_Survivor has no animations yet: run Project Fossil > Art > Set Up Model Packs, then this again.");
+
+            string prefabDir = $"{dir}/Prefab";
+            var sources = Directory.Exists(prefabDir)
+                ? Directory.GetFiles(prefabDir, "Survivalist*.prefab").Select(p => p.Replace('\\', '/')).OrderBy(p => p).ToList()
+                : new List<string>();
+            if (sources.Count == 0) { Log.AppendLine($"  no Survivalist prefabs in {prefabDir}, skipped."); art.survivors = new ModelDefinition[0]; return; }
+
+            EnsureFolder(Out + "/Survivors");
+            var defs = new List<ModelDefinition>();
+            for (int i = 0; i < sources.Count; i++)
+            {
+                var source = AssetDatabase.LoadAssetAtPath<GameObject>(sources[i]);
+                if (source == null) continue;
+                string name = $"Survivor_{i + 1}";
+                string modelPath = $"{Out}/Survivors/{name}.prefab";
+                CleanPrefab(source, modelPath);
+                FixSurvivor(modelPath, dir, avatar);
+
+                string defPath = $"{Out}/Survivors/{name}.asset";
+                var def = AssetDatabase.LoadAssetAtPath<ModelDefinition>(defPath);
+                if (def == null)
+                {
+                    def = ScriptableObject.CreateInstance<ModelDefinition>();
+                    AssetDatabase.CreateAsset(def, defPath);
+                }
+                def.model           = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+                def.animator        = template != null ? template.animator : null;
+                def.height          = template != null ? template.height : 1.8f;
+                def.yawOffset       = 0f;     // Unity-made prefabs face +Z
+                def.faceHeadForward = false;
+                def.attachments     = new GameObject[0];
+                def.trimMeshes      = new string[0];
+                def.keepBones       = new string[0];
+                EditorUtility.SetDirty(def);
+                defs.Add(def);
+                Log.AppendLine($"  {name} <- {sources[i]}");
+            }
+            art.survivors = defs.ToArray();
+        }
+
+        // The pack's body model, imported as a humanoid. Returns its avatar.
+        private static Avatar HumanAvatar(string dir)
+        {
+            string fbx = Directory.Exists($"{dir}/Basemesh")
+                ? Directory.GetFiles($"{dir}/Basemesh", "*.fbx").Select(p => p.Replace('\\', '/')).FirstOrDefault()
+                : null;
+            if (fbx == null) { Log.AppendLine("  no body model in Basemesh; keeping the prefabs' own avatars."); return null; }
+            var imp = AssetImporter.GetAtPath(fbx) as ModelImporter;
+            if (imp != null && imp.animationType != ModelImporterAnimationType.Human)
+            {
+                Log.AppendLine($"  {fbx}: rig {imp.animationType} -> Humanoid");
+                imp.animationType = ModelImporterAnimationType.Human;
+                imp.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+                imp.SaveAndReimport();
+            }
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(fbx).OfType<Avatar>().FirstOrDefault();
+            Log.AppendLine($"  avatar: {(avatar == null ? "none" : avatar.name + (avatar.isHuman ? " (humanoid)" : " (NOT humanoid)"))}");
+            return avatar;
+        }
+
+        // URP versions of the outfit materials, and the humanoid avatar on the Animator.
+        private static void FixSurvivor(string prefabPath, string dir, Avatar avatar)
+        {
+            var root = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    var mats = r.sharedMaterials;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        var m = mats[i];
+                        if (m == null || IsUrp(m.shader)) continue;
+                        string bare = m.name.StartsWith("HDRP_") ? m.name.Substring(5) : m.name.StartsWith("URP_") ? m.name.Substring(4) : m.name;
+                        var urp = AssetDatabase.LoadAssetAtPath<Material>($"{dir}/Materials URP/URP_{bare}.mat");
+                        if (urp != null) mats[i] = urp;
+                        else Log.AppendLine($"  {r.name}: {m.name} ({(m.shader != null ? m.shader.name : "no shader")}) has no URP version");
+                    }
+                    r.sharedMaterials = mats;
+                }
+                foreach (var an in root.GetComponentsInChildren<Animator>(true))
+                {
+                    if (avatar != null && (an.avatar == null || !an.avatar.isHuman)) an.avatar = avatar;
+                    an.runtimeAnimatorController = null; // ours is set at runtime
+                    an.applyRootMotion = false;
+                }
+                PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        // ── Helicopter ─────────────────────────────────────────────────────────
+
+        private static void SetUpHelicopter(BoughtArt art, string dir)
+        {
+            Log.AppendLine();
+            var prefabs = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+                                   .Select(p => p.Replace('\\', '/'))
+                                   .OrderBy(p => p.Contains("/metallic/") ? 0 : 1).ThenBy(p => p).ToList();
+            var source = prefabs.Select(AssetDatabase.LoadAssetAtPath<GameObject>).FirstOrDefault(g => g != null);
+            if (source == null) { Log.AppendLine($"Helicopter: no prefab in {dir}, skipped."); art.helicopter = null; return; }
+            Log.AppendLine($"Helicopter <- {AssetDatabase.GetAssetPath(source)}");
+
+            string path = $"{Out}/Models/Helicopter.prefab";
+            CleanPrefab(source, path);
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                // Our flight code spins the rotors; the pack's demo animation would fight it.
+                foreach (var an in root.GetComponentsInChildren<Animator>(true)) Object.DestroyImmediate(an);
+                var b = new Bounds();
+                bool any = false;
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+                }
+                Log.AppendLine($"  size {b.size.x:0.0} x {b.size.y:0.0} x {b.size.z:0.0} m (x, y, z); parts:");
+                foreach (var t in root.GetComponentsInChildren<Transform>(true).Take(120))
+                {
+                    int depth = 0;
+                    for (var p = t.parent; p != null; p = p.parent) depth++;
+                    Log.AppendLine($"  {new string(' ', depth * 2)}{t.name}{(t.GetComponent<Renderer>() != null ? " [mesh]" : "")}");
+                }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+            art.helicopter = AssetDatabase.LoadAssetAtPath<GameObject>(path);
         }
 
         // ── Nature ─────────────────────────────────────────────────────────────

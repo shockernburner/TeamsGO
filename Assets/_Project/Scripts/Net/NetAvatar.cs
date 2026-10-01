@@ -80,7 +80,7 @@ namespace ProjectFossil.Net
                 return;
             }
             var content = GameContent.LoadDefault();
-            _visual = PlayerVisual.Attach(gameObject, content != null ? content.playerModel : null);
+            _visual = PlayerVisual.Attach(gameObject, BoughtArt.Survivor(Owner.ClientId, content != null ? content.playerModel : null));
         }
 
         public override void OnStopClient() => All.Remove(this);
