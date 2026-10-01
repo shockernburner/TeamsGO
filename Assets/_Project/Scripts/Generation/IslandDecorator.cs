@@ -306,6 +306,9 @@ namespace ProjectFossil.Generation
 
         // Sizes match the primitives they replace: trees ~7 m, rocks ~1.5 m across, plants ~1.2 m, at scale 1.
         private const float TreeHeight = 7f, RockWidth = 1.5f, PlantHeight = 1.2f;
+        // Low, spreading plants (banana leaves, big ferns) scaled up to plant height become leaves metres wide
+        // that fill the screen when you crawl past. No plant gets wider than this at scale 1.
+        private const float PlantMaxWidth = 1.8f;
 
         private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst, float treeHeight)
         {
@@ -313,6 +316,8 @@ namespace ProjectFossil.Generation
             float s = inst.Kind == ScatterKind.Rock
                 ? RockWidth * inst.Scale / Mathf.Max(0.01f, Mathf.Max(b.size.x, b.size.z))
                 : (inst.Kind == ScatterKind.Tree ? treeHeight : PlantHeight) * inst.Scale / Mathf.Max(0.01f, b.size.y);
+            if (inst.Kind == ScatterKind.Plant)
+                s = Mathf.Min(s, PlantMaxWidth * inst.Scale / Mathf.Max(0.01f, Mathf.Max(b.size.x, b.size.z)));
 
             var go = Object.Instantiate(prefab, root, false);
             go.name = prefab.name;

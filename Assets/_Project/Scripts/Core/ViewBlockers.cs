@@ -12,7 +12,9 @@ namespace ProjectFossil.Core
         public static float WaterHeight { get; private set; } = float.NegativeInfinity;
 
         private const float Cell = 8f;
-        private const float MaxRadius = 3f; // plants bigger than this still register, queries just reach this far
+        // Largest plant registered so far: queries look this far into neighbouring cells, so a wide plant whose
+        // centre is a few metres off still hides when its leaves reach the camera.
+        private static float _maxRadius;
 
         public struct Entry
         {
@@ -35,6 +37,7 @@ namespace ProjectFossil.Core
             Grid.Clear();
             Water.Clear();
             Count = 0;
+            _maxRadius = 0f;
             WaterHeight = float.NegativeInfinity;
         }
 
@@ -92,6 +95,7 @@ namespace ProjectFossil.Core
             if (!Grid.TryGetValue(key, out var list)) Grid[key] = list = new List<Entry>();
             list.Add(e);
             Count++;
+            if (e.Radius > _maxRadius) _maxRadius = e.Radius;
         }
 
         // Every plant whose rough sphere comes within `pad` of the segment a→b.
@@ -100,7 +104,7 @@ namespace ProjectFossil.Core
             results.Clear();
             if (Count == 0) return;
 
-            float grow = pad + MaxRadius;
+            float grow = pad + _maxRadius;
             int x0 = Mathf.FloorToInt((Mathf.Min(a.x, b.x) - grow) / Cell), x1 = Mathf.FloorToInt((Mathf.Max(a.x, b.x) + grow) / Cell);
             int z0 = Mathf.FloorToInt((Mathf.Min(a.z, b.z) - grow) / Cell), z1 = Mathf.FloorToInt((Mathf.Max(a.z, b.z) + grow) / Cell);
 
