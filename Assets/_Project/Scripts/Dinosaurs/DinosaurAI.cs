@@ -637,9 +637,9 @@ namespace ProjectFossil.Dinosaurs
                 }
 
                 float dist = Vector3.Distance(transform.position, col.transform.position);
-                if (dist <= species.hearingRange * noise) return col.transform;
+                if (dist <= species.hearingRange * noise * WorldConditions.HearingMultiplier) return col.transform;
 
-                float sight = species.sightRange * visibility;
+                float sight = species.sightRange * visibility * WorldConditions.SightMultiplier;
                 if (dist <= sight && HasLineOfSight(col.transform, sight)) return col.transform;
             }
             return null;

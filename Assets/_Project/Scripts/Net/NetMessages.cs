@@ -8,6 +8,9 @@ namespace ProjectFossil.Net
     {
         public int   Seed;
         public float Elapsed;
+        public byte  Time;     // DayTime the host's island got (never Random)
+        public byte  Weather;  // Weather likewise
+        public float Wind;
     }
 
     // Joiner -> host: this island is built and my player is standing on it. Send my body.
@@ -29,6 +32,14 @@ namespace ProjectFossil.Net
     public struct TeamMessage : IBroadcast
     {
         public string Text;
+    }
+
+    // Anyone -> host -> team: my rescue flare dropped a helicopter pad here. The host also replays these to
+    // late joiners.
+    public struct FlareMessage : IBroadcast
+    {
+        public UnityEngine.Vector3 Pad;
+        public int From;
     }
 
     // Anyone -> host -> team: my helicopter at Pad just took off; whoever is standing under it comes too.

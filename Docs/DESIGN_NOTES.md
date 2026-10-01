@@ -279,3 +279,24 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **What bit me?** A red wedge around the middle of the screen points toward whatever just hit you, for 1.4 s. In first person, small hunters at your feet or behind you were invisible behind the red danger edges.
 - **Finding a downed teammate.** A pulsing red light column 50 m tall stands over a downed teammate. Their tag stays whole when pinned to the screen edge, with an arrow toward them. Bleed-out is 60 s (was 45).
 - **Frame rate.** The Editor and development builds show fps in the bottom-right corner. Running the host Editor and a joining build on one Mac roughly halves each one's frame rate, which looks like dinosaurs lagging.
+
+## Sky, weather, birds and shared rescue flares (2026-10-01, 12:36 PM playtest)
+
+- **Shared rescue flares.** A rescue flare used to land only on the host's island, so a joiner standing with a teammate had no helicopter to board. Any player's flare now goes through the host to everyone (`FlareMessage`, `MatchManager.AddSharedPad`); late joiners get the pads already down. Teammates can board the same helicopter and leave together for the team bonus.
+- **Time of day and weather.** The start menu has a Time (Random, Dawn, Day, Dusk, Night) and a Weather (Random, Clear, Cloudy, Rain, Storm, Fog) choice, saved between sessions. Random is rolled from the island seed (`WorldConditions.Resolve`), so it's deterministic, with midday and clear skies most likely. Online, the host's result travels in `IslandMessage` and joiners use it as an override.
+- **Weather is systemic.** Dinosaur sight range is multiplied by `WorldConditions.Sight` (night 0.55, dawn and dusk 0.85; fog 0.6, storm 0.75, rain 0.85) and hearing range by `Hearing` (storm 0.6, rain 0.8). Bad weather and darkness help stealth, but you see less too.
+- **The sky** (`Environment/SkyDirector`) sets the sun or moon angle and colour, ambient light, procedural skybox, and fog per time of day, then dims and greys it for weather. `SkyEffects` adds drifting particle clouds (more in bad weather), stars on clear nights, and rain around the camera. Storms strike lightning every 7 to 22 s, flashing the sky; thunder follows at the speed of sound. Rain, thunder, night insects and bird calls are synthesized (`SoundSynth`).
+- **Head lamp.** At night a lamp on your head is on; L switches it. Dinosaurs don't react to it yet.
+- **Flying reptiles.** Flocks of placeholder pterosaurs circle 45 to 85 m up (four flocks on a clear day, fewer in rain and fog, none at night or in storms) and cry when within 260 m. They are scenery only and will get a real animated model with the art pass.
+
+## Bought art packs (2026-10-01)
+
+- Firdous bought NatureManufacture's Forest Environment and Muelsa's dinosaur pack Vol. I. Paid packs stay out of git (the repo is public and the Asset Store licence forbids redistributing them), so they're git-ignored.
+- **Project Fossil > Art > Set Up Bought Packs** (`Editor/BoughtPackSetup`) turns them into content on the machine that has them:
+  - Switches the dinosaur pack's built-in materials to URP Lit, as its ReadMe advises.
+  - Copies each creature prefab without the pack's own scripts, physics and sound, which would fight our AI.
+  - Builds our Speed/Attack/Dead Animator controllers, picking idle, walk, run, attack and death by animation name. It keeps the walk in place by pulling root motion out of whichever bone travels.
+  - Assigns trees, plants, rocks and ground textures per biome. The dinosaur pack's palms, banyan, banana and mimosa make the jungle and beach tropical.
+  - Writes everything to `Art/Bought` (git-ignored), ending in `Resources/BoughtArt.asset`, and a report to `Logs/BoughtArtReport.txt`.
+- At runtime `BoughtArt.Current` is read first, and the free Quaternius models are the fallback. A machine without the packs, such as a joiner's, still plays the same island from the same seed; only the looks differ.
+- Bought trees are real-sized: 16 m at scatter scale 1 (was 7 m). Models that bring their own LODGroup keep it.

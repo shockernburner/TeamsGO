@@ -337,6 +337,131 @@ namespace ProjectFossil.Audio
             return Finish(s, 0.5f);
         }
 
+        // Steady rain on leaves: hiss plus scattered drops, looping seamlessly.
+        public static float[] Rain(float seconds = 6f, int seed = 9100)
+        {
+            var rng = new Random(seed);
+            var s = Buffer(seconds);
+            var hp = new HighPass(700f);
+            var lp = new OnePole(5200f);
+            for (int i = 0; i < s.Length; i++)
+                s[i] = lp.Next(hp.Next(Noise(rng))) * 0.9f;
+
+            // Drops: short ticks on leaves, a few hundred a second.
+            int drops = (int)(seconds * 260f);
+            for (int d = 0; d < drops; d++)
+            {
+                int i0 = rng.Next(s.Length);
+                float f = 1800f + (float)rng.NextDouble() * 3000f, amp = 0.1f + (float)rng.NextDouble() * 0.25f;
+                int n = (int)(0.012f * SampleRate);
+                for (int j = 0; j < n && i0 + j < s.Length; j++)
+                {
+                    float tj = j / (float)SampleRate;
+                    s[i0 + j] += (float)Math.Sin(Tau * f * tj) * Exp(tj, 0.0005f, 0.003f) * amp;
+                }
+            }
+            return Loop(s, 0.45f);
+        }
+
+        // Thunder: a sharp crack (close strikes) rolling into a long low rumble.
+        public static float[] Thunder(int variant)
+        {
+            var rng = new Random(9200 + variant);
+            const float len = 5.5f;
+            var s = Buffer(len);
+            var low = new OnePole(160f + variant * 25f);
+            var mid = new Bandpass(420f, 1.5f);
+            float crack = variant % 2 == 0 ? 0.7f : 0.25f;
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i);
+                // Rolling: a few swells as the sound comes back off hills and cloud.
+                float roll = 0.6f + 0.4f * (float)Math.Sin(Tau * (0.7f + variant * 0.15f) * t + variant);
+                float env = Exp(t, 0.02f, 1.6f) * roll;
+                float n = Noise(rng);
+                s[i] = (low.Next(n) * 3.2f + mid.Next(n) * 0.5f) * env + Noise(rng) * crack * Exp(t, 0.001f, 0.06f);
+            }
+            return Finish(s, 0.9f);
+        }
+
+        // Pterosaur cry from high up: a thin, wavering two-part squawk.
+        public static float[] SkyCall(int variant)
+        {
+            var rng = new Random(9300 + variant);
+            const float len = 0.9f;
+            var s = Buffer(len);
+            var bp = new Bandpass(2200f + variant * 150f, 2f);
+            double phase = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = T(i);
+                bool second = t > 0.42f;
+                float tt = second ? t - 0.42f : t;
+                float k = tt / 0.4f;
+                float f = (second ? 1500f : 1900f) + variant * 80f - 600f * k + 60f * (float)Math.Sin(Tau * 31f * t);
+                phase += f / SampleRate;
+                float tone = (float)Math.Sin(Tau * phase) + 0.35f * (float)Math.Sin(Tau * 2.0 * phase);
+                float env = Adsr(tt, 0.03f, 0.08f, 0.6f, 0.4f, 0.15f);
+                s[i] = (tone * 0.6f + bp.Next(Noise(rng)) * 0.5f) * env;
+            }
+            return Finish(s, 0.7f);
+        }
+
+        // Night loop: insects trilling in pulses over a low breeze.
+        public static float[] NightAmbience(float seconds = 10f, int seed = 9400)
+        {
+            var rng = new Random(seed);
+            var s = Buffer(seconds);
+            var lp = new OnePole(260f);
+            for (int i = 0; i < s.Length; i++)
+                s[i] = lp.Next(Noise(rng)) * 1.4f;
+
+            int insects = 4;
+            for (int b = 0; b < insects; b++)
+            {
+                float f = 3800f + b * 450f + (float)rng.NextDouble() * 200f;
+                float rate = 2.5f + (float)rng.NextDouble() * 2.5f;   // chirps per second
+                float amp = 0.05f + 0.03f * b;
+                float offset = (float)rng.NextDouble();
+                for (int i = 0; i < s.Length; i++)
+                {
+                    float t = T(i);
+                    float pulse = (t * rate + offset) % 1f;
+                    if (pulse > 0.35f) continue;
+                    float trill = 0.5f + 0.5f * (float)Math.Sin(Tau * 45f * t);
+                    s[i] += (float)Math.Sin(Tau * f * t) * trill * (float)Math.Sin(Math.PI * pulse / 0.35f) * amp;
+                }
+            }
+            return Loop(s, 0.45f);
+        }
+
+        // Crossfade the tail into the head so a loop has no click, then finish.
+        private static float[] Loop(float[] s, float peak)
+        {
+            int fade = Math.Min(SampleRate / 2, s.Length / 4);
+            for (int i = 0; i < fade; i++)
+            {
+                float k = i / (float)fade;
+                s[i] = s[i] * k + s[s.Length - fade + i] * (1f - k);
+            }
+            Array.Resize(ref s, s.Length - fade);
+            return FinishLoop(s, peak);
+        }
+
+        // Like Finish, without the fade at the end (a loop's end runs straight into its start).
+        private static float[] FinishLoop(float[] s, float peak)
+        {
+            float max = 1e-6f;
+            for (int i = 0; i < s.Length; i++)
+            {
+                s[i] = (float)Math.Tanh(s[i]);
+                max = Math.Max(max, Math.Abs(s[i]));
+            }
+            float g = peak / max;
+            for (int i = 0; i < s.Length; i++) s[i] *= g;
+            return s;
+        }
+
         // ── Building blocks ────────────────────────────────────────────────────
 
         private const float Tau = (float)(Math.PI * 2.0);

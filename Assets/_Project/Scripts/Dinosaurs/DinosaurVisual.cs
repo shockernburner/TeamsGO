@@ -31,7 +31,9 @@ namespace ProjectFossil.Dinosaurs
             if (_built) return;
             _ai    = GetComponent<DinosaurAI>();
             _agent = GetComponent<NavMeshAgent>();
-            var def = _ai != null && _ai.species != null ? _ai.species.model : null;
+            var species = _ai != null ? _ai.species : null;
+            // A bought pack's model when this machine has one, otherwise the free model in the repository.
+            var def = species == null ? null : BoughtArt.ModelFor(species.speciesName) ?? species.model;
             if (def == null || !def.HasModel) return; // species not set yet, or no model: keep the capsule
             _built = true;
 

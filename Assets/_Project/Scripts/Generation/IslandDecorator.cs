@@ -34,6 +34,16 @@ namespace ProjectFossil.Generation
                 wind.SetDirection((data.Seed & 0x7fffffff) % 360); // each island has its own wind
             }
             if (Application.isPlaying) ApplyAtmosphere(); // don't rewrite the open scene's lighting from the editor tool
+            AddBoughtWind(islandGO.transform);
+        }
+
+        // Bought foliage shaders bend with Unity's wind zones; the pack's own wind prefab drives them.
+        private static void AddBoughtWind(Transform island)
+        {
+            var art = BoughtArt.Current;
+            if (art == null || art.windZone == null || !Application.isPlaying) return;
+            if (Object.FindFirstObjectByType<WindZone>() != null) return;
+            Object.Instantiate(art.windZone, island, false).name = "Wind";
         }
 
         // ── Ground ─────────────────────────────────────────────────────────────
@@ -49,11 +59,17 @@ namespace ProjectFossil.Generation
             // doesn't read as one mown lawn.
             int cliffL = biomeCount, dirtL = biomeCount + 1, mossL = biomeCount + 2;
             var layers = new TerrainLayer[biomeCount + 3];
+            // Bought ground textures where this machine has them, plain noisy colour otherwise.
+            var art = BoughtArt.Current;
             for (int i = 0; i < biomeCount; i++)
-                layers[i] = MakeLayer(biomes[i] != null ? biomes[i].groundColor : Color.gray, 1000 + i);
-            layers[cliffL] = MakeLayer(CliffColor, 999);
-            layers[dirtL]  = MakeLayer(DirtColor, 998);
-            layers[mossL]  = MakeLayer(MossColor, 997);
+            {
+                var bought = biomes[i] != null ? BoughtArt.BiomeFor(biomes[i].name) : null;
+                layers[i] = bought != null && bought.ground != null ? bought.ground
+                          : MakeLayer(biomes[i] != null ? biomes[i].groundColor : Color.gray, 1000 + i);
+            }
+            layers[cliffL] = art != null && art.cliff != null ? art.cliff : MakeLayer(CliffColor, 999);
+            layers[dirtL]  = art != null && art.dirt  != null ? art.dirt  : MakeLayer(DirtColor, 998);
+            layers[mossL]  = art != null && art.moss  != null ? art.moss  : MakeLayer(MossColor, 997);
             td.terrainLayers = layers;
             float offA = (data.Seed & 0xFFF) * 0.37f, offB = ((data.Seed >> 12) & 0xFFF) * 0.41f;
 
@@ -236,12 +252,24 @@ namespace ProjectFossil.Generation
                 Vector3 pos = inst.WorldPos;
                 pos.y = terrain.SampleHeight(parent.TransformPoint(pos)) + terrain.transform.position.y;
 
-                // Imported models when the biome has them; primitives otherwise.
-                var models = inst.Kind == ScatterKind.Tree ? b.treeModels
+                // Bought models first, then the biome's free imported models, then primitives.
+                var bought = BoughtArt.BiomeFor(b.name);
+                var boughtModels = bought == null ? null
+                                 : inst.Kind == ScatterKind.Tree ? bought.trees
+                                 : inst.Kind == ScatterKind.Rock ? bought.rocks
+                                 : bought.plants;
+                bool useBought = BoughtArt.Has(boughtModels);
+                var models = useBought ? boughtModels
+                           : inst.Kind == ScatterKind.Tree ? b.treeModels
                            : inst.Kind == ScatterKind.Rock ? b.rockModels
                            : b.plantModels;
                 var prefab = Pick(models, inst.Variant);
-                if (prefab != null) { PlaceModel(prefab, root, pos, inst); continue; }
+                if (prefab != null)
+                {
+                    float treeHeight = useBought && BoughtArt.Current != null ? BoughtArt.Current.treeHeight : TreeHeight;
+                    PlaceModel(prefab, root, pos, inst, treeHeight);
+                    continue;
+                }
 
                 if (inst.Kind == ScatterKind.Tree)
                 {
@@ -267,18 +295,24 @@ namespace ProjectFossil.Generation
         private static GameObject Pick(GameObject[] models, int variant)
         {
             if (models == null || models.Length == 0) return null;
-            return models[variant % models.Length];
+            // Skip empty slots (a bought pack removed after setup) without changing which model a seed gets.
+            for (int i = 0; i < models.Length; i++)
+            {
+                var m = models[(variant + i) % models.Length];
+                if (m != null) return m;
+            }
+            return null;
         }
 
         // Sizes match the primitives they replace: trees ~7 m, rocks ~1.5 m across, plants ~1.2 m, at scale 1.
         private const float TreeHeight = 7f, RockWidth = 1.5f, PlantHeight = 1.2f;
 
-        private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst)
+        private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst, float treeHeight)
         {
             var b = ModelFit.PrefabBounds(prefab);
             float s = inst.Kind == ScatterKind.Rock
                 ? RockWidth * inst.Scale / Mathf.Max(0.01f, Mathf.Max(b.size.x, b.size.z))
-                : (inst.Kind == ScatterKind.Tree ? TreeHeight : PlantHeight) * inst.Scale / Mathf.Max(0.01f, b.size.y);
+                : (inst.Kind == ScatterKind.Tree ? treeHeight : PlantHeight) * inst.Scale / Mathf.Max(0.01f, b.size.y);
 
             var go = Object.Instantiate(prefab, root, false);
             go.name = prefab.name;
@@ -329,6 +363,23 @@ namespace ProjectFossil.Generation
 
             // Stop drawing small things once they're a few pixels tall; the haze hides the pop.
             float cullBelow = inst.Kind == ScatterKind.Plant ? 0.012f : inst.Kind == ScatterKind.Rock ? 0.006f : 0.003f;
+            var own = go.GetComponentInChildren<LODGroup>();
+            if (own != null)
+            {
+                // Bought models bring their own detail levels; keep them and only make the last one drop out
+                // at the same distance as everything else.
+                var levels = own.GetLODs();
+                if (levels.Length > 0 && levels[levels.Length - 1].screenRelativeTransitionHeight < cullBelow)
+                {
+                    levels[levels.Length - 1].screenRelativeTransitionHeight = cullBelow;
+                    for (int i = levels.Length - 2; i >= 0; i--)
+                        levels[i].screenRelativeTransitionHeight = Mathf.Max(levels[i].screenRelativeTransitionHeight,
+                                                                             levels[i + 1].screenRelativeTransitionHeight + 0.001f);
+                    own.SetLODs(levels);
+                }
+                own.RecalculateBounds();
+                return;
+            }
             var lod = go.AddComponent<LODGroup>();
             lod.SetLODs(new[] { new LOD(cullBelow, go.GetComponentsInChildren<Renderer>()) });
             lod.RecalculateBounds();

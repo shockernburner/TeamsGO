@@ -103,8 +103,21 @@ namespace ProjectFossil.Match
             if (_player != null)
                 Match.Begin(LastData, _player, content, dinosaurPrefab, islandGO.transform);
 
-            Debug.Log($"[MatchBootstrap] Seed {usedSeed} | {LastData.SpawnZones.Count} spawn zones | {LastData.PointsOfInterest.Count} POIs");
+            WorldConditions.Begin(usedSeed); // sky and weather for this island (the sky reacts to it)
+            if (_player != null) Match.Announce(ConditionsHint(WorldConditions.Current));
+
+            Debug.Log($"[MatchBootstrap] Seed {usedSeed} | {LastData.SpawnZones.Count} spawn zones | {LastData.PointsOfInterest.Count} POIs | {WorldConditions.Describe(WorldConditions.Current)}");
             Generated?.Invoke(usedSeed);
+        }
+
+        private static string ConditionsHint(Conditions c)
+        {
+            string hint = c.Weather == Weather.Storm ? "The storm drowns out your footsteps."
+                        : c.Weather == Weather.Rain  ? "Rain covers your footsteps."
+                        : c.Weather == Weather.Fog   ? "In the fog, nothing sees far. Neither do you."
+                        : c.Time == DayTime.Night    ? "In the dark they see less. Your lamp is on (L)."
+                        : "";
+            return $"{WorldConditions.Describe(c)}. {hint}".Trim();
         }
 
         // ── NavMesh ────────────────────────────────────────────────────────────

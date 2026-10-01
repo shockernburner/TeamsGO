@@ -65,6 +65,8 @@ namespace ProjectFossil.Match
         public Func<Vector3, float, int> TeammatesNear;
         // This player finished boarding: the helicopter at this pad leaves, with any teammates under it.
         public event Action<Vector3> LiftedOff;
+        // This player's rescue flare came down here: the team should get the same pad.
+        public event Action<Vector3> FlareDropped;
 
         public const float BleedOutSeconds = 60f;
         public float BleedOutLeft { get; private set; }
@@ -440,7 +442,7 @@ namespace ProjectFossil.Match
         private void OnExtractionOpened()
         {
             Announce("Extraction open: helicopters are landing. Their noise draws dinosaurs.");
-            if (!IsFollower && TryDropRescueFlare(out float distance))
+            if (TryDropRescueFlare(out float distance))
                 Announce($"The beacons are far off. A rescue flare landed {Mathf.RoundToInt(distance)} m away.");
         }
 
@@ -468,12 +470,26 @@ namespace ProjectFossil.Match
                 zone.SetOpen(true);
                 _zones.Add(zone);
                 distance = Flat(hit.position - p).magnitude;
+                FlareDropped?.Invoke(hit.position);
                 return true;
             }
             return false;
         }
 
         private static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
+
+        // A teammate's rescue flare: the same pad appears here, so the team can leave from it together.
+        public void AddSharedPad(Vector3 position)
+        {
+            if (!IsRunning || _islandRoot == null) return;
+            foreach (var zone in _zones)
+                if (zone != null && Flat(zone.transform.position - position).magnitude < 10f) return; // have it already
+            var pad = ExtractionZone.Create(position, Content.matchRules.extractionRadius, _islandRoot);
+            pad.SetOpen(State != null && State.IsExtractionOpen);
+            _zones.Add(pad);
+            if (Player != null)
+                Announce($"A teammate's rescue flare landed {Mathf.RoundToInt(Flat(position - Player.transform.position).magnitude)} m away. Leave together for a bonus.");
+        }
 
         private void OnSurvivalPayout(int amount)
         {

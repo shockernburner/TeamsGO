@@ -41,7 +41,10 @@ namespace ProjectFossil.Audio
         private const int Variants = 4;
 
         private AudioClip[] _steps, _softSteps, _screeches, _roars, _bites, _swings, _hits, _hurts, _sniffs;
-        private AudioClip _coin, _sting, _chime, _ambience, _heartbeat, _rotor, _victory;
+        private AudioClip _coin, _sting, _chime, _ambience, _heartbeat, _rotor, _victory, _nightAmbience, _rainLoop;
+        private AudioClip[] _thunders, _skyCalls;
+        private AudioSource _rain;      // 2D loop, louder in a storm
+        private float _rainTarget;
         private float _nextBeat;
         private readonly Dictionary<ExtractionZone, AudioSource> _rotors = new Dictionary<ExtractionZone, AudioSource>();
 
@@ -103,6 +106,10 @@ namespace ProjectFossil.Audio
             _heartbeat = Clip("Heartbeat", SoundSynth.Heartbeat());
             _rotor     = Clip("Rotor",    SoundSynth.Rotor());
             _victory   = Clip("Victory",  SoundSynth.Victory());
+            _nightAmbience = Clip("NightAmbience", SoundSynth.NightAmbience());
+            _rainLoop  = Clip("Rain",     SoundSynth.Rain());
+            _thunders  = Make("Thunder",  SoundSynth.Thunder);
+            _skyCalls  = Make("SkyCall",  SoundSynth.SkyCall);
 
             _ui = gameObject.AddComponent<AudioSource>();
             _ui.playOnAwake = false;
@@ -117,6 +124,48 @@ namespace ProjectFossil.Audio
             _ambient.loop = true;
             _ambient.spatialBlend = 0f;
             _ambient.volume = ambienceVolume * masterVolume;
+
+            _rain = gameObject.AddComponent<AudioSource>();
+            _rain.clip = _rainLoop;
+            _rain.loop = true;
+            _rain.spatialBlend = 0f;
+            _rain.volume = 0f;
+            _rain.playOnAwake = false;
+        }
+
+        // ── Weather and sky ────────────────────────────────────────────────────
+
+        private void OnConditions(Conditions c)
+        {
+            // Insects at night, birds and wind by day.
+            var clip = c.Time == DayTime.Night ? _nightAmbience : _ambience;
+            if (_ambient.clip != clip) { _ambient.clip = clip; if (_ambient.isPlaying) _ambient.Play(); }
+            _rainTarget = c.Weather == Weather.Storm ? 0.75f : c.Weather == Weather.Rain ? 0.45f : 0f;
+        }
+
+        // Thunder arrives later the farther away the strike: about 3 s per kilometre.
+        private void OnLightning(float distance)
+        {
+            float delay = distance / 343f;
+            float volume = Mathf.Lerp(1f, 0.45f, Mathf.InverseLerp(200f, 2000f, distance));
+            StartCoroutine(PlayLater(Pick(_thunders), delay, volume, Random.Range(0.85f, 1.05f)));
+        }
+
+        private System.Collections.IEnumerator PlayLater(AudioClip clip, float delay, float volume, float pitch)
+        {
+            yield return new WaitForSeconds(delay);
+            Play2D(clip, volume, pitch);
+        }
+
+        private void OnSkyCall(Vector3 position) =>
+            Play3D(Pick(_skyCalls), position, 0.7f, Random.Range(0.9f, 1.15f), 260f);
+
+        private void UpdateRain()
+        {
+            float target = _match != null && _match.IsRunning ? _rainTarget : _rainTarget * 0.5f;
+            _rain.volume = Mathf.MoveTowards(_rain.volume, target * masterVolume, Time.deltaTime * 0.3f);
+            if (_rain.volume > 0.001f && !_rain.isPlaying) _rain.Play();
+            else if (_rain.volume <= 0.001f && _rain.isPlaying) _rain.Stop();
         }
 
         private static AudioClip[] Make(string name, System.Func<int, float[]> recipe)
@@ -139,8 +188,21 @@ namespace ProjectFossil.Audio
             DinosaurAI.Killed -= OnDinoKilled;
         }
 
-        private void OnEnable()  => DinosaurAI.Killed += OnDinoKilled;
-        private void OnDisable() => DinosaurAI.Killed -= OnDinoKilled;
+        private void OnEnable()
+        {
+            DinosaurAI.Killed += OnDinoKilled;
+            WorldConditions.Changed   += OnConditions;
+            WorldConditions.Lightning += OnLightning;
+            AmbientEvents.SkyCall     += OnSkyCall;
+        }
+
+        private void OnDisable()
+        {
+            DinosaurAI.Killed -= OnDinoKilled;
+            WorldConditions.Changed   -= OnConditions;
+            WorldConditions.Lightning -= OnLightning;
+            AmbientEvents.SkyCall     -= OnSkyCall;
+        }
 
         // ── Binding (the match restarts in place, so rebind whenever it changes) ──
 
@@ -163,6 +225,7 @@ namespace ProjectFossil.Audio
             UpdateDistantRoar();
             UpdateHeartbeat();
             UpdateRotors();
+            UpdateRain();
         }
 
         private void Bind(MatchManager match)
