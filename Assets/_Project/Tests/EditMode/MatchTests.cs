@@ -29,6 +29,28 @@ namespace ProjectFossil.Tests.EditMode
         }
 
         [Test]
+        public void Boarding_TwoOnThePad_IsFaster()
+        {
+            var alone = Make();
+            var pair  = Make();
+            for (int i = 0; i < 30; i++) { alone.Tick(1f, false); pair.Tick(1f, false); }
+            for (int i = 0; i < 3; i++) { alone.Tick(1f, true); pair.Tick(1f, true, 2f); }
+            Assert.AreEqual(MatchPhase.Active, alone.Phase);
+            Assert.AreEqual(MatchResult.Extracted, pair.Result);
+        }
+
+        [Test]
+        public void ExtractNow_OnlyOnceExtractionIsOpen()
+        {
+            var s = Make();
+            s.ExtractNow();
+            Assert.AreEqual(MatchPhase.Active, s.Phase);
+            for (int i = 0; i < 30; i++) s.Tick(1f, false);
+            s.ExtractNow();
+            Assert.AreEqual(MatchResult.Extracted, s.Result);
+        }
+
+        [Test]
         public void FastForward_NeverWindsBack()
         {
             var s = Make();

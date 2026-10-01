@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
@@ -28,6 +29,13 @@ namespace ProjectFossil.Net
         public const ushort Port       = 7770;
         public const int    MaxTeam    = 4;
         private const string AddressKey = "ProjectFossil.JoinAddress";
+        private const string NameKey    = "ProjectFossil.PlayerName";
+        private const int    MaxName    = 16;
+        private static readonly string[] Names =
+        {
+            "Kestrel", "Juniper", "Rook", "Vega", "Ember", "Wren", "Flint", "Cedar", "Lark", "Briar",
+            "Sable", "Moss", "Quill", "Onyx", "Fern", "Talon", "Ash", "Reed", "Marlow", "Sage",
+        };
         private const string PrefabsPath = "Net/NetworkPrefabs";
 
         public static NetSession Instance { get; private set; }
@@ -35,6 +43,8 @@ namespace ProjectFossil.Net
         private enum Mode { Menu, Solo, StartingHost, Hosting, Joining, Joined }
 
         public MatchManager Match => _boot != null ? _boot.Match : null;
+        // What teammates see over this player's head and in team messages.
+        public string PlayerName { get; private set; }
         public bool IsOnline => _mode == Mode.Hosting || _mode == Mode.Joined || _mode == Mode.StartingHost || _mode == Mode.Joining;
 
         private MatchBootstrap _boot;
@@ -72,6 +82,8 @@ namespace ProjectFossil.Net
             _boot = GetComponent<MatchBootstrap>();
             _soloDinosaur = _boot != null ? _boot.dinosaurPrefab : null;
             _address = PlayerPrefs.GetString(AddressKey, "127.0.0.1");
+            PlayerName = CleanName(PlayerPrefs.GetString(NameKey, ""));
+            if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
             NetRole.IsFollower = false;
         }
 
@@ -102,6 +114,7 @@ namespace ProjectFossil.Net
 
         private void PlaySolo()
         {
+            SaveName();
             StopNetwork();
             NetRole.IsFollower = false;
             _boot.dinosaurPrefab = _soloDinosaur;
@@ -114,6 +127,7 @@ namespace ProjectFossil.Net
 
         private void Host()
         {
+            SaveName();
             if (!EnsureNetwork()) return;
             NetRole.IsFollower = false;
             _boot.dinosaurPrefab = _dinosaurPrefab.gameObject;
@@ -134,6 +148,7 @@ namespace ProjectFossil.Net
 
         private void Join()
         {
+            SaveName();
             if (!EnsureNetwork()) return;
             _address = string.IsNullOrWhiteSpace(_address) ? "127.0.0.1" : _address.Trim();
             PlayerPrefs.SetString(AddressKey, _address);
@@ -203,8 +218,11 @@ namespace ProjectFossil.Net
 
             _net.ServerManager.RegisterBroadcast<ReadyMessage>(OnReady);
             _net.ServerManager.RegisterBroadcast<FinalStandMessage>(OnFinalStandRequest);
+            _net.ServerManager.RegisterBroadcast<TeamMessage>(OnTeamMessage);
+            _net.ServerManager.RegisterBroadcast<LiftOffMessage>(OnLiftOffRequest);
             _net.ClientManager.RegisterBroadcast<IslandMessage>(OnIsland);
             _net.ClientManager.RegisterBroadcast<AnnounceMessage>(OnAnnounce);
+            _net.ClientManager.RegisterBroadcast<LiftOffMessage>(OnLiftOff);
             return true;
         }
 
@@ -254,12 +272,18 @@ namespace ProjectFossil.Net
         private void OnRemoteState(NetworkConnection conn, RemoteConnectionStateArgs args)
         {
             if (args.ConnectionState != RemoteConnectionState.Stopped) return;
+            string who = "A teammate";
             if (_avatars.TryGetValue(conn.ClientId, out var body))
             {
                 _avatars.Remove(conn.ClientId);
-                if (Match != null && body != null) Match.Teammates.Remove(body.transform);
+                if (body != null)
+                {
+                    if (!string.IsNullOrEmpty(body.Label)) who = body.Label;
+                    if (Match != null) Match.Teammates.Remove(body.transform);
+                    if (!body.IsAlive) return; // already flew out or didn't make it; nothing new to say
+                }
             }
-            if (Match != null && _mode == Mode.Hosting) Match.Announce("A teammate left the island.");
+            if (_mode == Mode.Hosting) TellTeam($"{who} left the game.", conn.ClientId);
         }
 
         private void OnLoadedStartScenes(NetworkConnection conn, bool asServer)
@@ -276,6 +300,7 @@ namespace ProjectFossil.Net
         {
             _seed = seed;
             HookMatch();
+            if (Match != null) Match.PlayerName = PlayerName;
             if (_mode != Mode.Hosting || _net == null || !_net.ServerManager.Started) return;
 
             _net.ServerManager.Broadcast(new IslandMessage { Seed = seed, Elapsed = 0f });
@@ -307,6 +332,29 @@ namespace ProjectFossil.Net
             _hooked = true;
             Match.TeamAnnounced       += OnTeamAnnounced;
             Match.FinalStandRequested += OnFinalStandRequested;
+            Match.LiftedOff           += OnLiftedOff;
+            // A teammate still on their feet can get this player up, so going down isn't the end.
+            Match.CanBeRevived  = () => IsOnline && Teammates().Any(a => a.IsStanding);
+            Match.TeammatesNear = (point, radius) =>
+            {
+                if (!IsOnline) return 0;
+                int n = 0;
+                foreach (var a in Teammates())
+                {
+                    if (!a.IsStanding) continue;
+                    Vector3 d = a.transform.position - point;
+                    d.y = 0f;
+                    if (d.sqrMagnitude <= radius * radius) n++;
+                }
+                return n;
+            };
+        }
+
+        // Everyone else's bodies on this machine.
+        private static IEnumerable<NetAvatar> Teammates()
+        {
+            foreach (var a in NetAvatar.All)
+                if (a != null && a.IsSpawned && !a.IsOwner) yield return a;
         }
 
         private void Update()
@@ -316,7 +364,7 @@ namespace ProjectFossil.Net
             if (Match == null || Match.Player == null || _readySeed == _seed) return;
             if (_mode != Mode.Hosting && _mode != Mode.Joined) return;
             _readySeed = _seed;
-            _net.ClientManager.Broadcast(new ReadyMessage { Seed = _seed });
+            _net.ClientManager.Broadcast(new ReadyMessage { Seed = _seed, Name = PlayerName });
         }
 
         // ── Host: bodies ───────────────────────────────────────────────────────
@@ -334,14 +382,12 @@ namespace ProjectFossil.Net
             Vector3 pos = Match.Player != null ? Match.Player.transform.position : Vector3.zero;
             var go = Instantiate(_avatarPrefab.gameObject, pos, Quaternion.identity);
             go.name = $"Teammate_{conn.ClientId}";
-            _net.ServerManager.Spawn(go, conn);
             body = go.GetComponent<NetAvatar>();
+            body.SetLabel(UniqueName(msg.Name, conn.ClientId));
+            _net.ServerManager.Spawn(go, conn);
             _avatars[conn.ClientId] = body;
-            if (!IsHostsOwn(conn))
-            {
-                Match.Teammates.Add(body.transform);
-                Match.Announce($"{body.Label} dropped in with you.");
-            }
+            if (!IsHostsOwn(conn)) Match.Teammates.Add(body.transform);
+            TellTeam($"{body.Label} dropped in.", conn.ClientId);
         }
 
         // The host's own player (its local client), as opposed to a teammate who joined.
@@ -361,8 +407,7 @@ namespace ProjectFossil.Net
         {
             if (Match == null || body == null) return;
             Match.Teammates.Remove(body.transform);
-            if (!IsHostsOwn(body.Owner))
-                Match.Announce(extracted ? $"{body.Label} made it out!" : $"{body.Label} is down.");
+            TellTeam(extracted ? $"{body.Label} made it out!" : $"{body.Label} didn't make it.", body.Owner.ClientId);
         }
 
         private void OnFinalStandRequest(NetworkConnection conn, FinalStandMessage msg, Channel channel)
@@ -409,16 +454,93 @@ namespace ProjectFossil.Net
 
         // ── Team messages ──────────────────────────────────────────────────────
 
+        // This machine has news for the team (it already showed it here): send it via the host.
         private void OnTeamAnnounced(string text)
         {
-            if (_mode == Mode.Hosting && _net != null && _net.ServerManager.Started && !string.IsNullOrEmpty(text))
-                _net.ServerManager.Broadcast(new AnnounceMessage { Text = text });
+            if (!string.IsNullOrEmpty(text) && _net != null && _net.ClientManager.Started && IsOnline)
+                _net.ClientManager.Broadcast(new TeamMessage { Text = text });
+        }
+
+        private void OnTeamMessage(NetworkConnection conn, TeamMessage msg, Channel channel)
+        {
+            if (string.IsNullOrEmpty(msg.Text)) return;
+            string text = msg.Text.Length > 200 ? msg.Text.Substring(0, 200) : msg.Text;
+            TellTeam(text, conn.ClientId);
+        }
+
+        // Host: to every machine but the one it's from (or about).
+        private void TellTeam(string text, int from)
+        {
+            if (_net != null && _net.ServerManager.Started)
+                _net.ServerManager.Broadcast(new AnnounceMessage { Text = text, From = from });
         }
 
         private void OnAnnounce(AnnounceMessage msg, Channel channel)
         {
-            if (_net.IsServerStarted) return; // the host announced it already
+            if (msg.From >= 0 && msg.From == MyClientId) return;
             if (Match != null) Match.Announce(msg.Text);
+        }
+
+        // ── Leaving together ───────────────────────────────────────────────────
+
+        private void OnLiftedOff(Vector3 pad)
+        {
+            if (_net != null && _net.ClientManager.Started && IsOnline)
+                _net.ClientManager.Broadcast(new LiftOffMessage { Pad = pad });
+        }
+
+        private void OnLiftOffRequest(NetworkConnection conn, LiftOffMessage msg, Channel channel)
+        {
+            _net.ServerManager.Broadcast(new LiftOffMessage { Pad = msg.Pad, From = conn.ClientId });
+        }
+
+        private void OnLiftOff(LiftOffMessage msg, Channel channel)
+        {
+            if (msg.From == MyClientId || Match == null) return;
+            Match.TeamLiftOff(msg.Pad);
+        }
+
+        private int MyClientId => _net != null && _net.ClientManager.Started && _net.ClientManager.Connection != null
+            ? _net.ClientManager.Connection.ClientId : -2;
+
+        // ── Names ──────────────────────────────────────────────────────────────
+
+        private static string CleanName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "";
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in name)
+                if (char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' || c == '.') sb.Append(c);
+            string s = sb.ToString().Trim();
+            return s.Length > MaxName ? s.Substring(0, MaxName).Trim() : s;
+        }
+
+        private void SaveName()
+        {
+            string clean = CleanName(PlayerName);
+            if (string.IsNullOrEmpty(clean)) clean = Names[new System.Random().Next(Names.Length)];
+            PlayerName = clean;
+            PlayerPrefs.SetString(NameKey, clean);
+            PlayerPrefs.Save();
+            if (Match != null) Match.PlayerName = clean;
+        }
+
+        // Host: two Kestrels become Kestrel and Kestrel 2.
+        private string UniqueName(string wanted, int clientId)
+        {
+            string name = CleanName(wanted);
+            if (string.IsNullOrEmpty(name)) name = $"Survivor {clientId + 1}";
+            string candidate = name;
+            for (int i = 2; Taken(candidate, clientId); i++) candidate = $"{name} {i}";
+            return candidate;
+        }
+
+        private bool Taken(string name, int clientId)
+        {
+            foreach (var pair in _avatars)
+                if (pair.Key != clientId && pair.Value != null && pair.Value.IsAlive &&
+                    string.Equals(pair.Value.Label, name, System.StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         private void OnFinalStandRequested()
@@ -446,13 +568,18 @@ namespace ProjectFossil.Net
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 190, 400, 380);
+            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 215, 400, 430);
             GUILayout.BeginArea(area, GUI.skin.box);
             GUILayout.Label("PROJECT FOSSIL", _title);
             GUILayout.Space(10);
 
             bool busy = _mode != Mode.Menu;
             GUI.enabled = !busy;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Your name:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            PlayerName = GUILayout.TextField(PlayerName ?? "", MaxName, _field, GUILayout.Height(30));
+            GUILayout.EndHorizontal();
+            GUILayout.Space(8);
             if (GUILayout.Button("Play solo", _button, GUILayout.Height(40))) PlaySolo();
             GUILayout.Space(6);
             if (GUILayout.Button("Host a co-op game", _button, GUILayout.Height(40))) Host();
@@ -483,8 +610,8 @@ namespace ProjectFossil.Net
         {
             int team = _mode == Mode.Hosting ? _avatars.Count : NetAvatar.All.Count;
             string text = _mode == Mode.Hosting
-                ? $"Hosting at {_lanAddress ?? "?"}  |  team of {Mathf.Max(1, team)}"
-                : $"Co-op with {_address}  |  team of {Mathf.Max(1, team)}";
+                ? $"{PlayerName}  |  hosting at {_lanAddress ?? "?"}  |  team of {Mathf.Max(1, team)}"
+                : $"{PlayerName}  |  co-op with {_address}  |  team of {Mathf.Max(1, team)}";
             GUI.Label(new Rect(Screen.width * 0.5f - 200, 4, 400, 22), text, _hud);
         }
 

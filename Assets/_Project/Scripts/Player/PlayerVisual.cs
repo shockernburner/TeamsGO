@@ -39,6 +39,24 @@ namespace ProjectFossil.Player
 
         public float turnSpeed = 720f; // degrees per second
 
+        // First person: the body still casts its shadow (and is there for teammates), but this player's own
+        // camera, inside the head, doesn't draw it.
+        private bool _shadowOnly;
+
+        public void SetShadowOnly(bool on)
+        {
+            _shadowOnly = on;
+            ApplyShadowMode();
+        }
+
+        private void ApplyShadowMode()
+        {
+            if (_pivot == null) return;
+            var mode = _shadowOnly ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly
+                                   : UnityEngine.Rendering.ShadowCastingMode.On;
+            foreach (var r in _pivot.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = mode;
+        }
+
         // Set on a teammate's body online, where there is no controller or health here to read.
         private bool _remoteCrouch, _remoteDead, _remote;
 
@@ -68,13 +86,12 @@ namespace ProjectFossil.Player
             _health     = GetComponent<Health>();
 
             // Hide the capsule body. The camera and colliders stay as they are.
-            foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
+            Placeholder.RemoveRenderers(transform);
 
             _pivot = new GameObject("Visual").transform;
             _pivot.SetParent(transform, false);
             var model = ModelFit.Spawn(def, _pivot);
-            foreach (var r in model.GetComponentsInChildren<Renderer>())
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            ApplyShadowMode();
 
             if (def.animator != null)
             {
@@ -135,10 +152,11 @@ namespace ProjectFossil.Player
             Vector3 ls = _hand.lossyScale; // build in metres whatever the rig's import scale
             t.localScale = new Vector3(1f / Mathf.Max(1e-4f, ls.x), 1f / Mathf.Max(1e-4f, ls.y), 1f / Mathf.Max(1e-4f, ls.z));
             BuildWeapon(t, look);
+            ApplyShadowMode();
         }
 
         // Simple shapes in metres, grip at the origin, handle along +Y.
-        private static void BuildWeapon(Transform root, HeldLook look)
+        internal static void BuildWeapon(Transform root, HeldLook look)
         {
             EnsureMaterials();
             switch (look)

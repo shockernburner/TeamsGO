@@ -36,8 +36,13 @@ namespace ProjectFossil.Match
             }
         }
 
+        // Leaving on the same helicopter as teammates: +25% for each one aboard with you.
+        public const float TeamBonusPerMate = 0.25f;
+        public static float TeamFactor(int matesAboard) => 1f + TeamBonusPerMate * Math.Max(0, matesAboard);
+
         // Live score while playing counts as if you'd survive (no multiplier yet).
-        public int Total(float secondsSurvived, MatchResult result = MatchResult.None) =>
-            (int)Math.Round(Subtotal(secondsSurvived) * Multiplier(result));
+        public int Total(float secondsSurvived, MatchResult result = MatchResult.None, int matesAboard = 0) =>
+            (int)Math.Round(Subtotal(secondsSurvived) * Multiplier(result) *
+                            (result == MatchResult.Extracted ? TeamFactor(matesAboard) : 1f));
     }
 }

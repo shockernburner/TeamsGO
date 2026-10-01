@@ -121,6 +121,16 @@ namespace ProjectFossil.Tests.EditMode
         }
 
         [Test]
+        public void Score_LeavingWithTeammates_AddsAQuarterEach()
+        {
+            var s = new ScoreModel();
+            s.AddKill(400);
+            int alone = s.Total(300f, MatchResult.Extracted);
+            Assert.AreEqual((int)System.Math.Round(alone * 1.5f), s.Total(300f, MatchResult.Extracted, 2), 1);
+            Assert.AreEqual(s.Total(300f, MatchResult.Died), s.Total(300f, MatchResult.Died, 3), "no bonus unless you leave");
+        }
+
+        [Test]
         public void Score_Breakdown_AddsUp()
         {
             var s = new ScoreModel();

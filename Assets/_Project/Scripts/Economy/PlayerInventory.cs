@@ -68,7 +68,7 @@ namespace ProjectFossil.Economy
         // Uses the first healing consumable if it would actually heal. Returns true if one was used.
         public bool TryUseHealingItem(Health health)
         {
-            if (health == null || !health.IsAlive || health.Current >= health.Max) return false;
+            if (health == null || !health.IsAlive || health.IsDown || health.Current >= health.Max) return false;
 
             var item = Inventory.FirstHealingItem();
             if (item == null) return false;
@@ -77,5 +77,18 @@ namespace ProjectFossil.Economy
             health.Heal(item.healAmount);
             return true;
         }
+
+        // Co-op: patch up a teammate. Uses one healing item and says how much it heals.
+        public bool TryTakeHealingItem(out float amount)
+        {
+            amount = 0f;
+            var item = Inventory.FirstHealingItem();
+            if (item == null) return false;
+            Inventory.Remove(item, 1);
+            amount = item.healAmount;
+            return true;
+        }
+
+        public bool HasHealingItem => Inventory.FirstHealingItem() != null;
     }
 }

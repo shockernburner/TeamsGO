@@ -19,7 +19,12 @@ namespace ProjectFossil.Player
         [Tooltip("How far around you a swing reaches: 1 = dead ahead only, 0 = 180 degrees, -0.5 = 240 degrees")]
         public float minFacingDot = -0.5f;
 
+        [Tooltip("First person: only what's in front of you counts, and the view never gets turned for you")]
+        public float firstPersonFacingDot = 0.3f;
+
         public float CooldownRemaining { get; private set; }
+        // Set by FirstPersonView.
+        public bool FirstPerson { get; set; }
         public WeaponStats CurrentWeapon => GetWeapon();
 
         private PlayerController _controller;
@@ -48,7 +53,7 @@ namespace ProjectFossil.Player
         public bool TryAttack()
         {
             if (!_controller.enabled || _controller.InputBlocked) return false;
-            if (!_controller.Health.IsAlive || CooldownRemaining > 0f) return false;
+            if (!_controller.Health.IsAlive || _controller.Health.IsDown || CooldownRemaining > 0f) return false;
 
             var weapon = GetWeapon();
             CooldownRemaining = weapon.Cooldown;
@@ -76,7 +81,7 @@ namespace ProjectFossil.Player
                 if (dist > weapon.Range + hitRadius) continue;
 
                 float dot = dist > 0.1f ? Vector3.Dot(transform.forward, to / dist) : 1f;
-                if (dot < minFacingDot) continue;
+                if (dot < (FirstPerson ? firstPersonFacingDot : minFacingDot)) continue;
 
                 float score = dot * 2f - dist / weapon.Range; // facing matters more than a few cm
                 if (score > bestScore)
@@ -95,7 +100,7 @@ namespace ProjectFossil.Player
 
             Vector3 face = bestCollider.bounds.center - transform.position;
             face.y = 0f;
-            if (face.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(face);
+            if (!FirstPerson && face.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(face);
 
             best.TakeDamage(new DamageInfo(weapon.Damage, gameObject, bestCollider.ClosestPoint(origin)));
             Attacked?.Invoke(weapon, best as Health);

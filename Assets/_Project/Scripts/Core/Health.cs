@@ -23,6 +23,13 @@ namespace ProjectFossil.Core
         // Return true when the hit was sent on.
         public Func<DamageInfo, bool> Redirect;
 
+        // Co-op: a blow that would kill knocks you down instead while this says a teammate could still save
+        // you. Down, you have 1 HP: a teammate revives you, or the next hit (or bleeding out) finishes you.
+        public Func<bool> CanGoDown;
+        public bool IsDown { get; private set; }
+        public event Action WentDown;
+        public event Action Revived;
+
         private void Awake()
         {
             if (Pool == null) Pool = new HealthPool(maxHealth);
@@ -64,6 +71,16 @@ namespace ProjectFossil.Core
         private void Apply(DamageInfo info)
         {
             if (!IsAlive) return;
+            if (!IsDown && info.Amount >= Pool.Current && CanGoDown != null && CanGoDown())
+            {
+                info.Amount = Pool.ApplyDamage(Pool.Current - 1f);
+                IsDown     = true;
+                LastDamage = info;
+                Damaged?.Invoke(info);
+                WentDown?.Invoke();
+                return;
+            }
+            if (IsDown) info.Amount = Mathf.Max(info.Amount, Pool.Current); // down, any hit finishes you
             float applied = Pool.ApplyDamage(info.Amount);
             if (applied <= 0f) return;
 
@@ -73,6 +90,16 @@ namespace ProjectFossil.Core
             if (!IsAlive) Died?.Invoke(info);
         }
 
-        public float Heal(float amount) => Pool.Heal(amount);
+        // Healing items don't lift you off the ground; only a teammate does.
+        public float Heal(float amount) => IsDown ? 0f : Pool.Heal(amount);
+
+        // A teammate got you up, with this share of your health.
+        public void Revive(float fraction)
+        {
+            if (!IsDown || !IsAlive) return;
+            IsDown = false;
+            Pool.Heal(Mathf.Max(0f, Pool.Max * fraction - Pool.Current));
+            Revived?.Invoke();
+        }
     }
 }

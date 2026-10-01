@@ -357,7 +357,8 @@ namespace ProjectFossil.UI
             GUILayout.Label($"Kills ({stats.DinosKilled}): {stats.KillPoints}");
             GUILayout.Label($"Damage dealt: {stats.DamagePoints}");
             GUILayout.Label($"Threats faced ({stats.ThreatsFaced}): {stats.ThreatPoints}");
-            GUILayout.Label($"{ResultLabel(stats.Result)}: x{stats.ResultMultiplier:0.##}");
+            GUILayout.Label($"{ResultLabel(stats.Result)}: x{stats.ResultMultiplier:0.##}" +
+                            (stats.MatesAboard > 0 ? $"  (with {stats.MatesAboard} teammate{(stats.MatesAboard > 1 ? "s" : "")} aboard)" : ""));
             GUILayout.Space(6);
             GUILayout.Label(RankLine(stats));
             GUILayout.Label($"Coins earned: {stats.CoinsEarned}    Island seed: {stats.Seed}");
@@ -498,6 +499,14 @@ namespace ProjectFossil.UI
         {
             var state = _match.State;
             float y = Screen.height * 0.18f;
+
+            if (_match.PlayerHealth != null && _match.PlayerHealth.IsDown)
+            {
+                float t = Mathf.Max(0f, _match.BleedOutLeft);
+                GUI.Label(new Rect(0f, y - 34f, Screen.width, 32f),
+                          $"YOU'RE DOWN  {Mathf.CeilToInt(t)}s   Crawl to cover. A teammate can get you up.", _banner);
+                y += 40f;
+            }
 
             if (state.IsExtracting)
             {
