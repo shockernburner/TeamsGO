@@ -288,3 +288,15 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **The sky** (`Environment/SkyDirector`) sets the sun or moon angle and colour, ambient light, procedural skybox, and fog per time of day, then dims and greys it for weather. `SkyEffects` adds drifting particle clouds (more in bad weather), stars on clear nights, and rain around the camera. Storms strike lightning every 7 to 22 s, flashing the sky; thunder follows at the speed of sound. Rain, thunder, night insects and bird calls are synthesized (`SoundSynth`).
 - **Head lamp.** At night a lamp on your head is on; L switches it. Dinosaurs don't react to it yet.
 - **Flying reptiles.** Flocks of placeholder pterosaurs circle 45 to 85 m up (four flocks on a clear day, fewer in rain and fog, none at night or in storms) and cry when within 260 m. They are scenery only and will get a real animated model with the art pass.
+
+## Bought art packs (2026-10-01)
+
+- Firdous bought NatureManufacture's Forest Environment and Muelsa's dinosaur pack Vol. I. Paid packs stay out of git (the repo is public and the Asset Store licence forbids redistributing them), so they're git-ignored.
+- **Project Fossil > Art > Set Up Bought Packs** (`Editor/BoughtPackSetup`) turns them into content on the machine that has them:
+  - Switches the dinosaur pack's built-in materials to URP Lit, as its ReadMe advises.
+  - Copies each creature prefab without the pack's own scripts, physics and sound, which would fight our AI.
+  - Builds our Speed/Attack/Dead Animator controllers, picking idle, walk, run, attack and death by animation name. It keeps the walk in place by pulling root motion out of whichever bone travels.
+  - Assigns trees, plants, rocks and ground textures per biome. The dinosaur pack's palms, banyan, banana and mimosa make the jungle and beach tropical.
+  - Writes everything to `Art/Bought` (git-ignored), ending in `Resources/BoughtArt.asset`, and a report to `Logs/BoughtArtReport.txt`.
+- At runtime `BoughtArt.Current` is read first, and the free Quaternius models are the fallback. A machine without the packs, such as a joiner's, still plays the same island from the same seed; only the looks differ.
+- Bought trees are real-sized: 16 m at scatter scale 1 (was 7 m). Models that bring their own LODGroup keep it.

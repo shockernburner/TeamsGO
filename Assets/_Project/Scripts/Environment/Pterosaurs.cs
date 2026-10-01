@@ -70,9 +70,10 @@ namespace ProjectFossil.Environment
                     b.Root.position = pos;
                     b.Root.rotation = Quaternion.LookRotation(heading) * Quaternion.Euler(0f, 0f, 18f); // bank into the turn
 
-                    // Flap in bursts, glide in between.
+                    // Flap in bursts, glide in between (placeholder birds only).
                     float gliding = Mathf.PerlinNoise(t * 0.25f, b.Phase * 3f);
                     float flap = gliding > 0.5f ? Mathf.Sin(t * b.FlapRate + b.Phase) * 32f : 6f;
+                    if (b.LeftWing == null) continue; // a bought, animated model flaps by itself
                     b.LeftWing.localRotation  = Quaternion.Euler(0f, 0f,  flap);
                     b.RightWing.localRotation = Quaternion.Euler(0f, 0f, -flap);
                 }
@@ -117,6 +118,31 @@ namespace ProjectFossil.Environment
             EnsureMaterials();
             var root = new GameObject("Pterosaur").transform;
             root.SetParent(transform, false);
+
+            var bought = BoughtArt.Current != null ? BoughtArt.Current.flyer : null;
+            if (bought != null && bought.HasModel)
+            {
+                var model = ModelFit.Spawn(bought, root);
+                foreach (var r in model.GetComponentsInChildren<Renderer>())
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                if (bought.animator != null)
+                {
+                    var anim = model.GetComponentInChildren<Animator>();
+                    if (anim == null) anim = model.AddComponent<Animator>();
+                    anim.runtimeAnimatorController = bought.animator;
+                    anim.applyRootMotion = false;
+                    anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+                }
+                root.localScale = Vector3.one * Range(0.85f, 1.2f);
+                return new Bird
+                {
+                    Root = root,
+                    Phase    = index * Mathf.PI * 2f / count + Range(-0.3f, 0.3f),
+                    Radius   = Range(-6f, 6f),
+                    Height   = Range(-5f, 5f),
+                    FlapRate = Range(4f, 5.5f),
+                };
+            }
 
             Part(root, PrimitiveType.Capsule, _skin, new Vector3(0f, 0f, 0f),     new Vector3(0.35f, 0.65f, 0.3f), new Vector3(90f, 0f, 0f));
             Part(root, PrimitiveType.Sphere,  _skin, new Vector3(0f, 0.08f, 0.75f), new Vector3(0.26f, 0.24f, 0.32f), Vector3.zero);
