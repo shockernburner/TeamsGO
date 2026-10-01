@@ -14,7 +14,10 @@ namespace ProjectFossil.Editor
         private const string Target = Root + "/Resources/SoundLibrary";
 
         private static readonly string[] Sets =
-            { "Roar", "Growl", "Screech", "Breath", "Thunder", "Rotor", "RainLoop", "StormLoop", "WindLoop" };
+            {
+                "Roar", "Growl", "Screech", "Breath", "Thunder", "Rotor", "RainLoop", "StormLoop", "WindLoop",
+                "Step", "SoftStep", "Bite", "Swing", "Hit", "Hurt", "DayAmbience", "NightAmbience",
+            };
 
         internal static List<string> Misplaced()
         {
@@ -65,6 +68,7 @@ namespace ProjectFossil.Editor
             {
                 var other = AssetDatabase.FindAssets("t:AudioClip", new[] { Root });
                 log.AppendLine($"  Assets/SoundLibrary has {other.Length} other sound files; none is named like Roar_1 or RainLoop.");
+                log.AppendLine("  Those are probably the raw downloads. Use the prepared SoundLibrary.zip instead (it has Resources/SoundLibrary inside).");
             }
             return moved;
         }

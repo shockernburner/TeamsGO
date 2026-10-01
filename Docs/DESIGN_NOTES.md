@@ -374,3 +374,6 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - Recorded sounds must sit in `Assets/SoundLibrary/Resources/SoundLibrary`. The setup (and the automatic run on
   Editor start) now moves our clips (Roar_1, RainLoop, ...) there from anywhere under `Assets/SoundLibrary` and
   reports how many are ready.
+- Every everyday sound can now come from a recording: Step, SoftStep, Bite, Swing, Hit, Hurt, DayAmbience and
+  NightAmbience join the recorded sets, each falling back to its synthesized version. The synthesized day ambience
+  (wind plus whistled bird chirps) is the main "cartoon" sound in playtests, so a real forest recording replaces it first.

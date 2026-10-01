@@ -93,25 +93,25 @@ namespace ProjectFossil.Audio
 
         private void Awake()
         {
-            _steps     = Make("Step",     v => SoundSynth.Footstep(v, false));
-            _softSteps = Make("SoftStep", v => SoundSynth.Footstep(v, true));
+            _steps     = SoundLibrary.Get("Step")     ?? Make("Step",     v => SoundSynth.Footstep(v, false));
+            _softSteps = SoundLibrary.Get("SoftStep") ?? Make("SoftStep", v => SoundSynth.Footstep(v, true));
             _screeches = SoundLibrary.Get("Screech") ?? Make("Screech", SoundSynth.Screech);
             _roars     = SoundLibrary.Get("Roar")    ?? Make("Roar",    SoundSynth.Roar);
             _growls    = SoundLibrary.Get("Growl");
             _breaths   = SoundLibrary.Get("Breath");
-            _bites     = Make("Bite",     SoundSynth.Bite);
-            _swings    = Make("Swing",    SoundSynth.Swing);
-            _hits      = Make("Hit",      SoundSynth.Hit);
-            _hurts     = Make("Hurt",     SoundSynth.Hurt);
+            _bites     = SoundLibrary.Get("Bite")  ?? Make("Bite",     SoundSynth.Bite);
+            _swings    = SoundLibrary.Get("Swing") ?? Make("Swing",    SoundSynth.Swing);
+            _hits      = SoundLibrary.Get("Hit")   ?? Make("Hit",      SoundSynth.Hit);
+            _hurts     = SoundLibrary.Get("Hurt")  ?? Make("Hurt",     SoundSynth.Hurt);
             _coin      = Clip("Coin",     SoundSynth.Coin());
             _sting     = Clip("Sting",    SoundSynth.ThreatSting());
             _chime     = Clip("Chime",    SoundSynth.Chime());
-            _ambience  = Clip("Ambience", SoundSynth.Ambience());
+            _ambience  = SoundLibrary.One("DayAmbience") ?? Clip("Ambience", SoundSynth.Ambience());
             _sniffs    = Make("Sniff",    SoundSynth.Sniff);
             _heartbeat = Clip("Heartbeat", SoundSynth.Heartbeat());
             _rotor     = SoundLibrary.One("Rotor") ?? Clip("Rotor", SoundSynth.Rotor());
             _victory   = Clip("Victory",  SoundSynth.Victory());
-            _nightAmbience = Clip("NightAmbience", SoundSynth.NightAmbience());
+            _nightAmbience = SoundLibrary.One("NightAmbience") ?? Clip("NightAmbience", SoundSynth.NightAmbience());
             _rainLoop  = SoundLibrary.One("RainLoop") ?? Clip("Rain", SoundSynth.Rain());
             _stormLoop = SoundLibrary.One("StormLoop") ?? _rainLoop;
             _windLoop  = SoundLibrary.One("WindLoop");
