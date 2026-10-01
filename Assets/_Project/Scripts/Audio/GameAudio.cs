@@ -431,7 +431,8 @@ namespace ProjectFossil.Audio
                     src.dopplerLevel = 0.4f;
                     _rotors[zone] = src;
                 }
-                src.volume = masterVolume;
+                // After the end the helicopter flies on behind the results; let it fade into the distance.
+                src.volume = _match.IsRunning ? masterVolume : Mathf.MoveTowards(src.volume, 0f, Time.deltaTime * 0.25f);
                 if (active && !src.isPlaying) src.Play();
             }
         }

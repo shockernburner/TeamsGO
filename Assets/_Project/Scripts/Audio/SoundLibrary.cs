@@ -43,6 +43,7 @@ namespace ProjectFossil.Audio
                 _sets[kv.Key] = kv.Value.ToArray();
             }
             if (_sets.Count > 0) Debug.Log($"[SoundLibrary] Recorded sounds: {string.Join(", ", _sets.Keys)}");
+            else Debug.Log("[SoundLibrary] No recorded sounds in any Resources/SoundLibrary folder: using synthesized ones.");
         }
     }
 }

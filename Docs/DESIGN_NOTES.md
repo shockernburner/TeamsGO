@@ -350,3 +350,18 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
   - Three thunder strikes.
   - A recorded helicopter loop.
 - The clips were trimmed, normalised and made into seamless loops with ffmpeg. They are mono for positional one-shots and stereo for the weather beds.
+
+## Big predator reach, getting unstuck, a filmic ending (2026-10-01, 8:58 PM playtest)
+
+- The 8:58 PM playtest still showed the free survivor, the primitive helicopter and synthesized sound. The likely cause is that Set Up Bought Packs hadn't run since the new packs arrived, because the Recorder compile error blocked the Editor. The setup now runs by itself once per Editor session whenever an imported pack isn't in use yet.
+- To make this checkable from a screenshot, the Console says what's in use at match start: which player look, how many bought survivors, which helicopter, and whether recorded sounds were found.
+- Ironjaw walked until its middle was within bite range, which put its whole body over the player. The player could then hit its belly from underneath while it stood still. Fixes:
+  - Bite reach is now measured from the body's surface, at half the species range, so a big animal bites from its snout.
+  - Circling keeps the body length out of the way.
+  - The agent no longer stops early at 90% of the range.
+- A chase that makes no headway for 1.2 s now detours to another side of its target, 50–130° around, before trying straight again. "No headway" means barely moving while out of reach, or a path that ends short (the player up on a rock or behind a wall of trees).
+- How the match ends:
+  - When it's over, the edges close in and the picture fades to black. Then the results and menu come up on the black.
+  - On extraction this follows the "YOU MADE IT OUT!" banner.
+  - On death it takes 2.5 s.
+  - The rotor sound fades away behind it.
