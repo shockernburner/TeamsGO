@@ -546,9 +546,41 @@ namespace ProjectFossil.Editor
             foreach (var guid in AssetDatabase.FindAssets("t:TerrainLayer", new[] { root }))
             {
                 string p = AssetDatabase.GUIDToAssetPath(guid);
-                if (Path.GetFileName(p).StartsWith(fileStart)) return AssetDatabase.LoadAssetAtPath<TerrainLayer>(p);
+                if (Path.GetFileName(p).StartsWith(fileStart)) return MatteCopy(AssetDatabase.LoadAssetAtPath<TerrainLayer>(p));
             }
             return null;
+        }
+
+        // The packs' ground layers carry mask maps packed for their own terrain shaders. Our URP terrain reads them
+        // as wet and metallic, so the forest floor glitters white and blue. A copy with colour and bumps only is matte,
+        // and a larger tile hides the repeat grid.
+        private const float MinGroundTile = 6f;
+
+        private static TerrainLayer MatteCopy(TerrainLayer source)
+        {
+            if (source == null) return null;
+            EnsureFolder(Out + "/Ground");
+            string path = $"{Out}/Ground/{source.name}.terrainlayer";
+            var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(path);
+            bool isNew = layer == null;
+            if (isNew) layer = new TerrainLayer();
+
+            layer.diffuseTexture   = source.diffuseTexture;
+            layer.normalMapTexture = source.normalMapTexture;
+            layer.normalScale      = Mathf.Min(source.normalScale, 1f);
+            layer.maskMapTexture   = null;
+            layer.smoothness       = 0f; // URP terrain: smoothness = albedo alpha × this
+            layer.metallic         = 0f;
+            layer.specular         = Color.black;
+            layer.diffuseRemapMin  = Vector4.zero;
+            layer.diffuseRemapMax  = Vector4.one;
+            layer.tileOffset       = Vector2.zero;
+            layer.tileSize         = new Vector2(Mathf.Max(source.tileSize.x, MinGroundTile), Mathf.Max(source.tileSize.y, MinGroundTile));
+
+            if (isNew) AssetDatabase.CreateAsset(layer, path);
+            else EditorUtility.SetDirty(layer);
+            Log.AppendLine($"  ground {source.name}: tile {source.tileSize.x:0.#} -> {layer.tileSize.x:0.#} m, mask map {(source.maskMapTexture != null ? "dropped" : "none")}");
+            return layer;
         }
 
         // The forest pack ships for the built-in pipeline, with its URP version as a package inside it. Until that's

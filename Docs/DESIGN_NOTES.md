@@ -304,3 +304,11 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
   - The creature prefabs had lost their root rotation, so a raptor stood on its tail. The copy now keeps the pack's root transform under a plain parent.
   - The pack names attacks `IdleAtk1`/`AtkA`, and the flight loop is `Flight`. The big theropod and the long-neck have no run clip, so their walk plays up to 2.2× faster at a run.
 - `SkyParticle.shader` sat next to `SkyParticle.mat` in Resources, so `Resources.Load<Material>("Shaders/SkyParticle")` tried to read the shader as a material ("isMapping" assertion), which broke clouds, stars and rain. The shader moved to `Art/Shaders`.
+
+## Matte ground, smaller leaves, real clouds (2026-10-01, 4:59 PM playtest)
+
+- The forest looked right after the URP import. Four things still stood out:
+  - The "isMapping" console error was still there at match start. The game's Resources materials were written as text outside Unity, and one of them reads badly in 6.5. `Editor/MaterialRepair` has Unity load and resave them once per project copy, which rewrites them in its own format. It is also on the menu as **Project Fossil > Maintenance > Resave Game Materials**.
+  - The forest floor glittered white and blue in a visible grid. The forest pack's ground layers carry mask maps packed for its own terrain shader, and URP read them as wet metal. The setup now makes matte copies of the ground layers (colour and bumps, no mask map, smoothness 0) with tiles of at least 6 m.
+  - Crawling through the jungle filled the screen with leaves metres wide. Low, spreading plants (banana, big ferns) were scaled up to plant height, so they got very wide. Plants are now capped at 1.8 m across at scale 1. The camera's plant lookup also reaches the widest plant registered, so a big plant whose centre is a few metres away still hides when it is in your face.
+  - Clouds were round balls. They are now wide, flat-bottomed cumulus quads, 150–320 m across and 55–95 m tall, kept level.

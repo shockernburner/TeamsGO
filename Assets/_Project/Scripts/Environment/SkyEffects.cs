@@ -49,7 +49,7 @@ namespace ProjectFossil.Environment
                 var r = _clouds.GetComponent<ParticleSystemRenderer>();
                 r.renderMode = ParticleSystemRenderMode.Billboard;
                 r.sortMode   = ParticleSystemSortMode.Distance;
-                r.maxParticleSize = 3f; // big on screen when overhead
+                r.maxParticleSize = 4f; // big on screen when overhead
             }
 
             _clouds.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -58,8 +58,12 @@ namespace ProjectFossil.Environment
             main.prewarm         = true;
             main.startLifetime   = 240f;
             main.startSpeed      = 0f;
-            main.startSize       = new ParticleSystem.MinMaxCurve(70f, 160f);
-            main.startRotation   = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            // Real clouds are wide and flat-bottomed, not balls: stretch each one sideways and keep it level.
+            main.startSize3D     = true;
+            main.startSizeX      = new ParticleSystem.MinMaxCurve(150f, 320f);
+            main.startSizeY      = new ParticleSystem.MinMaxCurve(55f, 95f);
+            main.startSizeZ      = 1f;
+            main.startRotation   = new ParticleSystem.MinMaxCurve(-0.06f, 0.06f);
             main.startColor      = new Color(tint.r, tint.g, tint.b, alpha);
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.maxParticles    = count + 20;
@@ -218,33 +222,39 @@ namespace ProjectFossil.Environment
             return m;
         }
 
-        // A puffy cloud: overlapping soft blobs, ragged at the edge, a little darker underneath.
+        // A cumulus cloud for a wide quad: a row of soft blobs, heaped in the middle, cut off flat underneath,
+        // with wispy noise at the edges and a grey base.
         private static Texture2D CloudTexture()
         {
-            const int size = 128;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
+            const int w = 256, h = 96;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
             var rng = new System.Random(77);
-            var blobs = new Vector3[9];
+            // Blob centres in texture space (u across, v up) with radii in v units. Bigger ones near the middle.
+            var blobs = new Vector3[22];
             for (int i = 0; i < blobs.Length; i++)
             {
-                float a = (float)rng.NextDouble() * Mathf.PI * 2f, d = (float)rng.NextDouble() * 0.22f;
-                blobs[i] = new Vector3(0.5f + Mathf.Cos(a) * d, 0.48f + Mathf.Sin(a) * d * 0.6f, 0.13f + (float)rng.NextDouble() * 0.12f);
+                float u = 0.12f + 0.76f * (float)rng.NextDouble();
+                float mid = 1f - Mathf.Abs(u - 0.5f) * 2f;               // 1 in the middle, 0 at the ends
+                float r = (0.08f + 0.14f * (float)rng.NextDouble()) * (0.5f + 0.7f * mid);
+                blobs[i] = new Vector3(u, 0.28f + r * 0.9f, r);
             }
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
+            const float aspect = w / (float)h;
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                float u = x / (size - 1f), v = y / (size - 1f);
+                float u = x / (w - 1f), v = y / (h - 1f);
                 float density = 0f;
                 foreach (var b in blobs)
                 {
-                    float dx = u - b.x, dy = v - b.y;
+                    float dx = (u - b.x) * aspect, dy = v - b.y;
                     density += Mathf.Exp(-(dx * dx + dy * dy) / (b.z * b.z));
                 }
-                float detail = Mathf.PerlinNoise(u * 7f + 3.1f, v * 7f + 1.7f) * 0.5f + Mathf.PerlinNoise(u * 15f, v * 15f) * 0.25f;
-                float a = Mathf.Clamp01((density * 0.7f + detail * 0.5f - 0.45f) * 1.6f);
-                // Fade to nothing at the square's edge so no corner shows.
-                float edge = Mathf.Clamp01((0.5f - Mathf.Max(Mathf.Abs(u - 0.5f), Mathf.Abs(v - 0.5f))) * 6f);
-                float shade = Mathf.Lerp(0.72f, 1f, Mathf.Clamp01(v * 1.3f));
+                float detail = Mathf.PerlinNoise(u * 18f + 3.1f, v * 7f + 1.7f) * 0.5f + Mathf.PerlinNoise(u * 40f, v * 15f) * 0.25f;
+                float a = Mathf.Clamp01((density * 0.8f + detail * 0.45f - 0.6f) * 1.8f);
+                // A soft flat base, and nothing at the quad's edges.
+                a *= Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.2f, 0.32f, v));
+                float edge = Mathf.Clamp01(Mathf.Min(Mathf.Min(u, 1f - u) * 10f, (1f - v) * 8f));
+                float shade = Mathf.Lerp(0.62f, 1f, Mathf.Clamp01((v - 0.22f) * 2.5f));
                 tex.SetPixel(x, y, new Color(shade, shade, shade * 1.02f, a * edge));
             }
             tex.Apply();
