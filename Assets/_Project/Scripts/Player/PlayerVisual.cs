@@ -47,28 +47,6 @@ namespace ProjectFossil.Player
         // camera, inside the head, doesn't draw it.
         private bool _shadowOnly;
 
-        // The survivor model's own materials whose names suggest skin and shirt, so the first-person arms can wear
-        // the same look. Either may be null (the placeholder body, or a model with unhelpful material names).
-        public (Material skin, Material shirt) OutfitMaterials()
-        {
-            Material skin = null, shirt = null;
-            if (_model == null) return (null, null);
-            var names = new System.Collections.Generic.List<string>();
-            foreach (var r in _model.GetComponentsInChildren<Renderer>(true))
-            foreach (var m in r.sharedMaterials)
-            {
-                if (m == null) continue;
-                names.Add(m.name);
-                string n = m.name.ToLowerInvariant();
-                if (skin == null && (n.Contains("skin") || n.Contains("hand") || n.Contains("body"))) skin = m;
-                else if (shirt == null && (n.Contains("shirt") || n.Contains("jacket") || n.Contains("top") ||
-                                           n.Contains("cloth") || n.Contains("outfit") || n.Contains("sleeve"))) shirt = m;
-            }
-            Debug.Log($"[PlayerVisual] First-person arms: skin {(skin != null ? skin.name : "none")}, " +
-                      $"shirt {(shirt != null ? shirt.name : "none")} (model materials: {string.Join(", ", names)}).");
-            return (skin, shirt);
-        }
-
         public void SetShadowOnly(bool on)
         {
             _shadowOnly = on;
@@ -102,6 +80,7 @@ namespace ProjectFossil.Player
             var v = player.GetComponent<PlayerVisual>();
             if (v == null) v = player.AddComponent<PlayerVisual>();
             v.Build(def);
+            PlantPusher.Ensure(player, 0.6f);
             return v;
         }
 

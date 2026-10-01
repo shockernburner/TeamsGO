@@ -395,3 +395,11 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Posture:** the Quaternius jog and sprint clips keep the fists up. With the bought survivalist pack, its own StarterAssets idle, walk and run clips drive the "Survivor_Survivalist" animator instead, with relaxed arms.
 - **Crawl removed:** there is no crawl animation, so Z does nothing and the hint no longer mentions it.
 - **First-person arms:** these borrow the survivor model's skin and shirt materials when their names say which is which. The bought-pack report now lists the FPS_Survivalist prefab so the real arms can be wired next.
+
+## 2026-10-02 — Movie_004 fixes: survivalist first-person arms, weapon in view, plants that part
+
+- **Weapon missing in first person:** MatchBootstrap adds PlayerCombat after PlayerController has already created FirstPersonView. The view never found it, so it never showed the held weapon, never swung, and never told combat it was in first person. The view now looks again until PlayerCombat turns up.
+- **First-person arms:** the survivor pack's FPS_Survivalist prefab is stored as `BoughtArt.firstPersonArms`. `FirstPersonRig` keeps only its FPS arm and sleeve meshes and curls the fingers into a fist with HumanPoseHandler. Each frame it bends each arm with two-bone IK onto the wrist targets that FirstPersonView already animates (rest pose, bob, sway, swing). The weapon rides the right wrist target, so it stays in the hand. Without the pack, the simple arms remain.
+- **Giant poles on rocky slopes:** the volcanic biome used dry boughs as its "trees", so they were scaled to tree height and stood up as huge diagonal logs. They now count as rocks (scaled by width), and old beeches are the trees.
+- **Red hit flash:** the side flush was a stretched vignette and left a hard vertical edge. It is now a smooth sideways fade.
+- **Plants part around you:** `PlantPusher` goes on players and dinosaurs. IslandWind leans bushes and ferns away from any pusher inside them, and they spring back once it has passed. Bought foliage now also leans with gusts (half strength) on top of its shader ripple.

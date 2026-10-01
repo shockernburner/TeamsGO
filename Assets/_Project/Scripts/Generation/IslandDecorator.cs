@@ -382,7 +382,8 @@ namespace ProjectFossil.Generation
                     float radius = Mathf.Max(wb.extents.x, wb.extents.z);
                     // Bushes and tall ferns you can crouch in count as cover; ankle-high grass doesn't.
                     bool cover = radius >= 0.55f && wb.size.y >= 0.7f;
-                    ViewBlockers.Register(wb.center, radius, renderers, shaderWind ? null : go.transform, 1f, cover);
+                    // Shader-wind foliage already ripples; it still leans with gusts (less) and gets pushed aside.
+                    ViewBlockers.Register(wb.center, radius, renderers, go.transform, shaderWind ? 0.5f : 1f, cover);
                 }
             }
 
