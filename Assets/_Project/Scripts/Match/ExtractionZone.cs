@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ProjectFossil.Core;
 using ProjectFossil.Player;
 
 namespace ProjectFossil.Match
@@ -58,13 +59,13 @@ namespace ProjectFossil.Match
             root.transform.SetParent(parent, false);
             root.transform.position = position;
 
-            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var disc = Placeholder.Primitive(PrimitiveType.Cylinder);
             disc.name = "Disc";
             Destroy(disc.GetComponent<Collider>());
             disc.transform.SetParent(root.transform, false);
             disc.transform.localScale = new Vector3(radius * 2f, 0.05f, radius * 2f);
 
-            var pillar = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var pillar = Placeholder.Primitive(PrimitiveType.Cylinder);
             pillar.name = "Beacon";
             Destroy(pillar.GetComponent<Collider>());
             pillar.transform.SetParent(root.transform, false);
@@ -316,7 +317,7 @@ namespace ProjectFossil.Match
 
         private static Renderer Part(PrimitiveType type, Transform parent, Vector3 pos, Vector3 euler, Vector3 scale, Color color)
         {
-            var go = GameObject.CreatePrimitive(type);
+            var go = Placeholder.Primitive(type);
             Destroy(go.GetComponent<Collider>()); // one box on the body stands in for all the parts
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;

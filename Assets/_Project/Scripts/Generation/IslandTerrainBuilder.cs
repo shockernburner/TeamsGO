@@ -1,4 +1,5 @@
 using UnityEngine;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Generation
 {
@@ -41,14 +42,14 @@ namespace ProjectFossil.Generation
         {
             foreach (var poi in data.PointsOfInterest)
             {
-                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                var marker = Placeholder.Primitive(PrimitiveType.Sphere);
                 marker.name = $"POI_{poi.Type}_{poi.GridPos.x}_{poi.GridPos.y}";
                 marker.transform.position = poi.WorldPos + Vector3.up * 3f;
                 marker.transform.localScale = Vector3.one * 6f;
                 marker.transform.SetParent(parent, true);
                 Object.DestroyImmediate(marker.GetComponent<Collider>());
 
-                var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                var mat = new Material(Placeholder.LitBase);
                 mat.color = poi.Type switch
                 {
                     POIType.ExtractionZone => new Color(0f, 1f, 0.2f),
