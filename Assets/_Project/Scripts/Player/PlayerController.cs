@@ -96,6 +96,9 @@ namespace ProjectFossil.Player
         }
 
         public Health Health { get; private set; }
+        // Knocked down in co-op: crawling, waiting for a teammate.
+        public bool IsDown => Health != null && Health.IsDown;
+        public float downCrawlSpeed = 0.7f;
 
         private CharacterController _cc;
         private Transform _body;
@@ -127,6 +130,9 @@ namespace ProjectFossil.Player
                     var rig = cam.GetComponent<CameraRig>();
                     if (rig == null) rig = cam.gameObject.AddComponent<CameraRig>();
                     rig.Init(cameraTarget, transform);
+                    var view = GetComponent<FirstPersonView>();
+                    if (view == null) view = gameObject.AddComponent<FirstPersonView>();
+                    view.Init(cam, cameraTarget, rig);
                 }
             }
 
@@ -141,11 +147,18 @@ namespace ProjectFossil.Player
             Health = GetComponent<Health>();
             if (Health == null) Health = gameObject.AddComponent<Health>();
             Health.Died += OnDied;
+            Health.WentDown += OnWentDown;
+        }
+
+        private void OnWentDown()
+        {
+            RunToggled = false;
+            SetStance(Stance.Prone);
         }
 
         private void OnDestroy()
         {
-            if (Health != null) Health.Died -= OnDied;
+            if (Health != null) { Health.Died -= OnDied; Health.WentDown -= OnWentDown; }
         }
 
         private void OnDied(DamageInfo info)
@@ -175,27 +188,27 @@ namespace ProjectFossil.Player
 
         public void OnJump(InputValue v)
         {
-            if (!v.isPressed || _inputBlocked) return;
+            if (!v.isPressed || _inputBlocked || IsDown) return;
             if (Stance != Stance.Standing) SetStance(Stance.Standing); // jump key also stands you up
             else _jumpPressed = true;
         }
 
         public void OnSprint(InputValue v)
         {
-            if (!v.isPressed || _inputBlocked) return;
+            if (!v.isPressed || _inputBlocked || IsDown) return;
             RunToggled = !RunToggled;
             if (RunToggled && Stance != Stance.Standing) SetStance(Stance.Standing);
         }
 
         public void OnCrouch(InputValue v)
         {
-            if (!v.isPressed || _inputBlocked) return;
+            if (!v.isPressed || _inputBlocked || IsDown) return;
             SetStance(Stance == Stance.Crouching ? Stance.Standing : Stance.Crouching);
         }
 
         public void OnProne(InputValue v)
         {
-            if (!v.isPressed || _inputBlocked) return;
+            if (!v.isPressed || _inputBlocked || IsDown) return;
             SetStance(Stance == Stance.Prone ? Stance.Standing : Stance.Prone);
         }
 
@@ -273,7 +286,7 @@ namespace ProjectFossil.Player
             float speed;
             switch (Stance)
             {
-                case Stance.Prone:     speed = crawlSpeed;  break;
+                case Stance.Prone:     speed = IsDown ? downCrawlSpeed : crawlSpeed; break;
                 case Stance.Crouching: speed = crouchSpeed; break;
                 default:
                     speed = IsSprinting ? runSpeed : (StaminaModel.IsExhausted ? exhaustedSpeed : walkSpeed);

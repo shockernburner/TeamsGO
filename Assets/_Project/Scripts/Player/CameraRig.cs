@@ -17,6 +17,10 @@ namespace ProjectFossil.Player
         public float plantPadding  = 0.35f;  // plants this close to the line of sight hide
         public float plantClearance = 1.2f;  // and plants this close to the camera itself, which fill the frame edges
         public float aboveWater    = 0.35f;
+        public float eyeClearance  = 0.45f;  // first person: leaves and grass this close to the eyes hide
+
+        // First person: the camera sits in the head (FirstPersonView places it), so there is nothing to pull in.
+        public bool FirstPerson { get; set; }
 
         private Transform _pivot;
         private Transform _owner;
@@ -39,6 +43,12 @@ namespace ProjectFossil.Player
         private void LateUpdate()
         {
             if (_pivot == null) return;
+            if (FirstPerson)
+            {
+                _distance = -1f;
+                HidePlants(transform.position, transform.position, eyeClearance);
+                return;
+            }
 
             Vector3 origin  = _pivot.position;
             Vector3 desired = _pivot.TransformPoint(_restLocal);
@@ -67,7 +77,7 @@ namespace ProjectFossil.Player
             if (pos.y < floor) pos.y = floor;
             transform.position = pos;
 
-            HidePlants(pos, origin);
+            HidePlants(pos, origin, plantClearance);
         }
 
         // Terrain, trunks and rocks block; the player, animals and anything that moves don't.
@@ -79,12 +89,13 @@ namespace ProjectFossil.Player
             return true;
         }
 
-        private void HidePlants(Vector3 cameraPos, Vector3 target)
+        private void HidePlants(Vector3 cameraPos, Vector3 target, float clearance)
         {
             // Stop a little short of the head so plants right at the player's feet stay visible.
             Vector3 end = Vector3.Lerp(cameraPos, target, 0.85f);
-            ViewBlockers.Overlapping(cameraPos, end, plantPadding, _near);
-            ViewBlockers.Overlapping(cameraPos, cameraPos, plantClearance, _around);
+            if (target != cameraPos) ViewBlockers.Overlapping(cameraPos, end, plantPadding, _near);
+            else _near.Clear();
+            ViewBlockers.Overlapping(cameraPos, cameraPos, clearance, _around);
 
             _still.Clear();
             Collect(_near);

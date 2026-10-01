@@ -58,6 +58,18 @@ namespace ProjectFossil.Match
         private readonly List<Transform> _candidates = new List<Transform>();
         private readonly HashSet<Transform> _finalStandsSent = new HashSet<Transform>();
 
+        // Co-op hooks (the networking layer fills these in; solo leaves them empty).
+        // Whether a teammate is still up to revive this player if they go down.
+        public Func<bool> CanBeRevived;
+        // How many living teammates stand within `radius` of a point (boarding together, leaving together).
+        public Func<Vector3, float, int> TeammatesNear;
+        // This player finished boarding: the helicopter at this pad leaves, with any teammates under it.
+        public event Action<Vector3> LiftedOff;
+
+        public const float BleedOutSeconds = 45f;
+        public float BleedOutLeft { get; private set; }
+        private bool _leftWithTeam;
+
         public bool IsFinalStand { get; private set; }
         // The helicopter that took the player off the island (null until they extract).
         public ExtractionZone RescuedBy { get; private set; }
@@ -148,6 +160,12 @@ namespace ProjectFossil.Match
             _menuInput       = player.GetComponent<PlayerMenuInput>();
 
             if (PlayerHealth != null) PlayerHealth.Died += OnPlayerDied;
+            if (PlayerHealth != null)
+            {
+                PlayerHealth.CanGoDown = () => IsRunning && CanBeRevived != null && CanBeRevived();
+                PlayerHealth.WentDown += OnPlayerDown;
+                PlayerHealth.Revived  += OnPlayerRevived;
+            }
             if (PlayerHealth != null) PlayerHealth.Damaged += OnPlayerDamaged;
             if (_menuInput != null)   _menuInput.UseItemPressed += OnUseItem;
         }
@@ -238,14 +256,24 @@ namespace ProjectFossil.Match
 
             bool open = State.IsExtractionOpen;
             bool inZone = false;
+            float boarding = 1f;
+            bool down = PlayerHealth != null && PlayerHealth.IsDown;
             foreach (var zone in _zones)
             {
                 zone.SetOpen(open);
-                // Boarding starts once the helicopter is down.
-                if (Player != null && zone.HelicopterLanded && zone.Contains(Player.transform.position)) inZone = true;
+                // Boarding starts once the helicopter is down (and you're on your feet).
+                if (Player != null && !down && zone.HelicopterLanded && zone.Contains(Player.transform.position))
+                {
+                    inZone = true;
+                    // Each teammate holding the pad with you speeds boarding up by half.
+                    int mates = TeammatesNear != null ? TeammatesNear(zone.transform.position, zone.radius) : 0;
+                    boarding = 1f + 0.5f * mates;
+                }
             }
 
-            State.Tick(Time.deltaTime, inZone);
+            State.Tick(Time.deltaTime, inZone, boarding);
+            if (!IsRunning) return;
+            TickBleedOut();
             if (!IsRunning) return;
 
             if (IsFollower)
@@ -496,6 +524,51 @@ namespace ProjectFossil.Match
 
         private void OnPlayerDied(DamageInfo info) => State?.ReportPlayerDied();
 
+        // ── Down and revive (co-op) ────────────────────────────────────────────
+
+        private void OnPlayerDown()
+        {
+            BleedOutLeft = BleedOutSeconds;
+            Announce($"You're down! Crawl to cover. A teammate can get you up (E). {Mathf.RoundToInt(BleedOutSeconds)} s.");
+            TeamAnnounced?.Invoke($"{PlayerName} is down! Get to them and press E.");
+        }
+
+        private void OnPlayerRevived()
+        {
+            BleedOutLeft = 0f;
+            Announce("You're back up. Stay close to your team.");
+        }
+
+        private void TickBleedOut()
+        {
+            if (PlayerHealth == null || !PlayerHealth.IsDown) return;
+            BleedOutLeft -= Time.deltaTime;
+            // Nobody left to come for you (or too late): that's it.
+            bool hope = CanBeRevived != null && CanBeRevived();
+            if (BleedOutLeft <= 0f || !hope)
+                PlayerHealth.TakeDamage(new DamageInfo(PlayerHealth.Max * 10f, null, Player.transform.position));
+        }
+
+        // ── Leaving together (co-op) ───────────────────────────────────────────
+
+        // Shown to teammates in shared announcements.
+        public string PlayerName = "A teammate";
+
+        // A teammate's helicopter at `pad` took off: if this player is standing under it, they're aboard too.
+        public void TeamLiftOff(Vector3 pad)
+        {
+            if (!IsRunning || Player == null || (PlayerHealth != null && PlayerHealth.IsDown)) return;
+            foreach (var zone in _zones)
+            {
+                if (zone == null || !zone.HelicopterLanded) continue;
+                if ((zone.transform.position - pad).sqrMagnitude > 25f) continue;
+                if (!zone.Contains(Player.transform.position)) return;
+                _leftWithTeam = true;
+                State.ExtractNow();
+                return;
+            }
+        }
+
         private void OnUseItem()
         {
             if (!IsRunning || PlayerInventory == null) return;
@@ -508,19 +581,29 @@ namespace ProjectFossil.Match
             Stats.Result       = result;
             Stats.TimeSurvived = State.Elapsed;
             Stats.CoinsEarned  = PlayerInventory != null ? PlayerInventory.Wallet.TotalEarned : 0;
-            RecordScore(result);
-
-            if (PlayerController != null && PlayerController.enabled)
-                PlayerController.InputBlocked = true;
 
             if (result == MatchResult.Extracted && Player != null)
                 foreach (var zone in _zones)
                     if (zone != null && zone.HelicopterLanded && zone.Contains(Player.transform.position))
                     {
                         RescuedBy = zone;
-                        zone.LiftOff(Player.transform);
+                        Stats.MatesAboard = TeammatesNear != null ? TeammatesNear(zone.transform.position, zone.radius) : 0;
+                        // Taken along by a teammate's take-off: they're aboard even if their body already left.
+                        if (_leftWithTeam) Stats.MatesAboard = Mathf.Max(1, Stats.MatesAboard);
                         break;
                     }
+            RecordScore(result);
+
+            if (PlayerController != null && PlayerController.enabled)
+                PlayerController.InputBlocked = true;
+
+            if (RescuedBy != null)
+            {
+                RescuedBy.LiftOff(Player.transform);
+                if (!_leftWithTeam) LiftedOff?.Invoke(RescuedBy.transform.position);
+                if (Stats.MatesAboard > 0)
+                    Announce(Stats.MatesAboard == 1 ? "You left together: +25% team bonus!" : $"{Stats.MatesAboard + 1} of you aboard: +{Stats.MatesAboard * 25}% team bonus!");
+            }
 
             MatchEnded?.Invoke(Stats);
         }
@@ -532,8 +615,9 @@ namespace ProjectFossil.Match
             Stats.KillPoints       = Score.KillPoints;
             Stats.DamagePoints     = Score.DamagePoints;
             Stats.ThreatPoints     = Score.ThreatPoints;
-            Stats.ResultMultiplier = ScoreModel.Multiplier(result);
-            Stats.Score            = Score.Total(t, result);
+            Stats.ResultMultiplier = ScoreModel.Multiplier(result) *
+                                     (result == MatchResult.Extracted ? ScoreModel.TeamFactor(Stats.MatesAboard) : 1f);
+            Stats.Score            = Score.Total(t, result, Stats.MatesAboard);
 
             Stats.NewBest   = Stats.Score > BestScore;
             if (Stats.NewBest) BestScore = Stats.Score;
@@ -560,6 +644,9 @@ namespace ProjectFossil.Match
             if (Director != null)     Director.OnThreatTriggered -= OnThreatTriggered;
             if (PlayerHealth != null) PlayerHealth.Died -= OnPlayerDied;
             if (PlayerHealth != null) PlayerHealth.Damaged -= OnPlayerDamaged;
+            if (PlayerHealth != null) { PlayerHealth.WentDown -= OnPlayerDown; PlayerHealth.Revived -= OnPlayerRevived; }
+            _leftWithTeam = false;
+            BleedOutLeft  = 0f;
             if (_menuInput != null)   _menuInput.UseItemPressed -= OnUseItem;
             if (State != null)
             {

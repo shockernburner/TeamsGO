@@ -44,7 +44,8 @@ namespace ProjectFossil.Match
             : this(rules.matchDuration, rules.extractionOpensAt, rules.extractionHoldTime,
                    rules.survivalPayoutInterval, rules.survivalPayoutAmount) { }
 
-        public void Tick(float deltaTime, bool playerInExtractionZone)
+        // `boardingSpeed`: teammates holding the pad together board faster (1 = alone).
+        public void Tick(float deltaTime, bool playerInExtractionZone, float boardingSpeed = 1f)
         {
             if (Phase != MatchPhase.Active || deltaTime <= 0f) return;
 
@@ -68,7 +69,7 @@ namespace ProjectFossil.Match
 
             if (IsExtractionOpen && playerInExtractionZone)
             {
-                ExtractionProgress += deltaTime;
+                ExtractionProgress += deltaTime * Math.Max(0f, boardingSpeed);
                 if (ExtractionProgress >= ExtractionHoldTime)
                 {
                     End(MatchResult.Extracted);
@@ -94,6 +95,12 @@ namespace ProjectFossil.Match
 
         public void ReportPlayerDied() => End(MatchResult.Died);
 
+        // A teammate finished boarding the helicopter this player is standing under: everyone aboard leaves.
+        public void ExtractNow()
+        {
+            if (Phase == MatchPhase.Active && IsExtractionOpen) End(MatchResult.Extracted);
+        }
+
         private void End(MatchResult result)
         {
             if (Phase == MatchPhase.Ended) return;
@@ -118,6 +125,7 @@ namespace ProjectFossil.Match
         public int   DamagePoints;
         public int   ThreatPoints;
         public float ResultMultiplier = 1f;
+        public int   MatesAboard;      // teammates who left on the same helicopter
         public int   Score;
         public int   BestScore;
         public bool  NewBest;

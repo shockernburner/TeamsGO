@@ -36,7 +36,7 @@ namespace ProjectFossil.Dinosaurs
             _built = true;
 
             // Hide the placeholder, keep its colliders (gameplay uses them).
-            foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
+            Placeholder.RemoveRenderers(transform);
 
             var model = ModelFit.Spawn(def, transform);
             ModelRoot = model.transform;
