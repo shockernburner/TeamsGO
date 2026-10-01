@@ -77,12 +77,16 @@ namespace ProjectFossil.Editor
             Log.AppendLine($"Forest pack:   {forest ?? "not found"}");
             Log.AppendLine($"Survivor pack: {survivors ?? "not found"}");
             Log.AppendLine($"Heli pack:     {heliPack ?? "not found"}");
+            int sounds = SoundSetup.Organise(Log);
             if (dinoPack == null && forest == null && survivors == null && heliPack == null)
             {
-                EditorUtility.DisplayDialog("Bought packs", "None of the art packs is imported.", "OK");
+                WriteReport();
+                EditorUtility.DisplayDialog("Bought packs", "None of the art packs is imported." +
+                    (sounds > 0 ? $"\n\nMoved {sounds} recorded sounds where the game finds them." : ""), "OK");
                 return;
             }
-            if (forest != null && OfferForestUrpPackage(forest)) return;
+            // Only an offer: the setup carries on either way, so the survivor and helicopter are never skipped.
+            if (forest != null) OfferForestUrpPackage(forest);
 
             EnsureFolder(Out + "/Resources");
             EnsureFolder(Out + "/Models");
@@ -118,10 +122,15 @@ namespace ProjectFossil.Editor
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
                 BoughtArt.Reload();
-                Directory.CreateDirectory(Path.GetDirectoryName(Report));
-                File.WriteAllText(Report, Log.ToString());
+                WriteReport();
             }
             Debug.Log($"[BoughtPackSetup] Done. Press Play to see the bought art. Report: {Path.GetFullPath(Report)}");
+        }
+
+        private static void WriteReport()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Report));
+            File.WriteAllText(Report, Log.ToString());
         }
 
         // Which imported packs the game doesn't use yet, or null when it's up to date.
@@ -135,6 +144,7 @@ namespace ProjectFossil.Editor
                 found.Add("helicopter pack");
             if ((FindDir("Creatures/VOLI") != null || FindDir("Forest Environment Dynamic Nature") != null) && art == null)
                 found.Add("dinosaur or forest pack");
+            if (SoundSetup.Misplaced().Count > 0) found.Add("recorded sounds");
             return found.Count == 0 ? null : "New " + string.Join(" and ", found);
         }
 
@@ -804,7 +814,10 @@ namespace ProjectFossil.Editor
         }
 
         // The forest pack ships for the built-in pipeline, with its URP version as a package inside it. Until that's
-        // imported, every plant shows magenta. Returns true when the import was started (run the setup again after).
+        // imported, every plant shows magenta. Asked once per project: a few of the pack's materials stay non-URP even
+        // after the import, so asking every run would nag forever. Returns true when the import was started.
+        private const string ForestOffered = "ProjectFossil.ForestUrpOffered";
+
         private static bool OfferForestUrpPackage(string forest)
         {
             int builtIn = 0;
@@ -822,10 +835,17 @@ namespace ProjectFossil.Editor
                 Log.AppendLine($"{builtIn} forest materials use built-in shaders and no URP package was found in the pack.");
                 return false;
             }
+            string key = ForestOffered + "." + Application.dataPath;
+            if (EditorPrefs.GetBool(key, false))
+            {
+                Log.AppendLine($"{builtIn} forest materials still use built-in shaders (URP package already offered).");
+                return false;
+            }
+            EditorPrefs.SetBool(key, true);
             if (!EditorUtility.DisplayDialog("Forest pack for URP",
                     $"{builtIn} forest materials are built for the old render pipeline and show pink.\n\n" +
                     $"The pack includes its URP version ({Path.GetFileName(package)}). Import it now? " +
-                    "Click Import in the next window, then run Set Up Bought Packs again.",
+                    "If it says there is nothing new to import, it's already in: click Skip.",
                     "Import", "Skip")) return false;
             AssetDatabase.ImportPackage(package, true);
             return true;
