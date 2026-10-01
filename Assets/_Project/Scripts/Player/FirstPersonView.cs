@@ -17,7 +17,7 @@ namespace ProjectFossil.Player
 
         public Vector3 eyeOffset = new Vector3(0f, 0.06f, 0.14f); // from the CameraTarget (the head pivot)
         public float   nearClip  = 0.05f;
-        public float   fieldOfView = 70f;
+        public float   fieldOfView = 80f;
 
         public bool IsFirstPerson { get; private set; }
 
@@ -42,7 +42,7 @@ namespace ProjectFossil.Player
         private float     _swing = -1f;   // 0..1 through an attack, < 0 when idle
         private bool      _armedSwing;
         private float     _flinch;
-        private static Material _skin, _sleeve;
+        private static Material _glove, _cuff, _sleeve;
 
         public void Init(Camera cam, Transform head, CameraRig rig)
         {
@@ -121,33 +121,43 @@ namespace ProjectFossil.Player
 
         // ── Arms ───────────────────────────────────────────────────────────────
 
+        // Where each wrist rests in front of the eyes, low in the corners of the view.
+        private static readonly Vector3    RightRest    = new Vector3( 0.19f, -0.24f, 0.36f);
+        private static readonly Vector3    LeftRest     = new Vector3(-0.21f, -0.27f, 0.32f);
+        private static readonly Quaternion RightRestRot = Quaternion.Euler(-22f, -14f, -8f);
+        private static readonly Quaternion LeftRestRot  = Quaternion.Euler(-22f,  16f,  8f);
+
         private void BuildArms()
         {
             EnsureMaterials();
             _arms = new GameObject("FirstPersonArms").transform;
             _arms.SetParent(_cam.transform, false);
-            _right = Arm("Right", new Vector3( 0.2f, -0.2f, 0.32f), 1f);
-            _left  = Arm("Left",  new Vector3(-0.22f, -0.24f, 0.28f), -1f);
+            _right = Arm("Right", RightRest, RightRestRot, 1f);
+            _left  = Arm("Left",  LeftRest,  LeftRestRot, -1f);
         }
 
-        // A sleeved forearm reaching forward from below the view, ending in a fist. The shoulder end is the pivot.
-        private Transform Arm(string side, Vector3 pos, float mirror)
+        // A gloved fist at the wrist (the pivot), with the sleeved forearm running back and down out of view.
+        private Transform Arm(string side, Vector3 pos, Quaternion rot, float mirror)
         {
             var root = new GameObject(side).transform;
             root.SetParent(_arms, false);
             root.localPosition = pos;
-            root.localRotation = Quaternion.Euler(-8f, -10f * mirror, 0f);
+            root.localRotation = rot;
 
-            Part(root, PrimitiveType.Capsule, _sleeve, new Vector3(0f, 0f, -0.12f), new Vector3(0.085f, 0.13f, 0.085f), new Vector3(90f, 0f, 0f));
-            Part(root, PrimitiveType.Capsule, _skin,   new Vector3(0f, 0f,  0.06f), new Vector3(0.065f, 0.1f, 0.065f), new Vector3(90f, 0f, 0f));
-            Part(root, PrimitiveType.Sphere,  _skin,   new Vector3(0f, 0.005f, 0.16f), new Vector3(0.085f, 0.075f, 0.095f), Vector3.zero);
-            Part(root, PrimitiveType.Capsule, _skin,   new Vector3(0.035f * mirror, 0.03f, 0.15f), new Vector3(0.03f, 0.035f, 0.03f), new Vector3(0f, 0f, 60f * mirror));
+            // Forearm in the outfit's sleeve, a leather cuff at the wrist.
+            Part(root, PrimitiveType.Capsule,  _sleeve, new Vector3(0f, -0.005f, -0.2f), new Vector3(0.078f, 0.17f, 0.07f), new Vector3(90f, 0f, 0f));
+            Part(root, PrimitiveType.Cylinder, _cuff,   new Vector3(0f, 0f, -0.035f),    new Vector3(0.07f, 0.03f, 0.064f), new Vector3(90f, 0f, 0f));
+            // Gloved fist: back of the hand, curled fingers, knuckles and thumb.
+            Part(root, PrimitiveType.Cube,     _glove,  new Vector3(0f, 0.004f, 0.03f),  new Vector3(0.072f, 0.04f, 0.075f), Vector3.zero);
+            Part(root, PrimitiveType.Cube,     _glove,  new Vector3(0f, -0.018f, 0.068f), new Vector3(0.07f, 0.045f, 0.03f), new Vector3(18f, 0f, 0f));
+            Part(root, PrimitiveType.Capsule,  _glove,  new Vector3(0f, 0.008f, 0.07f),  new Vector3(0.026f, 0.036f, 0.026f), new Vector3(0f, 0f, 90f));
+            Part(root, PrimitiveType.Capsule,  _glove,  new Vector3(-0.036f * mirror, -0.006f, 0.045f), new Vector3(0.022f, 0.028f, 0.022f), new Vector3(70f, 25f * mirror, 0f));
             return root;
         }
 
         private static GameObject Part(Transform parent, PrimitiveType type, Material mat, Vector3 pos, Vector3 scale, Vector3 euler)
         {
-            var go = GameObject.CreatePrimitive(type);
+            var go = Placeholder.Primitive(type);
             Destroy(go.GetComponent<Collider>());
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
@@ -172,7 +182,7 @@ namespace ProjectFossil.Player
             // In the right fist, handle running up through it and leaning forward, the head out ahead.
             _held = new GameObject("Held_" + look).transform;
             _held.SetParent(_right, false);
-            _held.localPosition = new Vector3(0f, 0f, 0.16f);
+            _held.localPosition = new Vector3(0f, -0.01f, 0.05f);
             _held.localRotation = Quaternion.Euler(look == HeldLook.Spear ? 80f : 35f, 0f, 0f);
             if (look == HeldLook.Spear) _held.localPosition += new Vector3(0f, 0f, -0.25f); // grip it further back
             PlayerVisual.BuildWeapon(_held, look);
@@ -234,8 +244,8 @@ namespace ProjectFossil.Player
                 }
                 if (_swing >= 1f) _swing = -1f;
             }
-            _right.localPosition = new Vector3(0.2f, -0.2f, 0.32f) + swingPos;
-            _right.localRotation = Quaternion.Euler(-8f, -10f, 0f) * swingRot;
+            _right.localPosition = RightRest + swingPos;
+            _right.localRotation = RightRestRot * swingRot;
         }
 
         private void OnAttacked(WeaponStats weapon, Health target)
@@ -257,28 +267,109 @@ namespace ProjectFossil.Player
             if (_health != null) _health.Damaged -= OnDamaged;
         }
 
-        private void OnDamaged(DamageInfo info) => _flinch = 1f;
+        // Where the last bite came from, so you can turn and fight what you can't see.
+        private Vector3 _hitFrom;
+        private float   _hitTimer;
+        private const float HitShowSeconds = 1.4f;
+
+        private void OnDamaged(DamageInfo info)
+        {
+            _flinch = 1f;
+            Vector3 from = info.Source != null ? info.Source.transform.position : info.Point;
+            Vector3 d = from - transform.position;
+            d.y = 0f;
+            if (d.sqrMagnitude < 0.01f) return; // no direction (bleeding out, a fall)
+            _hitFrom  = from;
+            _hitTimer = HitShowSeconds;
+        }
 
         private static void EnsureMaterials()
         {
-            if (_skin != null) return;
-            _skin   = Lit(new Color(0.78f, 0.58f, 0.45f));
-            _sleeve = Lit(new Color(0.33f, 0.36f, 0.24f));
+            if (_glove != null) return;
+            _glove  = Lit(new Color(0.24f, 0.17f, 0.11f));
+            _cuff   = Lit(new Color(0.14f, 0.1f, 0.07f));
+            _sleeve = Lit(new Color(0.25f, 0.28f, 0.18f));
         }
 
         private static Material Lit(Color c)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            var m = new Material(shader != null ? shader : Shader.Find("Standard"));
-            m.color = c;
+            var m = Placeholder.Lit(c);
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.2f);
             return m;
         }
 
-        // A small dot in the middle of the screen, so you know where a swing goes.
+        private static Texture2D _wedge;
+        private float _fps, _fpsTimer;
+        private int   _fpsFrames;
+
+        private void Update()
+        {
+            if (_hitTimer > 0f) _hitTimer -= Time.unscaledDeltaTime;
+            _fpsFrames++;
+            _fpsTimer += Time.unscaledDeltaTime;
+            if (_fpsTimer >= 0.5f) { _fps = _fpsFrames / _fpsTimer; _fpsFrames = 0; _fpsTimer = 0f; }
+        }
+
         private void OnGUI()
         {
-            if (!IsFirstPerson || (_controller != null && _controller.InputBlocked)) return;
+            DrawFrameRate();
+            if (_controller != null && _controller.InputBlocked) return;
+            DrawHitDirection();
+            if (!IsFirstPerson) return;
+            DrawDot();
+        }
+
+        // Development builds and the Editor: frames per second, top right, to spot slowdowns in playtests.
+        private void DrawFrameRate()
+        {
+            if (!Application.isEditor && !Debug.isDebugBuild) return;
+            GUI.color = _fps >= 45f ? new Color(0.6f, 1f, 0.6f, 0.8f) : _fps >= 25f ? new Color(1f, 0.9f, 0.4f, 0.9f) : new Color(1f, 0.4f, 0.35f, 0.95f);
+            GUI.Label(new Rect(Screen.width - 70f, Screen.height - 24f, 66f, 20f), $"{Mathf.RoundToInt(_fps)} fps");
+            GUI.color = Color.white;
+        }
+
+        // A red wedge around the middle of the screen, pointing toward whatever just bit you.
+        private void DrawHitDirection()
+        {
+            if (_hitTimer <= 0f || _cam == null) return;
+            Vector3 local = _cam.transform.InverseTransformDirection(_hitFrom - _cam.transform.position);
+            float angle = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg; // 0 = ahead, 90 = right, 180 = behind
+            if (_wedge == null) _wedge = MakeWedge();
+
+            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            float radius = Mathf.Min(Screen.width, Screen.height) * 0.22f;
+            var rect = new Rect(centre.x - 60f, centre.y - radius - 22f, 120f, 30f);
+            var saved = GUI.matrix;
+            GUIUtility.RotateAroundPivot(angle, centre);
+            GUI.color = new Color(1f, 0.15f, 0.1f, Mathf.Clamp01(_hitTimer / HitShowSeconds) * 0.9f);
+            GUI.DrawTexture(rect, _wedge);
+            GUI.color = Color.white;
+            GUI.matrix = saved;
+        }
+
+        // A curved band, thickest in the middle, fading at the ends.
+        private static Texture2D MakeWedge()
+        {
+            const int w = 64, h = 16;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int x = 0; x < w; x++)
+            for (int y = 0; y < h; y++)
+            {
+                float u = x / (w - 1f) * 2f - 1f;                // -1..1 across
+                float arc = (1f - u * u) * 0.5f;                  // band bows outward in the middle
+                float v = y / (h - 1f);                           // 0 bottom .. 1 top
+                float thick = 0.45f * (1f - Mathf.Abs(u));        // thinner toward the ends
+                float centreLine = 0.3f + arc;
+                float a = Mathf.Clamp01(1f - Mathf.Abs(v - centreLine) / Mathf.Max(0.05f, thick));
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a * (1f - Mathf.Abs(u) * 0.6f)));
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        // A small dot in the middle of the screen, so you know where a swing goes.
+        private void DrawDot()
+        {
             float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
             GUI.color = new Color(0f, 0f, 0f, 0.5f);
             GUI.DrawTexture(new Rect(cx - 3f, cy - 3f, 6f, 6f), Texture2D.whiteTexture);

@@ -188,7 +188,7 @@ namespace ProjectFossil.Player
 
         private static GameObject Shape(Transform parent, PrimitiveType type, Material mat, Vector3 pos, Vector3 scale)
         {
-            var go = GameObject.CreatePrimitive(type);
+            var go = Placeholder.Primitive(type);
             Destroy(go.GetComponent<Collider>());
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
@@ -208,9 +208,7 @@ namespace ProjectFossil.Player
 
         private static Material Lit(Color c)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            var m = new Material(shader != null ? shader : Shader.Find("Standard"));
-            m.color = c;
+            var m = Placeholder.Lit(c);
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.15f);
             return m;
         }

@@ -120,7 +120,7 @@ namespace ProjectFossil.Generation
         private static void AddWater(Transform parent, IslandData data)
         {
             var s = data.Settings;
-            var water = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10 x 10 units
+            var water = Placeholder.Primitive(PrimitiveType.Plane); // 10 x 10 units
             water.name = "Sea";
             Object.DestroyImmediate(water.GetComponent<Collider>()); // immediate: the NavMesh bakes this frame
             water.transform.SetParent(parent, false);
@@ -412,7 +412,7 @@ namespace ProjectFossil.Generation
         private static GameObject Part(GameObject parent, PrimitiveType type, Material mat, Vector3 pos, Vector3 scale,
                                        bool keepCollider = false)
         {
-            var go = GameObject.CreatePrimitive(type);
+            var go = Placeholder.Primitive(type);
             if (!keepCollider) Object.DestroyImmediate(go.GetComponent<Collider>());
             go.transform.SetParent(parent.transform, false);
             go.transform.localPosition = pos;
@@ -425,7 +425,7 @@ namespace ProjectFossil.Generation
 
         private static Material NewLit(Color color, float smoothness)
         {
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Lit")) { enableInstancing = true };
+            var mat = new Material(Placeholder.LitBase) { enableInstancing = true };
             mat.SetColor("_BaseColor", color);
             mat.SetFloat("_Smoothness", smoothness);
             return mat;

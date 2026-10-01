@@ -91,6 +91,7 @@ namespace ProjectFossil.Net
             if (IsOwner) FollowLocalPlayer();
             else TickRevive();
             if (_visual != null) _visual.SetRemotePose(_low.Value || _down.Value, !_alive.Value);
+            if (!IsOwner) UpdateBeam();
             if (!IsOwner && _body != null && _body.enabled != _alive.Value) _body.enabled = _alive.Value;
         }
 
@@ -274,6 +275,35 @@ namespace ProjectFossil.Net
             if (match != null) match.CreditKill(NetDinosaur.FindSpecies(speciesName));
         }
 
+        // ── Down beacon ────────────────────────────────────────────────────────
+
+        // A tall red light over a downed teammate, so the team can find them through the trees.
+        private GameObject _beam;
+
+        private void UpdateBeam()
+        {
+            bool show = _alive.Value && _down.Value;
+            if (show && _beam == null)
+            {
+                _beam = Placeholder.Primitive(PrimitiveType.Cylinder);
+                _beam.name = "DownBeam";
+                Destroy(_beam.GetComponent<Collider>());
+                _beam.transform.SetParent(transform, false);
+                _beam.transform.localPosition = new Vector3(0f, 25f, 0f);
+                _beam.transform.localScale    = new Vector3(0.35f, 25f, 0.35f);
+                var r = _beam.GetComponent<Renderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                var glow = Resources.Load<Material>("Shaders/PlainLitGlow");
+                var m = new Material(glow != null ? glow : Placeholder.LitBase) { color = new Color(1f, 0.15f, 0.1f) };
+                m.EnableKeyword("_EMISSION");
+                if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", new Color(2.5f, 0.3f, 0.2f));
+                r.sharedMaterial = m;
+            }
+            if (_beam != null && _beam.activeSelf != show) _beam.SetActive(show);
+            if (show) _beam.transform.localScale = new Vector3(0.35f + 0.1f * Mathf.Sin(Time.time * 6f), 25f, 0.35f + 0.1f * Mathf.Sin(Time.time * 6f));
+        }
+
         // ── Name tag ───────────────────────────────────────────────────────────
 
         private void OnGUI()
@@ -296,12 +326,24 @@ namespace ProjectFossil.Net
             bool down = _alive.Value && _down.Value;
             _tag.normal.textColor = !_alive.Value ? new Color(0.7f, 0.7f, 0.7f)
                                   : down ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 1f, 0.6f);
-            string text = !_alive.Value ? $"{Label} is gone"
-                        : down ? $"{Label} DOWN  {Mathf.RoundToInt(metres)} m  (E to help)"
+            if (!_alive.Value) return; // gone: the team message already said so
+            string text = down ? $"{Label} DOWN  {Mathf.RoundToInt(metres)} m  (E to help)"
                                : $"{Label}  {Mathf.RoundToInt(metres)} m";
-            if (!onScreen && _alive.Value) text = "◆ " + text;
+            if (!onScreen && _alive.Value)
+            {
+                // Off screen: an arrow on the edge toward them.
+                float gx = p.x, gy = Screen.height - p.y;
+                if (gx < 60f) text = "◀ " + text;
+                else if (gx > Screen.width - 60f) text = text + " ▶";
+                else if (gy < 60f) text = "▲ " + text;
+                else text = "▼ " + text;
+            }
 
-            var rect = new Rect(p.x - 90f, Screen.height - p.y - 12f, 180f, 24f);
+            // Kept whole on screen, even pinned to an edge.
+            const float w = 300f;
+            float x = Mathf.Clamp(p.x - w * 0.5f, 4f, Screen.width - w - 4f);
+            float y = Mathf.Clamp(Screen.height - p.y - 12f, 30f, Screen.height - 40f);
+            var rect = new Rect(x, y, w, 24f);
             var shadow = rect; shadow.x += 1f; shadow.y += 1f;
             var c = _tag.normal.textColor;
             _tag.normal.textColor = new Color(0f, 0f, 0f, 0.7f);
@@ -312,7 +354,7 @@ namespace ProjectFossil.Net
             // A small health bar under the name, and the revive progress while I'm getting them up.
             if (_alive.Value && onScreen)
             {
-                var bar = new Rect(p.x - 30f, rect.yMax, 60f, 4f);
+                var bar = new Rect(rect.center.x - 30f, rect.yMax, 60f, 4f);
                 GUI.color = new Color(0f, 0f, 0f, 0.6f);
                 GUI.DrawTexture(bar, Texture2D.whiteTexture);
                 GUI.color = down ? new Color(1f, 0.35f, 0.3f) : new Color(0.45f, 0.95f, 0.5f);

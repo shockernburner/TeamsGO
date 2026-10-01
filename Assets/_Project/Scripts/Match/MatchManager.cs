@@ -66,7 +66,7 @@ namespace ProjectFossil.Match
         // This player finished boarding: the helicopter at this pad leaves, with any teammates under it.
         public event Action<Vector3> LiftedOff;
 
-        public const float BleedOutSeconds = 45f;
+        public const float BleedOutSeconds = 60f;
         public float BleedOutLeft { get; private set; }
         private bool _leftWithTeam;
 
@@ -198,7 +198,7 @@ namespace ProjectFossil.Match
         {
             if (table == null) return;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var go = Placeholder.Primitive(PrimitiveType.Cube);
             go.name = label;
             go.transform.SetParent(parent, false);
             go.transform.position   = pos + Vector3.up * (size * 0.5f);
@@ -215,7 +215,7 @@ namespace ProjectFossil.Match
             }
 
             // Thin marker pole so caches can be spotted from a distance; hidden once the cache is emptied.
-            var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var pole = Placeholder.Primitive(PrimitiveType.Cylinder);
             pole.name = LootContainer.BeaconName;
             Destroy(pole.GetComponent<Collider>());
             pole.transform.SetParent(go.transform, false);
