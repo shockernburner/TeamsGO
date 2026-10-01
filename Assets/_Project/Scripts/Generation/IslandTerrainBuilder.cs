@@ -23,6 +23,9 @@ namespace ProjectFossil.Generation
 
             var go      = Terrain.CreateTerrainGameObject(td);
             go.name     = $"Island_{data.Seed}";
+            // A build has no editor default terrain material (the ground renders magenta), so ship our own.
+            var terrainMat = Resources.Load<Material>(TerrainMaterialPath);
+            if (terrainMat != null) go.GetComponent<Terrain>().materialTemplate = terrainMat;
             if (parent != null) go.transform.SetParent(parent, false);
 
             if (decorate) IslandDecorator.Decorate(go, data);
@@ -30,6 +33,9 @@ namespace ProjectFossil.Generation
 
             return go;
         }
+
+        // Resources/Shaders also holds a material per runtime-only shader (rotor dust) so builds keep them.
+        private const string TerrainMaterialPath = "Shaders/IslandTerrain";
 
         private static void AddPoiMarkers(IslandData data, Transform parent)
         {
