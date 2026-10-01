@@ -329,3 +329,4 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - The danger wash and damage bars painted the screen red, which ruins footage. Danger is now darkness at the edges. A hit flushes the edges dark red, stronger on the side it came from.
 - The helicopter is matte olive with blurred rotor discs, and its blades only ghost through. The rotor loop is a deep 9 Hz "whop" with breathing wash instead of high, fast slaps.
 - The roadmap to jaw-dropping is in `/mnt/project-files/plans/jaw-dropping-plan.md`: recorded sound, a realistic player and helicopter, sky and fog, smarter packs, co-op voice, then trailer capture. Shadow distance (50 → 120 m) and Unity Recorder wait on Firdous's OK.
+- Approved by Firdous (2026-10-01): the PC pipeline's shadow distance went from 50 m to 120 m, so the far forest keeps its depth. Unity Recorder (`com.unity.recorder` 5.1.1) was added for 4K ad capture, under Window > General > Recorder.
