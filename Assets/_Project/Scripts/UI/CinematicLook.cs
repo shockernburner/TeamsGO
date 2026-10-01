@@ -22,7 +22,7 @@ namespace ProjectFossil.UI
         [Header("Danger (at full)")]
         public float dangerSaturation = -15f;
         public float dangerVignette   = 0.34f;
-        public Color dangerTint       = new Color(0.22f, 0.01f, 0.01f);
+        public Color dangerTint       = new Color(0.1f, 0.01f, 0.01f); // reads as closing darkness on camera, not red paint
 
         private MatchBootstrap   _bootstrap;
         private Volume           _volume;
@@ -76,7 +76,14 @@ namespace ProjectFossil.UI
             {
                 _camera = cam;
                 var data = cam.GetUniversalAdditionalCameraData();
-                if (data != null) data.renderPostProcessing = true;
+                if (data != null)
+                {
+                    data.renderPostProcessing = true;
+                    // MSAA is off in the pipeline asset, so leaves and branches shimmered with jagged edges.
+                    // SMAA smooths them for a small cost and without the smear of temporal AA on swaying foliage.
+                    data.antialiasing        = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+                    data.antialiasingQuality = AntialiasingQuality.High;
+                }
             }
 
             if (_bootstrap == null) _bootstrap = FindFirstObjectByType<MatchBootstrap>();

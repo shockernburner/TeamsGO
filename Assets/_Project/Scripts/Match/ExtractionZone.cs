@@ -129,6 +129,9 @@ namespace ProjectFossil.Match
             float spin = _landed || _leaving ? 1100f : 1300f;
             if (_rotor != null)     _rotor.Rotate(Vector3.up, spin * Time.deltaTime, Space.Self);
             if (_tailRotor != null) _tailRotor.Rotate(Vector3.right, spin * 1.6f * Time.deltaTime, Space.Self);
+            // Blades only show as a ghost flicker inside the blur.
+            bool ghost = Mathf.Repeat(_time * 7f, 1f) < 0.25f;
+            foreach (var b in _blades) if (b != null) b.enabled = ghost;
 
             // Navigation lights blink; the white strobe flashes twice a second.
             SetGlow(_navRed,   new Color(1f, 0.1f, 0.05f), Mathf.Repeat(_time, 1.2f) < 0.6f ? 6f : 0.3f);
@@ -219,11 +222,12 @@ namespace ProjectFossil.Match
             _heli.localPosition = new Vector3(ApproachX, SkyHeight, 0f);
             _heli.localRotation = Quaternion.Euler(0f, 90f, 0f);
 
-            var body   = new Color(0.86f, 0.5f, 0.1f);  // rescue orange
-            var stripe = new Color(0.92f, 0.92f, 0.9f);
-            var dark   = new Color(0.1f, 0.1f, 0.11f);
-            var metal  = new Color(0.35f, 0.36f, 0.38f);
-            var glass  = new Color(0.2f, 0.32f, 0.4f);
+            // Matte military olive with a darker band: bright rescue orange read as a toy against the real forest.
+            var body   = new Color(0.22f, 0.25f, 0.19f);
+            var stripe = new Color(0.15f, 0.17f, 0.13f);
+            var dark   = new Color(0.07f, 0.07f, 0.08f);
+            var metal  = new Color(0.26f, 0.27f, 0.28f);
+            var glass  = new Color(0.06f, 0.08f, 0.1f);
 
             // Cabin and nose.
             Part(PrimitiveType.Capsule,  _heli, new Vector3(0f, 1.9f, 0.2f),  new Vector3(90f, 0f, 0f), new Vector3(2.5f, 2.3f, 2.3f), body);
@@ -255,14 +259,17 @@ namespace ProjectFossil.Match
             _rotor.SetParent(_heli, false);
             _rotor.localPosition = new Vector3(0f, 3.8f, -0.2f);
             Part(PrimitiveType.Cylinder, _rotor, Vector3.zero, Vector3.zero, new Vector3(0.45f, 0.1f, 0.45f), metal);
-            Part(PrimitiveType.Cube, _rotor, Vector3.zero, new Vector3(0f, 0f, 0f),  new Vector3(11f, 0.04f, 0.32f), dark);
-            Part(PrimitiveType.Cube, _rotor, Vector3.zero, new Vector3(0f, 90f, 0f), new Vector3(11f, 0.04f, 0.32f), dark);
+            _blades.Add(Part(PrimitiveType.Cube, _rotor, Vector3.zero, new Vector3(0f, 0f, 0f),  new Vector3(11f, 0.04f, 0.32f), dark));
+            _blades.Add(Part(PrimitiveType.Cube, _rotor, Vector3.zero, new Vector3(0f, 90f, 0f), new Vector3(11f, 0.04f, 0.32f), dark));
+            // At full speed a camera sees a rotor as a faint blurred disc, not four sticks stepping round.
+            _discs.Add(Disc(_heli, new Vector3(0f, 3.8f, -0.2f), Vector3.zero, 11f, 0.22f));
 
             _tailRotor = new GameObject("TailRotor").transform;
             _tailRotor.SetParent(_heli, false);
             _tailRotor.localPosition = new Vector3(0.22f, 2.9f, -6.6f);
-            Part(PrimitiveType.Cube, _tailRotor, Vector3.zero, Vector3.zero,              new Vector3(0.04f, 1.9f, 0.18f), dark);
-            Part(PrimitiveType.Cube, _tailRotor, Vector3.zero, new Vector3(90f, 0f, 0f), new Vector3(0.04f, 1.9f, 0.18f), dark);
+            _blades.Add(Part(PrimitiveType.Cube, _tailRotor, Vector3.zero, Vector3.zero,              new Vector3(0.04f, 1.9f, 0.18f), dark));
+            _blades.Add(Part(PrimitiveType.Cube, _tailRotor, Vector3.zero, new Vector3(90f, 0f, 0f), new Vector3(0.04f, 1.9f, 0.18f), dark));
+            _discs.Add(Disc(_heli, new Vector3(0.22f, 2.9f, -6.6f), new Vector3(0f, 0f, 90f), 1.9f, 0.18f));
 
             // Lights: red port, green starboard, a white strobe on the tail.
             _navRed   = Glow(_heli, new Vector3(-1.1f, 1.3f, 1.6f),  0.18f);
@@ -305,6 +312,27 @@ namespace ProjectFossil.Match
 
             _dust = MakeDust(transform);
             _heli.gameObject.SetActive(false);
+        }
+
+        private readonly System.Collections.Generic.List<Renderer> _blades = new System.Collections.Generic.List<Renderer>();
+        private readonly System.Collections.Generic.List<Renderer> _discs  = new System.Collections.Generic.List<Renderer>();
+
+        // A thin see-through disc where a spinning rotor sweeps.
+        private static Renderer Disc(Transform parent, Vector3 pos, Vector3 euler, float diameter, float alpha)
+        {
+            var r = Part(PrimitiveType.Cylinder, parent, pos, euler, new Vector3(diameter, 0.004f, diameter), Color.black);
+            var clear = Resources.Load<Material>("Shaders/PlainLitClear");
+            if (clear != null)
+            {
+                var m = new Material(clear);
+                var c = new Color(0.08f, 0.08f, 0.08f, alpha);
+                m.color = c;
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+                r.sharedMaterial = m;
+            }
+            else r.enabled = false; // no see-through material: plain blades only
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return r;
         }
 
         private static Renderer Glow(Transform parent, Vector3 pos, float size)

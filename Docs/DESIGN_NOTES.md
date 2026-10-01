@@ -320,3 +320,12 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - Raindrops passing by the lens drew as thick white bars. Their on-screen width is now capped.
 - Dinosaurs sometimes disappeared. Two culling causes: skinned-mesh bounds that don't follow a lunge, and detail-level groups dropping the model too early. The bounds are padded, and the last detail level now stays until the body is a speck.
 - Attacks, for reference: a swing checks a sphere around the body (weapon range + 0.4 m: 2 m for bare hands, 3 m for the spear). It takes the damageable thing that is most straight ahead, with being in front counting more than being a few centimetres closer. Third person accepts up to 120° either side and turns you to face the hit. First person only accepts about 72° either side of where you look.
+
+## Toward ad-quality footage (2026-10-01, 5:51 and 5:55 PM playtests)
+
+- Bushes still tipped above the ground. Our wind turned each plant and tree as a rigid whole, on top of the forest pack's own shader wind. Bought foliage now sways only in its shader, driven by the pack's wind zone. Our rigid sway is kept for the free models, which have no shader wind.
+- MSAA is off in the pipeline asset, so leaves shimmered. The match camera now uses SMAA High.
+- Rain was a wall of white sticks. Drops are thinner and fainter, and there are fewer of them.
+- The danger wash and damage bars painted the screen red, which ruins footage. Danger is now darkness at the edges. A hit flushes the edges dark red, stronger on the side it came from.
+- The helicopter is matte olive with blurred rotor discs, and its blades only ghost through. The rotor loop is a deep 9 Hz "whop" with breathing wash instead of high, fast slaps.
+- The roadmap to jaw-dropping is in `/mnt/project-files/plans/jaw-dropping-plan.md`: recorded sound, a realistic player and helicopter, sky and fog, smarter packs, co-op voice, then trailer capture. Shadow distance (50 → 120 m) and Unity Recorder wait on Firdous's OK.

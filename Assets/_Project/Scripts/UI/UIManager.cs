@@ -419,19 +419,23 @@ namespace ProjectFossil.UI
             GUI.color = old;
         }
 
-        // Red edges when hurt; the side the hit came from glows stronger.
+        // Hurt: the screen's edges flush dark red for a moment, a little stronger on the side the hit came from.
+        // Soft, like blood in the eyes, not painted bars; the red wedge already points at the attacker.
         private void DrawDamageFlash()
         {
             if (_damageFlash <= 0f) return;
             var old = GUI.color;
-            float a = 0.35f * _damageFlash;
-            float edge = Screen.width * 0.08f;
-            GUI.color = new Color(0.8f, 0f, 0f, a * 0.15f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = new Color(0.9f, 0f, 0f, a * (_damageSide < 0f ? 1.6f : 0.8f));
-            GUI.DrawTexture(new Rect(0, 0, edge, Screen.height), Texture2D.whiteTexture);
-            GUI.color = new Color(0.9f, 0f, 0f, a * (_damageSide > 0f ? 1.6f : 0.8f));
-            GUI.DrawTexture(new Rect(Screen.width - edge, 0, edge, Screen.height), Texture2D.whiteTexture);
+            float a = 0.5f * _damageFlash;
+            var tex = VignetteTexture();
+            GUI.color = new Color(0.55f, 0f, 0f, a);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), tex, ScaleMode.StretchToFill);
+            if (_damageSide != 0f)
+            {
+                float w = Screen.width * 0.6f;
+                float x = _damageSide < 0f ? -w * 0.5f : Screen.width - w * 0.5f;
+                GUI.color = new Color(0.55f, 0f, 0f, a * 0.6f);
+                GUI.DrawTexture(new Rect(x, 0, w, Screen.height), tex, ScaleMode.StretchToFill);
+            }
             GUI.color = old;
         }
 
@@ -489,7 +493,7 @@ namespace ProjectFossil.UI
             if (_danger <= 0.02f) return;
             float pulse = _danger > 0.6f ? 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * Mathf.Lerp(7f, 15f, _danger)) : 1f;
             var old = GUI.color;
-            GUI.color = new Color(0.35f, 0f, 0f, Mathf.Clamp01(_danger * 0.28f * pulse));
+            GUI.color = new Color(0.2f, 0f, 0f, Mathf.Clamp01(_danger * 0.2f * pulse)); // darkness at the edges, not a red wash
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), VignetteTexture(), ScaleMode.StretchToFill);
             GUI.color = old;
         }
