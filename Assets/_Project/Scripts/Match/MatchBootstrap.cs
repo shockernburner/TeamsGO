@@ -174,7 +174,11 @@ namespace ProjectFossil.Match
             EnsureComponent<PlayerCombat>(player);
             EnsureComponent<PlayerInteractor>(player);
             EnsureComponent<PlayerMenuInput>(player);
-            PlayerVisual.Attach(player, BoughtArt.Survivor(playerSlot, content != null ? content.playerModel : null));
+            var look = BoughtArt.Survivor(playerSlot, content != null ? content.playerModel : null);
+            PlayerVisual.Attach(player, look);
+            var art = BoughtArt.Current;
+            Debug.Log($"[MatchBootstrap] Player look: {(look != null && look.model != null ? look.model.name : "capsule")}; " +
+                      $"bought art: {(art == null ? "none (run Project Fossil > Art > Set Up Bought Packs)" : $"{art.survivors?.Length ?? 0} survivors, helicopter {(art.helicopter != null ? art.helicopter.name : "none")}")}");
             return player;
         }
 

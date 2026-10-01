@@ -67,6 +67,8 @@ namespace ProjectFossil.Dinosaurs
         private float        _scentCheck;
         private float        _scentTime = float.NegativeInfinity; // time stamp of the last mark it followed
         private float        _castTimer;     // > 0 while it stands where the trail went cold, sniffing around
+        private float        _stuckTimer;    // how long a chase has made no headway
+        private float        _detourTimer;   // > 0 while it goes around something to get at its target
 
         private static readonly Dictionary<Transform, List<DinosaurAI>> Attackers =
             new Dictionary<Transform, List<DinosaurAI>>();
@@ -277,10 +279,14 @@ namespace ProjectFossil.Dinosaurs
             }
         }
 
+        private Collider _body; // the visual swaps the placeholder capsule for a box around the model
+
         private Collider BodyCollider()
         {
+            if (_body != null && _body.enabled) return _body;
+            _body = null;
             foreach (var c in GetComponents<Collider>())
-                if (c.enabled && !c.isTrigger) return c;
+                if (c.enabled && !c.isTrigger) return _body = c;
             return null;
         }
 
@@ -470,6 +476,8 @@ namespace ProjectFossil.Dinosaurs
             _castTimer = 0f;
             _scentTime = float.NegativeInfinity;
             _agent.speed = species.runSpeed;
+            _stuckTimer  = 0f;
+            _detourTimer = 0f;
         }
 
         private void UpdateChase()
@@ -477,6 +485,10 @@ namespace ProjectFossil.Dinosaurs
             if (!IsValidTarget(_target)) { _target = null; EnterWander(); return; }
 
             float dist = Vector3.Distance(transform.position, _target.position);
+            // Reach is measured from the body you see: a big animal bites from its snout, not from its middle,
+            // so it can't end up standing over someone.
+            float gap   = GapTo(_target.position);
+            float reach = BiteReach;
 
             // Give up if target is too far (hunters sent by the director never give up)
             if (!_hunting && dist > GiveUpRange)
@@ -504,7 +516,7 @@ namespace ProjectFossil.Dinosaurs
                 if (_windupTimer <= 0f)
                 {
                     _attackTimer = species.attackCooldown;
-                    if (dist <= species.attackRange * 1.25f)
+                    if (gap <= reach * 1.25f + 0.5f)
                     {
                         var victim = _target.GetComponentInParent<IDamageable>();
                         victim?.TakeDamage(new DamageInfo(species.attackDamage * damageMultiplier, gameObject, _target.position));
@@ -515,18 +527,34 @@ namespace ProjectFossil.Dinosaurs
             }
 
             // Only a couple bite at once; the rest circle just out of reach and wait for a gap.
-            if (dist <= species.attackRange + 4f && !HoldAttackSlot(_target))
+            if (gap <= reach + 4f && !HoldAttackSlot(_target))
             {
                 CircleAround(_target.position);
                 return;
             }
 
-            if (dist > species.attackRange)
+            if (gap > reach)
             {
                 _agent.speed = species.runSpeed;
+                if (_detourTimer > 0f)
+                {
+                    // Going around whatever blocked the way; back to the straight chase once there.
+                    _detourTimer -= Time.deltaTime;
+                    if (!_agent.pathPending && _agent.remainingDistance < 1.5f) _detourTimer = 0f;
+                    return;
+                }
                 _agent.SetDestination(_target.position);
+
+                // Stuck: hardly moving although out of reach, or the path ends short of the target (up on a rock,
+                // behind a tree wall). Work round to another side rather than standing there.
+                bool still   = !_agent.pathPending && _agent.velocity.sqrMagnitude < 0.36f;
+                bool cutOff  = !_agent.pathPending && _agent.pathStatus != NavMeshPathStatus.PathComplete &&
+                               _agent.remainingDistance < 2f;
+                _stuckTimer = still || cutOff ? _stuckTimer + Time.deltaTime : 0f;
+                if (_stuckTimer > 1.2f) { _stuckTimer = 0f; Detour(_target.position, dist - gap + reach); }
                 return;
             }
+            _stuckTimer = 0f;
 
             // In range: stop, face the target and telegraph the bite.
             _agent.ResetPath();
@@ -702,12 +730,45 @@ namespace ProjectFossil.Dinosaurs
             _slotTarget = null;
         }
 
+        // How far a bite reaches beyond the body's surface. Species ranges were tuned from the body's centre on
+        // small placeholder bodies, about half of it ahead of the snout.
+        private float BiteReach => species.attackRange * 0.5f;
+
+        // Ground distance from the body's surface to a point (0 when it's under or inside the body).
+        private float GapTo(Vector3 point)
+        {
+            var body = BodyCollider();
+            if (body == null) return Flat(point - transform.position).magnitude;
+            var b = body.bounds;
+            Vector3 level = new Vector3(point.x, b.center.y, point.z);
+            return Flat(level - body.ClosestPoint(level)).magnitude;
+        }
+
+        // Somewhere else around the target, partway round to one side, to come at it from there.
+        private void Detour(Vector3 target, float radius)
+        {
+            _circleSide = -_circleSide;
+            Vector3 from = Flat(transform.position - target);
+            if (from.sqrMagnitude < 0.01f) from = -transform.forward;
+            for (int i = 0; i < 4; i++)
+            {
+                float turn = UnityEngine.Random.Range(50f, 130f) * (i % 2 == 0 ? _circleSide : -_circleSide);
+                Vector3 p = target + Quaternion.Euler(0f, turn, 0f) * from.normalized * (radius + UnityEngine.Random.Range(2f, 6f));
+                if (NavMesh.SamplePosition(p, out var hit, 4f, NavMesh.AllAreas) && _agent.SetDestination(hit.position))
+                {
+                    _detourTimer = 3f;
+                    return;
+                }
+            }
+        }
+
         // Walk around the target just outside biting range, facing it.
         private void CircleAround(Vector3 center)
         {
             Vector3 from = Flat(transform.position - center);
             if (from.sqrMagnitude < 0.01f) from = -transform.forward;
-            float radius = species.attackRange + 3f;
+            // Body length counts: a big animal circles farther out than a small one.
+            float radius = from.magnitude - GapTo(center) + BiteReach + 3f;
             Vector3 next = Quaternion.Euler(0f, 35f * _circleSide, 0f) * from.normalized * radius;
             _agent.speed = species.walkSpeed;
             if (NavMesh.SamplePosition(center + next, out var hit, 3f, NavMesh.AllAreas))
@@ -733,7 +794,7 @@ namespace ProjectFossil.Dinosaurs
         {
             _agent.speed             = species.walkSpeed;
             _agent.angularSpeed      = species.turnSpeed;
-            _agent.stoppingDistance  = species.attackRange * 0.9f;
+            _agent.stoppingDistance  = 0.5f; // the chase stops itself once the snout is in reach
             _agent.acceleration      = 10f;
         }
 

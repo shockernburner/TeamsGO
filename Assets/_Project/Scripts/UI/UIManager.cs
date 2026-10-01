@@ -49,6 +49,7 @@ namespace ProjectFossil.UI
         private float _danger;
         // After a successful extraction the victory banner holds the screen while the helicopter climbs away.
         public float victorySeconds = 5.5f;
+        public float deathFadeSeconds = 2.5f;
         private float _endedAt = float.NegativeInfinity;
 
         // Auto-create alongside any MatchBootstrap so no scene edits are needed.
@@ -224,14 +225,16 @@ namespace ProjectFossil.UI
                 DrawPrompt();
                 if (_shopOpen) DrawShop();
             }
-            else if (_match.Stats != null && _match.Stats.Result == MatchResult.Extracted &&
-                     Time.unscaledTime - _endedAt < victorySeconds)
-            {
-                DrawVictory(Time.unscaledTime - _endedAt);
-            }
             else
             {
-                DrawResults(_match.Stats);
+                // The end plays out like a film: the edges close in, the picture fades to black, then the results
+                // and the menu come up on the black. Escaping gets a moment with the banner first.
+                float since = Time.unscaledTime - _endedAt;
+                bool won = _match.Stats != null && _match.Stats.Result == MatchResult.Extracted;
+                float end = won ? victorySeconds : deathFadeSeconds;
+                DrawEndFade(Mathf.Clamp01(since / end), Mathf.Clamp01((since - (end - 1.5f)) / 1.5f));
+                if (since < end) { if (won) DrawVictory(since); }
+                else DrawResults(_match.Stats);
             }
 
             DrawMessages();
@@ -544,6 +547,24 @@ namespace ProjectFossil.UI
                           hidden ? "It's sniffing around. STAY LOW. DON'T MOVE." : "SOMETHING HAS YOUR SCENT", _alert);
                 _alert.normal.textColor = old;
             }
+        }
+
+        // Closing vignette, then black over everything.
+        private void DrawEndFade(float vignette, float black)
+        {
+            var old = GUI.color;
+            var full = new Rect(0, 0, Screen.width, Screen.height);
+            if (vignette > 0f)
+            {
+                GUI.color = new Color(0f, 0f, 0f, vignette);
+                GUI.DrawTexture(full, VignetteTexture());
+            }
+            if (black > 0f)
+            {
+                GUI.color = new Color(0f, 0f, 0f, black);
+                GUI.DrawTexture(full, Texture2D.whiteTexture);
+            }
+            GUI.color = old;
         }
 
         // "YOU MADE IT OUT": the moment the helicopter lifts away with you on the ladder.

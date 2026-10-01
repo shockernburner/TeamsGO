@@ -19,6 +19,27 @@ namespace ProjectFossil.Editor
     // Everything it writes goes to Assets/_Project/Art/Bought (git-ignored), ending in Resources/BoughtArt.asset,
     // which the game reads at runtime. Machines without the packs keep the free models.
     // A report of what it found (animation names, shaders) goes to Logs/BoughtArtReport.txt.
+    // Runs the setup by itself when a pack is imported that the game isn't using yet (once per Editor session),
+    // so a newly added pack shows up without remembering the menu.
+    [InitializeOnLoad]
+    internal static class BoughtPackAutoSetup
+    {
+        private const string Done = "ProjectFossil.BoughtPackAutoSetup";
+
+        static BoughtPackAutoSetup()
+        {
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorApplication.isPlayingOrWillChangePlaymode || SessionState.GetBool(Done, false)) return;
+                SessionState.SetBool(Done, true);
+                string why = BoughtPackSetup.NewPacks();
+                if (why == null) return;
+                Debug.Log($"[BoughtPackSetup] {why}: setting up the bought packs now.");
+                BoughtPackSetup.Run();
+            };
+        }
+    }
+
     public static class BoughtPackSetup
     {
         private const string Out       = "Assets/_Project/Art/Bought";
@@ -101,6 +122,20 @@ namespace ProjectFossil.Editor
                 File.WriteAllText(Report, Log.ToString());
             }
             Debug.Log($"[BoughtPackSetup] Done. Press Play to see the bought art. Report: {Path.GetFullPath(Report)}");
+        }
+
+        // Which imported packs the game doesn't use yet, or null when it's up to date.
+        internal static string NewPacks()
+        {
+            var art = AssetDatabase.LoadAssetAtPath<BoughtArt>(ArtAsset);
+            var found = new List<string>();
+            if (FindDir("Survivalist") != null && (art == null || art.survivors == null || art.survivors.Length == 0 || art.survivors[0] == null))
+                found.Add("survivor pack");
+            if (FindDir("OH-1_Basic") != null && (art == null || art.helicopter == null))
+                found.Add("helicopter pack");
+            if ((FindDir("Creatures/VOLI") != null || FindDir("Forest Environment Dynamic Nature") != null) && art == null)
+                found.Add("dinosaur or forest pack");
+            return found.Count == 0 ? null : "New " + string.Join(" and ", found);
         }
 
         // ── Materials ──────────────────────────────────────────────────────────
