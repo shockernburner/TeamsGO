@@ -16,6 +16,7 @@ namespace ProjectFossil.Player
         private static readonly int ArmedId    = Animator.StringToHash("Armed");
         private static readonly int HitId      = Animator.StringToHash("Hit");
         private static readonly int DeadId     = Animator.StringToHash("Dead");
+        private static readonly int SwimId     = Animator.StringToHash("Swim");
 
         public const string UnarmedName = "Bare hands";
 
@@ -27,6 +28,9 @@ namespace ProjectFossil.Player
         private Transform        _pivot;      // turns the model toward where it is moving
         private float            _yaw;        // current turn of the pivot, degrees
         private float            _faceForwardTimer;
+        private Transform        _model;
+        private int              _facingChecks;  // frames until the animated body's facing is checked
+        private bool             _hasSwim;
 
         // Weapon in the right hand. The grip is worked out from the finger bones once, in the rest pose,
         // so it works whatever way the rig's hand bone happens to point.
@@ -42,6 +46,28 @@ namespace ProjectFossil.Player
         // First person: the body still casts its shadow (and is there for teammates), but this player's own
         // camera, inside the head, doesn't draw it.
         private bool _shadowOnly;
+
+        // The survivor model's own materials whose names suggest skin and shirt, so the first-person arms can wear
+        // the same look. Either may be null (the placeholder body, or a model with unhelpful material names).
+        public (Material skin, Material shirt) OutfitMaterials()
+        {
+            Material skin = null, shirt = null;
+            if (_model == null) return (null, null);
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var r in _model.GetComponentsInChildren<Renderer>(true))
+            foreach (var m in r.sharedMaterials)
+            {
+                if (m == null) continue;
+                names.Add(m.name);
+                string n = m.name.ToLowerInvariant();
+                if (skin == null && (n.Contains("skin") || n.Contains("hand") || n.Contains("body"))) skin = m;
+                else if (shirt == null && (n.Contains("shirt") || n.Contains("jacket") || n.Contains("top") ||
+                                           n.Contains("cloth") || n.Contains("outfit") || n.Contains("sleeve"))) shirt = m;
+            }
+            Debug.Log($"[PlayerVisual] First-person arms: skin {(skin != null ? skin.name : "none")}, " +
+                      $"shirt {(shirt != null ? shirt.name : "none")} (model materials: {string.Join(", ", names)}).");
+            return (skin, shirt);
+        }
 
         public void SetShadowOnly(bool on)
         {
@@ -91,6 +117,7 @@ namespace ProjectFossil.Player
             _pivot = new GameObject("Visual").transform;
             _pivot.SetParent(transform, false);
             var model = ModelFit.Spawn(def, _pivot);
+            _model = model.transform;
             ApplyShadowMode();
 
             if (def.animator != null)
@@ -99,6 +126,8 @@ namespace ProjectFossil.Player
                 if (_animator == null) _animator = model.AddComponent<Animator>();
                 _animator.runtimeAnimatorController = def.animator;
                 _animator.applyRootMotion = false;
+                foreach (var p in _animator.parameters) if (p.nameHash == SwimId) _hasSwim = true;
+                _facingChecks = 3;
             }
 
             FindGrip(model.transform);
@@ -236,6 +265,34 @@ namespace ProjectFossil.Player
             _animator.SetFloat(SpeedId, speed, 0.1f, Time.deltaTime);
             if (_controller != null) _animator.SetBool(CrouchId, _controller.Stance != Stance.Standing);
             else if (_remote) _animator.SetBool(CrouchId, _remoteCrouch);
+            if (_hasSwim && _controller != null) _animator.SetBool(SwimId, _controller.IsSwimming);
+        }
+
+        // A humanoid animation turns the body to face its Animator's forward, which isn't always the way the
+        // character pack's prefab faces (the Survivalist ran backwards). After the first animated frames, measure
+        // where the chest points from the shoulders and turn the model so it faces the pivot's forward.
+        private void LateUpdate()
+        {
+            if (_facingChecks <= 0 || _animator == null || !_animator.isHuman || _model == null) return;
+            if (--_facingChecks > 0) return;
+            var l = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var r = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (l == null || r == null) return;
+            Vector3 right = _pivot.InverseTransformDirection(r.position - l.position);
+            right.y = 0f;
+            if (right.sqrMagnitude < 1e-6f) return;
+            Vector3 fwd = Vector3.Cross(right, Vector3.up);
+            float off = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+            if (Mathf.Abs(off) < 30f) return;
+            float turn = Mathf.Round(off / 90f) * 90f;
+            // Turn about the body's centre so it stays over the capsule.
+            Vector3 centre = _pivot.InverseTransformPoint(_animator.GetBoneTransform(HumanBodyBones.Hips) != null
+                ? _animator.GetBoneTransform(HumanBodyBones.Hips).position : _model.position);
+            centre.y = 0f;
+            var q = Quaternion.Euler(0f, -turn, 0f);
+            _model.localPosition = q * (_model.localPosition - centre) + centre;
+            _model.localRotation = q * _model.localRotation;
+            Debug.Log($"[PlayerVisual] {_model.name} faced {off:0} degrees off; turned it {-turn:0}.");
         }
 
         // The body faces the camera direction; the model faces where it is going, so backing up or strafing

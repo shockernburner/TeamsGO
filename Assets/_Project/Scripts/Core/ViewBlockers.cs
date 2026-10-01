@@ -51,6 +51,20 @@ namespace ProjectFossil.Core
             if (radius > 0f) Water.Add((surfaceCenter, radius));
         }
 
+        // The highest water surface over this spot: the sea, or a river or lake it lies in. -Infinity on dry land
+        // away from the sea.
+        public static float SurfaceAt(Vector3 p)
+        {
+            float s = WaterHeight;
+            foreach (var (c, r) in Water)
+            {
+                if (c.y <= s) continue;
+                float dx = c.x - p.x, dz = c.z - p.z;
+                if (dx * dx + dz * dz <= r * r) s = c.y;
+            }
+            return s;
+        }
+
         // Feet in the sea, a river or a lake.
         public static bool InWater(Vector3 feet)
         {

@@ -52,6 +52,9 @@ namespace ProjectFossil.Player
         [Header("Water")]
         [Tooltip("How deep into the sea the player can wade before the seabed stops them")]
         public float maxWadeDepth = 1.1f;
+        [Tooltip("Rivers and lakes deeper than this (feet below the surface) are swum, head above water")]
+        public float swimDepth = 1.3f;
+        public float swimSpeed = 2.2f;
 
         // ── State ─────────────────────────────────────────────────────────────
         public StaminaModel StaminaModel { get; private set; }
@@ -64,6 +67,7 @@ namespace ProjectFossil.Player
         public bool   IsCrouching => Stance == Stance.Crouching;
         public bool   IsProne     => Stance == Stance.Prone;
         public bool   IsGrounded  { get; private set; }
+        public bool   IsSwimming  { get; private set; }
 
         [Tooltip("Noise multiplier while holding still (breathing, shifting weight)")]
         public float stillNoise = 0.4f;
@@ -206,11 +210,8 @@ namespace ProjectFossil.Player
             SetStance(Stance == Stance.Crouching ? Stance.Standing : Stance.Crouching);
         }
 
-        public void OnProne(InputValue v)
-        {
-            if (!v.isPressed || _inputBlocked || IsDown) return;
-            SetStance(Stance == Stance.Prone ? Stance.Standing : Stance.Prone);
-        }
+        // Crawling has no body animation yet, so the Z key does nothing; Prone is only the knocked-down crawl.
+        public void OnProne(InputValue v) { }
 
         // ── Update ────────────────────────────────────────────────────────────
 
@@ -254,17 +255,24 @@ namespace ProjectFossil.Player
 
             // Running needs the toggle, standing, movement and breath. Exhaustion cancels the toggle.
             if (StaminaModel.IsExhausted) RunToggled = false;
-            IsSprinting = RunToggled && Stance == Stance.Standing && IsMoving && StaminaModel.CanRun;
+            UpdateSwimming();
+            IsSprinting = RunToggled && Stance == Stance.Standing && IsMoving && StaminaModel.CanRun && !IsSwimming;
             StaminaModel.Tick(Time.deltaTime, IsSprinting, IsMoving);
 
             // Vertical velocity
             if (IsGrounded && _verticalVelocity < 0f)
                 _verticalVelocity = -2f;
 
-            if (IsGrounded && _jumpPressed && Stance == Stance.Standing && StaminaModel.TrySpend(jumpStaminaCost))
+            if (IsGrounded && _jumpPressed && Stance == Stance.Standing && !IsSwimming && StaminaModel.TrySpend(jumpStaminaCost))
                 _verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
 
-            _verticalVelocity += gravity * Time.deltaTime;
+            if (IsSwimming)
+            {
+                // Float: ease the feet to swimDepth under the surface instead of sinking to the bottom.
+                float target = ViewBlockers.SurfaceAt(transform.position) - swimDepth;
+                _verticalVelocity = Mathf.Clamp((target - transform.position.y) * 4f, -3f, 3f);
+            }
+            else _verticalVelocity += gravity * Time.deltaTime;
             _jumpPressed        = false;
 
             Vector3 before = transform.position;
@@ -281,10 +289,24 @@ namespace ProjectFossil.Player
             _cc.Move(new Vector3(before.x - now.x, 0f, before.z - now.z));
         }
 
+        // Deep river or lake water: swim. A little hysteresis so the edge of a pool doesn't flicker in and out.
+        private void UpdateSwimming()
+        {
+            float depth = ViewBlockers.SurfaceAt(transform.position) - transform.position.y;
+            bool swim = IsSwimming ? depth > swimDepth - 0.25f : depth > swimDepth;
+            if (swim && !IsSwimming)
+            {
+                RunToggled = false;
+                if (Stance != Stance.Standing && !IsDown) SetStance(Stance.Standing);
+            }
+            IsSwimming = swim;
+        }
+
         private Vector3 HorizontalMove()
         {
             float speed;
-            switch (Stance)
+            if (IsSwimming) speed = swimSpeed;
+            else switch (Stance)
             {
                 case Stance.Prone:     speed = IsDown ? downCrawlSpeed : crawlSpeed; break;
                 case Stance.Crouching: speed = crouchSpeed; break;
