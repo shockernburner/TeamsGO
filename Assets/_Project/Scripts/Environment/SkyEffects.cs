@@ -162,6 +162,8 @@ namespace ProjectFossil.Environment
                 r.renderMode    = ParticleSystemRenderMode.Stretch;
                 r.velocityScale = 0.045f;
                 r.lengthScale   = 1f;
+                // Drops passing right by the lens would be fat white bars across the screen; cap their width.
+                r.maxParticleSize = 0.004f;
             }
 
             bool storm = c.Weather == Weather.Storm;

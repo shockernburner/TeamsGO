@@ -245,12 +245,13 @@ namespace ProjectFossil.Generation
             var deadTrk = NewLit(DeadTrunkColor, 0.05f);
             var foliage = new Dictionary<int, Material>();
             var rocks   = new Dictionary<int, Material>();
+            float GroundAt(Vector3 local) => terrain.SampleHeight(parent.TransformPoint(local)) + terrain.transform.position.y;
 
             foreach (var inst in plan)
             {
                 var b = biomes[inst.BiomeIndex];
                 Vector3 pos = inst.WorldPos;
-                pos.y = terrain.SampleHeight(parent.TransformPoint(pos)) + terrain.transform.position.y;
+                pos.y = GroundAt(pos);
 
                 // Bought models first, then the biome's free imported models, then primitives.
                 var bought = BoughtArt.BiomeFor(b.name);
@@ -267,7 +268,7 @@ namespace ProjectFossil.Generation
                 if (prefab != null)
                 {
                     float treeHeight = useBought && BoughtArt.Current != null ? BoughtArt.Current.treeHeight : TreeHeight;
-                    PlaceModel(prefab, root, pos, inst, treeHeight);
+                    PlaceModel(prefab, root, pos, inst, treeHeight, GroundAt);
                     continue;
                 }
 
@@ -310,7 +311,8 @@ namespace ProjectFossil.Generation
         // that fill the screen when you crawl past. No plant gets wider than this at scale 1.
         private const float PlantMaxWidth = 1.8f;
 
-        private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst, float treeHeight)
+        private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst, float treeHeight,
+                                       System.Func<Vector3, float> groundAt)
         {
             var b = ModelFit.PrefabBounds(prefab);
             float s = inst.Kind == ScatterKind.Rock
@@ -325,7 +327,22 @@ namespace ProjectFossil.Generation
             go.transform.localScale    = Vector3.one * s;
             // Sink rocks a little so they sit in the ground rather than on it.
             float sink = inst.Kind == ScatterKind.Rock ? b.size.y * s * 0.2f : 0.05f;
-            go.transform.localPosition = pos + Vector3.up * (-b.min.y * s - sink);
+            // On a slope the ground under the downhill edge is lower than at the centre, so a plant or a tree's
+            // roots float there. Sink to the lowest ground across the base instead.
+            if (inst.Kind != ScatterKind.Rock)
+            {
+                float reach = inst.Kind == ScatterKind.Tree ? Mathf.Min(b.size.x, b.size.z) * s * 0.2f
+                                                            : Mathf.Max(b.size.x, b.size.z) * s * 0.35f;
+                sink += BaseDrop(pos, reach, groundAt) * (inst.Kind == ScatterKind.Tree ? 1f : 0.6f); // leaves bend, a trunk can't
+                if (inst.Kind == ScatterKind.Tree) sink += 0.15f;
+            }
+            // Bought trees and plants are modelled with their pivot at ground level and roots or stems running a
+            // little below it, so they sit right on slopes. Lifting their lowest point to the ground left roots
+            // and ferns hanging in the air: trust such a pivot. Rocks, and models whose pivot is well inside them,
+            // still rest on their lowest point.
+            bool pivotAtGround = inst.Kind != ScatterKind.Rock && b.min.y < 0f && -b.min.y < b.size.y * 0.25f;
+            float lift = pivotAtGround ? 0f : -b.min.y * s;
+            go.transform.localPosition = pos + Vector3.up * (lift - sink);
 
             // Collision (and NavMesh carving) for trunks and rocks only; plants are walk-through.
             if (inst.Kind == ScatterKind.Tree)
@@ -388,6 +405,20 @@ namespace ProjectFossil.Generation
             var lod = go.AddComponent<LODGroup>();
             lod.SetLODs(new[] { new LOD(cullBelow, go.GetComponentsInChildren<Renderer>()) });
             lod.RecalculateBounds();
+        }
+
+        // How far the lowest ground within `reach` of `pos` lies below it (0 on flat ground), capped so a tree on a
+        // cliff edge doesn't vanish into the hill.
+        private static float BaseDrop(Vector3 pos, float reach, System.Func<Vector3, float> groundAt)
+        {
+            if (groundAt == null || reach < 0.05f) return 0f;
+            float low = pos.y;
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * Mathf.PI * 0.25f;
+                low = Mathf.Min(low, groundAt(pos + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * reach));
+            }
+            return Mathf.Min(pos.y - low, 1.5f);
         }
 
         // Moves a model's drawing under a new child at its base and returns that, so the whole model can lean in the

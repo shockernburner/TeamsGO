@@ -42,6 +42,7 @@ namespace ProjectFossil.Dinosaurs
 
             var model = ModelFit.Spawn(def, transform);
             ModelRoot = model.transform;
+            KeepVisible(model);
             FitBodyToModel(model);
 
             if (def.animator != null)
@@ -55,6 +56,32 @@ namespace ProjectFossil.Dinosaurs
 
             _ai.AttackWindupStarted += OnWindup;
             if (_ai.Health != null) _ai.Health.Died += OnDied;
+        }
+
+        // Bought creatures sometimes vanished for a moment. Two causes, both about culling: a skinned mesh is drawn
+        // only while its stored bounds are on screen, and those bounds don't follow a bite or a lunge that swings
+        // the body away from the rest pose; and a detail-level group may drop the model while it's still a few
+        // dozen metres off. Pad the bounds and let the last detail level stay until the body is a speck.
+        private static void KeepVisible(GameObject model)
+        {
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                var lb = smr.localBounds;
+                lb.Expand(lb.size.magnitude * 0.6f);
+                smr.localBounds = lb;
+            }
+            foreach (var group in model.GetComponentsInChildren<LODGroup>())
+            {
+                var levels = group.GetLODs();
+                if (levels.Length == 0) continue;
+                const float speck = 0.004f;
+                if (levels[levels.Length - 1].screenRelativeTransitionHeight <= speck) continue;
+                levels[levels.Length - 1].screenRelativeTransitionHeight = speck;
+                for (int i = levels.Length - 2; i >= 0; i--)
+                    if (levels[i].screenRelativeTransitionHeight <= levels[i + 1].screenRelativeTransitionHeight)
+                        levels[i].screenRelativeTransitionHeight = levels[i + 1].screenRelativeTransitionHeight + 0.001f;
+                group.SetLODs(levels);
+            }
         }
 
         // The placeholder capsule is a person-sized pill; a raptor is long and low. Swap it for a box around the
