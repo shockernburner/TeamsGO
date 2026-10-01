@@ -121,3 +121,11 @@ InitTestScene*.unity*
 /[Aa]ssets/NatureManufacture Assets.meta
 /[Aa]ssets/_Project/Art/Bought/
 /[Aa]ssets/_Project/Art/Bought.meta
+# Free Asset Store packs are under the same EULA (no redistribution), so they stay local too.
+/[Aa]ssets/Survivalist/
+/[Aa]ssets/Survivalist.meta
+/[Aa]ssets/OH-1_Basic/
+/[Aa]ssets/OH-1_Basic.meta
+# Licensed sound effects stay local; the game finds them by name.
+/[Aa]ssets/SoundLibrary/
+/[Aa]ssets/SoundLibrary.meta
