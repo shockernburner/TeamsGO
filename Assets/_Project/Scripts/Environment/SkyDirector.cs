@@ -24,6 +24,11 @@ namespace ProjectFossil.Environment
         private Light      _sun;
         private Material   _sky;
         private float      _sunIntensity, _skyExposure;
+        // Rain, storms and fog: the procedural sky stays blue whatever its tint (that blue is the scattering
+        // itself), so the camera draws a flat overcast colour instead, matched to the fog so the horizon melts away.
+        private bool       _overcast;
+        private Color      _overcastColor;
+        private Camera     _paintedCam;
         private Color      _ambientSky;
 
         private SkyEffects _effects;
@@ -79,6 +84,8 @@ namespace ProjectFossil.Environment
             RenderSettings.fogDensity = BaseFog * FogFactor(c);
 
             ApplySkybox(look);
+            _overcast = c.Weather == Weather.Rain || c.Weather == Weather.Storm || c.Weather == Weather.Fog;
+            _overcastColor = Color.Lerp(look.Fog, Color.white, 0.06f);
             _effects.Apply(c, look.CloudTint, look.Fog);
             _birds.Apply(c);
 
@@ -185,7 +192,7 @@ namespace ProjectFossil.Environment
             l.AmbientGround  *= ambientDim;
             l.SkyTint   = Greyed(l.SkyTint, grey);
             l.Fog       = Greyed(l.Fog, grey * 0.8f) * (c.Weather == Weather.Storm ? 0.7f : 1f);
-            l.CloudTint = Greyed(l.CloudTint, grey * 0.5f) * Mathf.Lerp(1f, 0.55f, grey);
+            l.CloudTint = Greyed(l.CloudTint, grey * 0.7f) * Mathf.Lerp(1f, 0.4f, grey); // rain clouds are dark
             if (c.Weather == Weather.Fog && c.Time != DayTime.Night) l.Fog = Color.Lerp(l.Fog, new Color(0.72f, 0.74f, 0.72f), 0.5f);
             return l;
         }
@@ -213,11 +220,29 @@ namespace ProjectFossil.Environment
             var cam = Camera.main;
             if (cam != null)
             {
+                PaintBackground(cam);
                 _effects.Follow(cam.transform);
                 _birds.Follow(cam.transform);
                 UpdateLamp(cam);
             }
             UpdateLightning();
+        }
+
+        private void PaintBackground(Camera cam)
+        {
+            if (_paintedCam != null && _paintedCam != cam && _paintedCam.clearFlags == CameraClearFlags.SolidColor)
+                _paintedCam.clearFlags = CameraClearFlags.Skybox;
+            if (_overcast)
+            {
+                cam.clearFlags      = CameraClearFlags.SolidColor;
+                cam.backgroundColor = _overcastColor + Color.white * (LightningPulse * 0.35f);
+                _paintedCam = cam;
+            }
+            else if (_paintedCam == cam)
+            {
+                cam.clearFlags = CameraClearFlags.Skybox;
+                _paintedCam = null;
+            }
         }
 
         // Night: a lamp on the head, L to switch it. It helps you see, nothing more (animals don't notice it yet).
@@ -248,6 +273,9 @@ namespace ProjectFossil.Environment
             if (_lamp.enabled != _lampOn) _lamp.enabled = _lampOn;
         }
 
+        // Two quick pulses, then gone.
+        private float LightningPulse => _flash > 0.6f ? 1f : _flash > 0.45f ? 0.2f : _flash;
+
         // Storms: a strike every so often, flashing the sky and the ground, thunder following.
         private void UpdateLightning()
         {
@@ -260,8 +288,7 @@ namespace ProjectFossil.Environment
             if (_flash <= 0f) return;
 
             _flash = Mathf.Max(0f, _flash - Time.deltaTime * 3.5f);
-            // Two quick pulses, then gone.
-            float pulse = _flash > 0.6f ? 1f : _flash > 0.45f ? 0.2f : _flash;
+            float pulse = LightningPulse;
             if (_sun != null) _sun.intensity = _sunIntensity + pulse * 2.2f;
             RenderSettings.ambientSkyColor = _ambientSky + Color.white * (pulse * 0.6f);
             if (_sky != null) _sky.SetFloat("_Exposure", _skyExposure + pulse * 1.4f);
