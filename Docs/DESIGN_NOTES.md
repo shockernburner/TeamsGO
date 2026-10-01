@@ -257,3 +257,7 @@ Firdous approved FishNet and Steamworks.NET. Step 1 adds FishNet 4.7.3 (UPM git 
 - **Restarts.** Only the host starts the next island, which pulls the whole team along. A joiner's results screen says "Waiting for the host to start the next island".
 - **Setup.** After the package installs, run **Project Fossil > Co-op > Set Up Networking** once. It builds the NetDinosaur and Avatar prefabs and the `NetworkPrefabs` spawn list in `Resources/Net`. It's safe to run again.
 - **Known limits in step 1.** The stalker and the scent trail follow the host only. The rescue flare only drops for the host. If the host dies or extracts, the director stops for everyone until the host starts a new island (animals already out keep hunting). Each player's rank and best score are their own.
+
+## Magenta ground in builds (2026-10-01 co-op playtest)
+
+The first co-op test worked: host in the Editor, joiner in a Mac build, both saw each other, fought the same dinosaurs, and the host extracted. But the build's ground was magenta. The terrain used the render pipeline's default terrain material, which only exists in the Editor. `Resources/Shaders/IslandTerrain.mat` (URP Terrain/Lit) is now assigned as the terrain's material, and `Resources/Shaders/RotorDust.mat` keeps the URP particle shader that the helicopter dust looks up at runtime in builds.
