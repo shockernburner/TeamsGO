@@ -574,6 +574,7 @@ namespace ProjectFossil.Editor
             if (sources.Count == 0) { Log.AppendLine($"  no Survivalist prefabs in {prefabDir}, skipped."); art.survivors = new ModelDefinition[0]; return; }
 
             EnsureFolder(Out + "/Survivors");
+            var animator = SurvivorAnimator(dir, template);
             var defs = new List<ModelDefinition>();
             for (int i = 0; i < sources.Count; i++)
             {
@@ -592,7 +593,7 @@ namespace ProjectFossil.Editor
                     AssetDatabase.CreateAsset(def, defPath);
                 }
                 def.model           = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
-                def.animator        = template != null ? template.animator : null;
+                def.animator        = animator;
                 def.height          = template != null ? template.height : 1.8f;
                 def.yawOffset       = 0f;     // Unity-made prefabs face +Z
                 def.faceHeadForward = false;
@@ -604,6 +605,82 @@ namespace ProjectFossil.Editor
                 Log.AppendLine($"  {name} <- {sources[i]}");
             }
             art.survivors = defs.ToArray();
+            LogFirstPersonArms(dir);
+        }
+
+        // The pack ships Unity's Starter Assets idle, walk and run, made for this skeleton: a relaxed, natural
+        // gait. Crouch, swim, punches and the rest still come from the Quaternius library.
+        private static RuntimeAnimatorController SurvivorAnimator(string dir, ModelDefinition template)
+        {
+            string anims = $"{dir}/StarterAssets/ThirdPersonController/Character/Animations";
+            var picks = new Dictionary<string, (AnimationClip, float)>
+            {
+                { "Idle", (PackClip($"{anims}/Stand--Idle.anim.fbx"), 0f) },
+                { "Walk", (PackClip($"{anims}/Locomotion--Walk_N.anim.fbx"), 2f) },     // Starter Assets walk speed
+                { "Run",  (PackClip($"{anims}/Locomotion--Run_N.anim.fbx"), 5.335f) },  // and sprint speed
+            };
+            bool all = picks.Values.All(v => v.Item1 != null);
+            Log.AppendLine(all ? "  animations: the pack's own idle, walk and run (Starter Assets), the rest Quaternius"
+                               : "  animations: Quaternius (the pack's Starter Assets clips weren't found)");
+            var ctrl = ModelPackSetup.BuildSurvivorAnimator("Survivor_Survivalist", all ? picks : null);
+            return ctrl != null ? ctrl : template != null ? template.animator : null;
+        }
+
+        // The one clip in a Starter Assets *.anim.fbx, imported as a looping humanoid clip.
+        private static AnimationClip PackClip(string path)
+        {
+            var imp = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (imp == null) return null;
+            bool changed = false;
+            if (imp.animationType != ModelImporterAnimationType.Human)
+            {
+                imp.animationType = ModelImporterAnimationType.Human;
+                imp.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+                changed = true;
+            }
+            var clips = imp.clipAnimations.Length > 0 ? imp.clipAnimations : imp.defaultClipAnimations;
+            foreach (var c in clips)
+            {
+                if (c.loopTime && c.lockRootRotation && c.lockRootHeightY && c.lockRootPositionXZ) continue;
+                c.loopTime = true;
+                c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = true; // in place: the controller moves the body
+                c.keepOriginalOrientation = c.keepOriginalPositionY = c.keepOriginalPositionXZ = true;
+                changed = true;
+            }
+            if (changed) { imp.clipAnimations = clips; imp.SaveAndReimport(); }
+            return AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>()
+                                .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+        }
+
+        // The pack's first-person prefabs, listed so the next step (real first-person arms) can be wired by name.
+        private static void LogFirstPersonArms(string dir)
+        {
+            string prefabDir = $"{dir}/Prefab";
+            if (!Directory.Exists(prefabDir)) return;
+            foreach (var path in Directory.GetFiles(prefabDir, "FPS_*.prefab").Select(p => p.Replace('\\', '/')).OrderBy(p => p))
+            {
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (go == null) continue;
+                Log.AppendLine($"  first-person prefab {path}:");
+                var anim = go.GetComponentInChildren<Animator>();
+                Log.AppendLine($"    animator: {(anim == null ? "none" : $"{anim.name}, avatar {(anim.avatar != null ? anim.avatar.name : "none")}, controller {(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "none")}")}");
+                var b = new Bounds(); bool any = false;
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (any) b.Encapsulate(r.bounds); else { b = r.bounds; any = true; }
+                    string mats = string.Join(", ", r.sharedMaterials.Where(m => m != null).Select(m => m.name));
+                    Log.AppendLine($"    mesh {r.name} ({r.GetType().Name}) [{mats}]");
+                }
+                if (any) Log.AppendLine($"    size {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m");
+                int n = 0;
+                foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                {
+                    if (++n > 60) { Log.AppendLine("    ..."); break; }
+                    int depth = 0; for (var p = t; p != go.transform; p = p.parent) depth++;
+                    Log.AppendLine($"    {new string(' ', depth * 2)}{t.name}");
+                }
+                break; // one is enough to see the layout
+            }
         }
 
         // The pack's body model, imported as a humanoid. Returns its avatar.

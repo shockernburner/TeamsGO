@@ -387,3 +387,11 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
   "PILOT: Your escape helicopter has arrived. Go to the extraction zone." The bell chime is gone.
 - The coin ding on every hit made fights sound like an arcade: now soft and at most every 2 s.
 - Flyer calls use the recorded screeches pitched up when the sound library is present.
+
+## 2026-10-01 — Movie_003 fixes: facing, swimming, posture, crawl, first-person arms
+
+- **Survivor facing:** the bind-pose shoulder check didn't match what humanoid retargeting shows, so it is gone. PlayerVisual now measures the animated shoulders a few frames after spawning and turns the model by the nearest quarter turn if it faces more than 30° away from the way it walks. It logs "[PlayerVisual] … turned it …" when it does.
+- **Swimming:** rivers and lakes used to let the player sink to the bed. `ViewBlockers.SurfaceAt` gives the highest water surface over a spot. Deeper than `swimDepth` (1.3 m), the player floats with the head above the surface, moves at `swimSpeed`, and can't jump or sprint. The animator gets a Swim blend tree (Quaternius Swim_Idle / Swim_Fwd).
+- **Posture:** the Quaternius jog and sprint clips keep the fists up. With the bought survivalist pack, its own StarterAssets idle, walk and run clips drive the "Survivor_Survivalist" animator instead, with relaxed arms.
+- **Crawl removed:** there is no crawl animation, so Z does nothing and the hint no longer mentions it.
+- **First-person arms:** these borrow the survivor model's skin and shirt materials when their names say which is which. The bought-pack report now lists the FPS_Survivalist prefab so the real arms can be wired next.

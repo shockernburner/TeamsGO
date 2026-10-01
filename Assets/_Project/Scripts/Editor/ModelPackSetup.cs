@@ -202,15 +202,10 @@ namespace ProjectFossil.Editor
             animImp.clipAnimations = list;
             animImp.SaveAndReimport();
 
-            var clips = Clips(animPath);
             var def = AssetDatabase.LoadAssetAtPath<ModelDefinition>($"{ModelData}/Model_Survivor.asset");
             if (def == null) { Debug.LogWarning("[ModelPackSetup] Model_Survivor.asset missing."); return; }
 
-            var pc = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefab)?.GetComponent<PlayerController>();
-            float walk = pc != null ? pc.walkSpeed : 5f, run = pc != null ? pc.runSpeed : 9f;
-            float crouch = pc != null ? pc.crouchSpeed : 2.5f;
-
-            var ctrl = BuildSurvivorController(clips, walk, run, crouch);
+            var ctrl = BuildSurvivorAnimator("Survivor");
             Assign(def, $"{Pack}/{Models["Model_Survivor"]}", ctrl);
             def.yawOffset       = 180f;  // the pack's characters face -Z in Unity
             def.faceHeadForward = false;
@@ -225,26 +220,56 @@ namespace ProjectFossil.Editor
             def.keepBones  = new[] { "head", "neck_01", "neck_02" };
         }
 
-        private static AnimatorController BuildSurvivorController(Dictionary<string, AnimationClip> clips,
-                                                                   float walk, float run, float crouch)
+        // The player's animator from the Quaternius library. `overrides` swaps in other humanoid clips by name
+        // (a character pack's own idle, walk and run), each with its natural speed in m/s so it plays in step.
+        internal static AnimatorController BuildSurvivorAnimator(string name,
+            Dictionary<string, (AnimationClip clip, float speed)> overrides = null)
         {
-            var ctrl = NewController("Survivor");
+            var clips = Clips($"{Pack}/Animations/UAL1_Standard.fbx");
+            var pc = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefab)?.GetComponent<PlayerController>();
+            float walk = pc != null ? pc.walkSpeed : 5f, run = pc != null ? pc.runSpeed : 9f;
+            float crouch = pc != null ? pc.crouchSpeed : 2.5f, swim = pc != null ? pc.swimSpeed : 2.2f;
+            return BuildSurvivorController(name, clips, overrides, walk, run, crouch, swim);
+        }
+
+        private static AnimatorController BuildSurvivorController(string name, Dictionary<string, AnimationClip> clips,
+            Dictionary<string, (AnimationClip clip, float speed)> overrides, float walk, float run, float crouch, float swim)
+        {
+            var ctrl = NewController(name);
             ctrl.AddParameter("Speed",  AnimatorControllerParameterType.Float);
             ctrl.AddParameter("Crouch", AnimatorControllerParameterType.Bool);
             ctrl.AddParameter("Attack", AnimatorControllerParameterType.Trigger);
             ctrl.AddParameter("Armed",  AnimatorControllerParameterType.Bool);
             ctrl.AddParameter("Hit",    AnimatorControllerParameterType.Trigger);
             ctrl.AddParameter("Dead",   AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Swim",   AnimatorControllerParameterType.Bool);
 
             // Base layer: whole-body movement.
             var sm = ctrl.layers[0].stateMachine;
             var stand = ctrl.CreateBlendTreeInController("Stand", out var standTree, 0);
             standTree.blendParameter = "Speed";
             standTree.useAutomaticThresholds = false;
-            standTree.AddChild(Clip(clips, "Idle_Loop"), 0f);
-            standTree.AddChild(Clip(clips, "Walk_Loop"), 1.8f);
-            standTree.AddChild(Clip(clips, "Jog_Fwd_Loop"), walk);
-            standTree.AddChild(Clip(clips, "Sprint_Loop"), run);
+            if (overrides != null && overrides.TryGetValue("Idle", out var oi) && oi.clip != null
+                && overrides.TryGetValue("Walk", out var ow) && ow.clip != null
+                && overrides.TryGetValue("Run", out var or) && or.clip != null)
+            {
+                // A pack's own locomotion: the run clip sped up to the jog and sprint speeds so the feet keep pace.
+                standTree.AddChild(oi.clip, 0f);
+                standTree.AddChild(ow.clip, ow.speed);
+                standTree.AddChild(or.clip, walk);
+                standTree.AddChild(or.clip, run);
+                var kids = standTree.children;
+                kids[2].timeScale = Mathf.Clamp(walk / Mathf.Max(0.5f, or.speed), 0.6f, 1.6f);
+                kids[3].timeScale = Mathf.Clamp(run  / Mathf.Max(0.5f, or.speed), 0.6f, 1.6f);
+                standTree.children = kids;
+            }
+            else
+            {
+                standTree.AddChild(Clip(clips, "Idle_Loop"), 0f);
+                standTree.AddChild(Clip(clips, "Walk_Loop"), 1.8f);
+                standTree.AddChild(Clip(clips, "Jog_Fwd_Loop"), walk);
+                standTree.AddChild(Clip(clips, "Sprint_Loop"), run);
+            }
             sm.defaultState = stand;
 
             var low = ctrl.CreateBlendTreeInController("Crouch", out var lowTree, 0);
@@ -259,6 +284,21 @@ namespace ProjectFossil.Editor
             var up = low.AddTransition(stand);
             up.AddCondition(AnimatorConditionMode.IfNot, 0f, "Crouch");
             up.hasExitTime = false; up.duration = 0.2f;
+
+            // Swimming in rivers and lakes: treading water, or a front crawl when moving.
+            var water = ctrl.CreateBlendTreeInController("Swim", out var swimTree, 0);
+            swimTree.blendParameter = "Speed";
+            swimTree.useAutomaticThresholds = false;
+            swimTree.AddChild(Clip(clips, "Swim_Idle_Loop"), 0f);
+            swimTree.AddChild(Clip(clips, "Swim_Fwd_Loop"), swim);
+            var dive = sm.AddAnyStateTransition(water);
+            dive.AddCondition(AnimatorConditionMode.If, 0f, "Swim");
+            dive.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+            dive.canTransitionToSelf = false; dive.duration = 0.3f;
+            var ashore = water.AddTransition(stand);
+            ashore.AddCondition(AnimatorConditionMode.IfNot, 0f, "Swim");
+            ashore.hasExitTime = false; ashore.duration = 0.3f;
+
 
             var death = sm.AddState("Death");
             death.motion = Clip(clips, "Death01");

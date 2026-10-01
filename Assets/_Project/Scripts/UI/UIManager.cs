@@ -278,7 +278,7 @@ namespace ProjectFossil.UI
 
             if (state.Elapsed < controlHintSeconds || _shopOpen)
             {
-                const string hints = "[Shift] Run on/off  [C] Crouch  [Z] Crawl  [Space] Jump/stand  " +
+                const string hints = "[Shift] Run on/off  [C] Crouch  [Space] Jump/stand  " +
                                      "[LMB/F] Attack  [E] Interact  [Q] Heal  [Tab] Shop";
                 GUI.Label(new Rect(0, Screen.height - 110, Screen.width, 22), hints, _hint);
             }

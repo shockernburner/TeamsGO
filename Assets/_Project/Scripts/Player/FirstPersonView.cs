@@ -43,6 +43,7 @@ namespace ProjectFossil.Player
         private bool      _armedSwing;
         private float     _flinch;
         private static Material _glove, _cuff, _sleeve;
+        private Material _handMat, _sleeveMat;
 
         public void Init(Camera cam, Transform head, CameraRig rig)
         {
@@ -130,6 +131,10 @@ namespace ProjectFossil.Player
         private void BuildArms()
         {
             EnsureMaterials();
+            // Bare hands and the shirt sleeve of whoever the survivor model is, when its materials say which is which.
+            var (skin, shirt) = _visual != null ? _visual.OutfitMaterials() : (null, null);
+            _handMat   = skin  != null ? skin  : _glove;
+            _sleeveMat = shirt != null ? shirt : _sleeve;
             _arms = new GameObject("FirstPersonArms").transform;
             _arms.SetParent(_cam.transform, false);
             _right = Arm("Right", RightRest, RightRestRot, 1f);
@@ -145,13 +150,13 @@ namespace ProjectFossil.Player
             root.localRotation = rot;
 
             // Forearm in the outfit's sleeve, a leather cuff at the wrist.
-            Part(root, PrimitiveType.Capsule,  _sleeve, new Vector3(0f, -0.005f, -0.2f), new Vector3(0.078f, 0.17f, 0.07f), new Vector3(90f, 0f, 0f));
+            Part(root, PrimitiveType.Capsule,  _sleeveMat, new Vector3(0f, -0.005f, -0.2f), new Vector3(0.078f, 0.17f, 0.07f), new Vector3(90f, 0f, 0f));
             Part(root, PrimitiveType.Cylinder, _cuff,   new Vector3(0f, 0f, -0.035f),    new Vector3(0.07f, 0.03f, 0.064f), new Vector3(90f, 0f, 0f));
             // Gloved fist: back of the hand, curled fingers, knuckles and thumb.
-            Part(root, PrimitiveType.Cube,     _glove,  new Vector3(0f, 0.004f, 0.03f),  new Vector3(0.072f, 0.04f, 0.075f), Vector3.zero);
-            Part(root, PrimitiveType.Cube,     _glove,  new Vector3(0f, -0.018f, 0.068f), new Vector3(0.07f, 0.045f, 0.03f), new Vector3(18f, 0f, 0f));
-            Part(root, PrimitiveType.Capsule,  _glove,  new Vector3(0f, 0.008f, 0.07f),  new Vector3(0.026f, 0.036f, 0.026f), new Vector3(0f, 0f, 90f));
-            Part(root, PrimitiveType.Capsule,  _glove,  new Vector3(-0.036f * mirror, -0.006f, 0.045f), new Vector3(0.022f, 0.028f, 0.022f), new Vector3(70f, 25f * mirror, 0f));
+            Part(root, PrimitiveType.Cube,     _handMat, new Vector3(0f, 0.004f, 0.03f),  new Vector3(0.072f, 0.04f, 0.075f), Vector3.zero);
+            Part(root, PrimitiveType.Cube,     _handMat, new Vector3(0f, -0.018f, 0.068f), new Vector3(0.07f, 0.045f, 0.03f), new Vector3(18f, 0f, 0f));
+            Part(root, PrimitiveType.Capsule,  _handMat, new Vector3(0f, 0.008f, 0.07f),  new Vector3(0.026f, 0.036f, 0.026f), new Vector3(0f, 0f, 90f));
+            Part(root, PrimitiveType.Capsule,  _handMat, new Vector3(-0.036f * mirror, -0.006f, 0.045f), new Vector3(0.022f, 0.028f, 0.022f), new Vector3(70f, 25f * mirror, 0f));
             return root;
         }
 
