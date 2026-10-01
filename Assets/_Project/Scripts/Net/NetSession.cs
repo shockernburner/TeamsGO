@@ -30,6 +30,8 @@ namespace ProjectFossil.Net
         public const int    MaxTeam    = 4;
         private const string AddressKey = "ProjectFossil.JoinAddress";
         private const string NameKey    = "ProjectFossil.PlayerName";
+        private const string TimeKey    = "ProjectFossil.DayTime";
+        private const string WeatherKey = "ProjectFossil.Weather";
         private const int    MaxName    = 16;
         private static readonly string[] Names =
         {
@@ -84,6 +86,8 @@ namespace ProjectFossil.Net
             _address = PlayerPrefs.GetString(AddressKey, "127.0.0.1");
             PlayerName = CleanName(PlayerPrefs.GetString(NameKey, ""));
             if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
+            WorldConditions.ChosenTime    = (DayTime)Mathf.Clamp(PlayerPrefs.GetInt(TimeKey, 0), 0, (int)DayTime.Night);
+            WorldConditions.ChosenWeather = (Weather)Mathf.Clamp(PlayerPrefs.GetInt(WeatherKey, 0), 0, (int)Weather.Fog);
             NetRole.IsFollower = false;
         }
 
@@ -115,6 +119,7 @@ namespace ProjectFossil.Net
         private void PlaySolo()
         {
             SaveName();
+            WorldConditions.ClearOverride();
             StopNetwork();
             NetRole.IsFollower = false;
             _boot.dinosaurPrefab = _soloDinosaur;
@@ -128,6 +133,7 @@ namespace ProjectFossil.Net
         private void Host()
         {
             SaveName();
+            WorldConditions.ClearOverride();
             if (!EnsureNetwork()) return;
             NetRole.IsFollower = false;
             _boot.dinosaurPrefab = _dinosaurPrefab.gameObject;
@@ -220,9 +226,11 @@ namespace ProjectFossil.Net
             _net.ServerManager.RegisterBroadcast<FinalStandMessage>(OnFinalStandRequest);
             _net.ServerManager.RegisterBroadcast<TeamMessage>(OnTeamMessage);
             _net.ServerManager.RegisterBroadcast<LiftOffMessage>(OnLiftOffRequest);
+            _net.ServerManager.RegisterBroadcast<FlareMessage>(OnFlareRequest);
             _net.ClientManager.RegisterBroadcast<IslandMessage>(OnIsland);
             _net.ClientManager.RegisterBroadcast<AnnounceMessage>(OnAnnounce);
             _net.ClientManager.RegisterBroadcast<LiftOffMessage>(OnLiftOff);
+            _net.ClientManager.RegisterBroadcast<FlareMessage>(OnFlare);
             return true;
         }
 
@@ -290,7 +298,9 @@ namespace ProjectFossil.Net
         {
             if (!asServer) { _clientLoaded = true; return; }
             if (IsHostsOwn(conn) || Match == null || Match.State == null) return;
-            _net.ServerManager.Broadcast(conn, new IslandMessage { Seed = _seed, Elapsed = Match.State.Elapsed });
+            _net.ServerManager.Broadcast(conn, IslandFor(_seed, Match.State.Elapsed));
+            foreach (var pad in _flares) // pads teammates' flares already brought in
+                _net.ServerManager.Broadcast(conn, new FlareMessage { Pad = pad, From = -1 });
         }
 
         // ── Island ─────────────────────────────────────────────────────────────
@@ -299,11 +309,12 @@ namespace ProjectFossil.Net
         private void OnGenerated(int seed)
         {
             _seed = seed;
+            _flares.Clear();
             HookMatch();
             if (Match != null) Match.PlayerName = PlayerName;
             if (_mode != Mode.Hosting || _net == null || !_net.ServerManager.Started) return;
 
-            _net.ServerManager.Broadcast(new IslandMessage { Seed = seed, Elapsed = 0f });
+            _net.ServerManager.Broadcast(IslandFor(seed, 0f));
             foreach (var pair in _avatars)
                 if (pair.Value != null && pair.Value.IsAlive && !IsHostsOwn(pair.Value.Owner))
                     Match.Teammates.Add(pair.Value.transform);
@@ -321,6 +332,8 @@ namespace ProjectFossil.Net
             int id = _net.ClientManager.Connection != null ? _net.ClientManager.Connection.ClientId : 1;
             float angle = id * 90f * Mathf.Deg2Rad;
             _boot.spawnOffset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 2.5f;
+            _flares.Clear();
+            WorldConditions.Override((DayTime)msg.Time, (Weather)msg.Weather, msg.Wind); // the host's sky
             _boot.GenerateAndSpawn(msg.Seed);
             if (Match != null && Match.State != null) Match.State.FastForward(msg.Elapsed);
             _readySeed = -1;
@@ -333,6 +346,7 @@ namespace ProjectFossil.Net
             Match.TeamAnnounced       += OnTeamAnnounced;
             Match.FinalStandRequested += OnFinalStandRequested;
             Match.LiftedOff           += OnLiftedOff;
+            Match.FlareDropped        += OnFlareDropped;
             // A teammate still on their feet can get this player up, so going down isn't the end.
             Match.CanBeRevived  = () => IsOnline && Teammates().Any(a => a.IsStanding);
             Match.TeammatesNear = (point, radius) =>
@@ -500,6 +514,35 @@ namespace ProjectFossil.Net
             Match.TeamLiftOff(msg.Pad);
         }
 
+        // ── Rescue flares ──────────────────────────────────────────────────────
+
+        private readonly List<Vector3> _flares = new List<Vector3>(); // host: this island's flare pads, for late joiners
+
+        private void OnFlareDropped(Vector3 pad)
+        {
+            if (_net != null && _net.ClientManager.Started && IsOnline)
+                _net.ClientManager.Broadcast(new FlareMessage { Pad = pad });
+        }
+
+        private void OnFlareRequest(NetworkConnection conn, FlareMessage msg, Channel channel)
+        {
+            if (_flares.Count >= 8) return; // one per player is plenty; ignore floods
+            _flares.Add(msg.Pad);
+            _net.ServerManager.Broadcast(new FlareMessage { Pad = msg.Pad, From = conn.ClientId });
+        }
+
+        private void OnFlare(FlareMessage msg, Channel channel)
+        {
+            if (msg.From == MyClientId || Match == null) return;
+            Match.AddSharedPad(msg.Pad);
+        }
+
+        private static IslandMessage IslandFor(int seed, float elapsed)
+        {
+            var c = WorldConditions.Current;
+            return new IslandMessage { Seed = seed, Elapsed = elapsed, Time = (byte)c.Time, Weather = (byte)c.Weather, Wind = c.WindDegrees };
+        }
+
         private int MyClientId => _net != null && _net.ClientManager.Started && _net.ClientManager.Connection != null
             ? _net.ClientManager.Connection.ClientId : -2;
 
@@ -568,7 +611,7 @@ namespace ProjectFossil.Net
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 215, 400, 430);
+            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 235, 400, 470);
             GUILayout.BeginArea(area, GUI.skin.box);
             GUILayout.Label("PROJECT FOSSIL", _title);
             GUILayout.Space(10);
@@ -579,6 +622,7 @@ namespace ProjectFossil.Net
             GUILayout.Label("Your name:", _label, GUILayout.Width(90), GUILayout.Height(30));
             PlayerName = GUILayout.TextField(PlayerName ?? "", MaxName, _field, GUILayout.Height(30));
             GUILayout.EndHorizontal();
+            DrawConditionsChoice();
             GUILayout.Space(8);
             if (GUILayout.Button("Play solo", _button, GUILayout.Height(40))) PlaySolo();
             GUILayout.Space(6);
@@ -604,6 +648,25 @@ namespace ProjectFossil.Net
                 BackToMenu(null);
             }
             GUILayout.EndArea();
+        }
+
+        // Time of day and weather for the islands this player starts (solo or hosting). Joiners get the host's.
+        private void DrawConditionsChoice()
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Time:", _label, GUILayout.Width(60), GUILayout.Height(26));
+            if (GUILayout.Button(WorldConditions.Label(WorldConditions.ChosenTime), GUILayout.Height(26)))
+            {
+                WorldConditions.ChosenTime = (DayTime)(((int)WorldConditions.ChosenTime + 1) % ((int)DayTime.Night + 1));
+                PlayerPrefs.SetInt(TimeKey, (int)WorldConditions.ChosenTime);
+            }
+            GUILayout.Label("Weather:", _label, GUILayout.Width(66), GUILayout.Height(26));
+            if (GUILayout.Button(WorldConditions.Label(WorldConditions.ChosenWeather), GUILayout.Height(26)))
+            {
+                WorldConditions.ChosenWeather = (Weather)(((int)WorldConditions.ChosenWeather + 1) % ((int)Weather.Fog + 1));
+                PlayerPrefs.SetInt(WeatherKey, (int)WorldConditions.ChosenWeather);
+            }
+            GUILayout.EndHorizontal();
         }
 
         private void DrawTeamLine()
