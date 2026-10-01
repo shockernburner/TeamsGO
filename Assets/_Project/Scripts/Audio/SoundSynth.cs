@@ -238,25 +238,33 @@ namespace ProjectFossil.Audio
             return Finish(s, 0.9f);
         }
 
-        // Helicopter loop: blade slaps (whole number per loop so it repeats seamlessly) over a turbine whine.
+        // Helicopter loop. A real one is mostly felt: a deep "whop" each time a blade passes (about nine a
+        // second, a whole number per loop so it repeats seamlessly), a rush of rotor wash, and only a faint
+        // turbine whine. The old loop slapped high and fast and sounded like a toy.
         public static float[] Rotor(float seconds = 2f)
         {
             var rng = new Random(11000);
             var s = Buffer(seconds);
-            const float slaps = 11f; // per second
-            var bp = new Bandpass(420f, 1.5f);
-            var lp = new OnePole(250f);
+            const float slaps = 9f; // per second
+            var body = new OnePole(140f);    // the chest-thump of each pass
+            var crack = new Bandpass(260f, 1.2f);
+            var wash = new OnePole(380f);
+            var rumble = new OnePole(60f);
             for (int i = 0; i < s.Length; i++)
             {
                 float t = T(i);
                 float phase = t * slaps - (float)Math.Floor(t * slaps);
-                float slap = bp.Next(Noise(rng)) * Exp(phase / slaps, 0.002f, 0.018f) * 2.2f;
-                float thump = (float)Math.Sin(Tau * 60f * phase / slaps) * Exp(phase / slaps, 0.002f, 0.025f);
-                float wash = lp.Next(Noise(rng)) * 0.9f;
-                float whine = (float)Math.Sin(Tau * 1800f * t) * 0.04f + (float)Math.Sin(Tau * 3600f * t) * 0.015f;
-                s[i] = slap + thump * 0.8f + wash + whine;
+                float tp = phase / slaps;
+                float env = Exp(tp, 0.004f, 0.035f);
+                float whop = (float)Math.Sin(Tau * 48f * tp) * env * 1.4f + body.Next(Noise(rng)) * env * 2.2f;
+                float edge = crack.Next(Noise(rng)) * Exp(tp, 0.002f, 0.012f) * 0.6f;
+                // The wash swells with each pass, so it breathes with the blades instead of hissing flat.
+                float breathe = 0.65f + 0.35f * (float)Math.Cos(Tau * phase);
+                float air = wash.Next(Noise(rng)) * 0.55f * breathe + rumble.Next(Noise(rng)) * 1.2f;
+                float whine = (float)Math.Sin(Tau * 2350f * t) * 0.008f;
+                s[i] = whop + edge + air + whine;
             }
-            return Finish(s, 0.7f);
+            return Finish(s, 0.8f);
         }
 
         // Made it out: a bright rising fanfare that lands on a big major chord.

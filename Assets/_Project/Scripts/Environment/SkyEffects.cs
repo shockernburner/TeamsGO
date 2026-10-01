@@ -160,10 +160,10 @@ namespace ProjectFossil.Environment
                 _rain = MakeSystem("Rain", mat);
                 var r = _rain.GetComponent<ParticleSystemRenderer>();
                 r.renderMode    = ParticleSystemRenderMode.Stretch;
-                r.velocityScale = 0.045f;
+                r.velocityScale = 0.03f;
                 r.lengthScale   = 1f;
                 // Drops passing right by the lens would be fat white bars across the screen; cap their width.
-                r.maxParticleSize = 0.004f;
+                r.maxParticleSize = 0.0025f;
             }
 
             bool storm = c.Weather == Weather.Storm;
@@ -172,13 +172,14 @@ namespace ProjectFossil.Environment
             main.loop            = true;
             main.startLifetime   = 1.1f;
             main.startSpeed      = 0f;
-            main.startSize       = new ParticleSystem.MinMaxCurve(0.022f, 0.035f);
-            main.startColor      = storm ? new Color(0.7f, 0.74f, 0.82f, 0.4f) : new Color(0.8f, 0.85f, 0.95f, 0.38f);
+            main.startSize       = new ParticleSystem.MinMaxCurve(0.012f, 0.02f);
+            // Faint and thin: real rain reads as a grey shimmer, with only the odd drop catching the light.
+            main.startColor      = storm ? new Color(0.72f, 0.76f, 0.84f, 0.16f) : new Color(0.8f, 0.85f, 0.95f, 0.14f);
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.maxParticles    = storm ? 7000 : 4000;
 
             var emission = _rain.emission;
-            emission.rateOverTime = storm ? 5200f : 2600f;
+            emission.rateOverTime = storm ? 3600f : 1800f;
 
             var shape = _rain.shape;
             shape.shapeType = ParticleSystemShapeType.Box;

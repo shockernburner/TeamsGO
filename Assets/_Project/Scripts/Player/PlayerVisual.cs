@@ -110,11 +110,13 @@ namespace ProjectFossil.Player
 
         private void FindGrip(Transform model)
         {
-            _hand = Find(model, "hand_r");
+            // Any humanoid rig names its bones through the avatar; otherwise look them up by the usual names.
+            bool human = _animator != null && _animator.isHuman;
+            _hand = human ? _animator.GetBoneTransform(HumanBodyBones.RightHand) : Find(model, "hand_r");
             if (_hand == null) return;
-            var index = Find(_hand, "index_01_r");
-            var pinky = Find(_hand, "pinky_01_r");
-            var mid   = Find(_hand, "middle_01_r");
+            var index = human ? _animator.GetBoneTransform(HumanBodyBones.RightIndexProximal)  : Find(_hand, "index_01_r");
+            var pinky = human ? _animator.GetBoneTransform(HumanBodyBones.RightLittleProximal) : Find(_hand, "pinky_01_r");
+            var mid   = human ? _animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal) : Find(_hand, "middle_01_r");
 
             Vector3 axis = index != null && pinky != null ? index.position - pinky.position : _hand.up;
             Vector3 palm = mid != null ? Vector3.Lerp(_hand.position, mid.position, 0.6f) : _hand.position;

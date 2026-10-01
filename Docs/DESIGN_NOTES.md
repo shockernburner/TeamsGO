@@ -320,3 +320,33 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - Raindrops passing by the lens drew as thick white bars. Their on-screen width is now capped.
 - Dinosaurs sometimes disappeared. Two culling causes: skinned-mesh bounds that don't follow a lunge, and detail-level groups dropping the model too early. The bounds are padded, and the last detail level now stays until the body is a speck.
 - Attacks, for reference: a swing checks a sphere around the body (weapon range + 0.4 m: 2 m for bare hands, 3 m for the spear). It takes the damageable thing that is most straight ahead, with being in front counting more than being a few centimetres closer. Third person accepts up to 120° either side and turns you to face the hit. First person only accepts about 72° either side of where you look.
+
+## Toward ad-quality footage (2026-10-01, 5:51 and 5:55 PM playtests)
+
+- Bushes still tipped above the ground. Our wind turned each plant and tree as a rigid whole, on top of the forest pack's own shader wind. Bought foliage now sways only in its shader, driven by the pack's wind zone. Our rigid sway is kept for the free models, which have no shader wind.
+- MSAA is off in the pipeline asset, so leaves shimmered. The match camera now uses SMAA High.
+- Rain was a wall of white sticks. Drops are thinner and fainter, and there are fewer of them.
+- The danger wash and damage bars painted the screen red, which ruins footage. Danger is now darkness at the edges. A hit flushes the edges dark red, stronger on the side it came from.
+- The helicopter is matte olive with blurred rotor discs, and its blades only ghost through. The rotor loop is a deep 9 Hz "whop" with breathing wash instead of high, fast slaps.
+- The roadmap to jaw-dropping is in `/mnt/project-files/plans/jaw-dropping-plan.md`: recorded sound, a realistic player and helicopter, sky and fog, smarter packs, co-op voice, then trailer capture. Shadow distance (50 → 120 m) and Unity Recorder wait on Firdous's OK.
+- Approved by Firdous (2026-10-01): the PC pipeline's shadow distance went from 50 m to 120 m, so the far forest keeps its depth. Unity Recorder (`com.unity.recorder` 5.1.1) was added for 4K ad capture, under Window > General > Recorder.
+
+## Real survivor, real helicopter, recorded sound (2026-10-01, evening)
+
+- Firdous added two free Asset Store packs, Survivalist Character and OH-1 helicopter, plus 18 Mixkit sound effects. All stay out of git like the paid packs.
+- "Set Up Bought Packs" now also does the following:
+  - It turns each Survivalist outfit prefab into a player look, imported as a humanoid with its URP materials. It is animated by the same survivor controller as before, built from the free animation library.
+  - Solo and the host get outfit 1. Each friend who joins gets the next outfit, so a team reads at a glance.
+  - It turns the helicopter prefab into a clean copy without the pack's demo animation. Our flight code finds the rotors by name and spins them, and adds a faint blur disc over the main rotor.
+  - The searchlight, rope ladder and collider are placed from the model's size. If the model flies sideways, `helicopterYaw` on BoughtArt turns it, and `helicopterLength` scales it.
+- Recorded sounds load from any `Resources/SoundLibrary` folder by name (`Roar_1`, `Growl_2`, `RainLoop` and so on). Anything missing falls back to the synthesized sound.
+- How the recordings are used:
+  - Real roars for the big animals.
+  - Screeches for raptors.
+  - Growls for the idle chatter.
+  - The big predator's breathing, close in, alternates with its sniffing.
+  - Separate loops for rain and storm.
+  - A wind layer in storms.
+  - Three thunder strikes.
+  - A recorded helicopter loop.
+- The clips were trimmed, normalised and made into seamless loops with ffmpeg. They are mono for positional one-shots and stereo for the weather beds.

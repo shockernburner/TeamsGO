@@ -268,7 +268,10 @@ namespace ProjectFossil.Generation
                 if (prefab != null)
                 {
                     float treeHeight = useBought && BoughtArt.Current != null ? BoughtArt.Current.treeHeight : TreeHeight;
-                    PlaceModel(prefab, root, pos, inst, treeHeight, GroundAt);
+                    // Bought foliage sways in its own shader with the pack's wind zone; turning the whole model on top of
+                    // that tipped bushes so their bases lifted off the ground.
+                    bool shaderWind = useBought && BoughtArt.Current != null && BoughtArt.Current.windZone != null;
+                    PlaceModel(prefab, root, pos, inst, treeHeight, GroundAt, shaderWind);
                     continue;
                 }
 
@@ -312,7 +315,7 @@ namespace ProjectFossil.Generation
         private const float PlantMaxWidth = 1.8f;
 
         private static void PlaceModel(GameObject prefab, Transform root, Vector3 pos, ScatterInstance inst, float treeHeight,
-                                       System.Func<Vector3, float> groundAt)
+                                       System.Func<Vector3, float> groundAt, bool shaderWind = false)
         {
             var b = ModelFit.PrefabBounds(prefab);
             float s = inst.Kind == ScatterKind.Rock
@@ -351,8 +354,8 @@ namespace ProjectFossil.Generation
                 {
                     // Sway the model, not the root: the trunk collider has to stay put or physics re-inserts it
                     // every frame.
-                    var pivot = SwayPivot(go.transform);
-                    ViewBlockers.RegisterTree(go.transform.position, pivot, 0.55f);
+                    if (shaderWind) ViewBlockers.RegisterTree(go.transform.position, null, 0f);
+                    else ViewBlockers.RegisterTree(go.transform.position, SwayPivot(go.transform), 0.55f);
                 }
                 var col = go.AddComponent<CapsuleCollider>();
                 col.radius = 0.35f / s * inst.Scale;
@@ -379,7 +382,7 @@ namespace ProjectFossil.Generation
                     float radius = Mathf.Max(wb.extents.x, wb.extents.z);
                     // Bushes and tall ferns you can crouch in count as cover; ankle-high grass doesn't.
                     bool cover = radius >= 0.55f && wb.size.y >= 0.7f;
-                    ViewBlockers.Register(wb.center, radius, renderers, go.transform, 1f, cover);
+                    ViewBlockers.Register(wb.center, radius, renderers, shaderWind ? null : go.transform, 1f, cover);
                 }
             }
 

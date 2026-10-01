@@ -40,6 +40,16 @@ namespace ProjectFossil.Core
         [Header("Sky")]
         public ModelDefinition flyer;
 
+        [Header("People and machines")]
+        [Tooltip("Player looks, one per outfit; teammates get different ones")]
+        public ModelDefinition[] survivors;
+        [Tooltip("Rescue helicopter model (pivot between the skids, nose along +Z after helicopterYaw)")]
+        public GameObject helicopter;
+        [Tooltip("Extra turn in degrees if the helicopter flies sideways or backwards")]
+        public float helicopterYaw;
+        [Tooltip("Helicopter length nose to tail in metres; the model is scaled to it")]
+        public float helicopterLength = 12f;
+
         [Header("Sizes")]
         [Tooltip("Height of a tree at scatter scale 1, in metres. Bought trees are real-sized, much taller than the old ones.")]
         public float treeHeight = 16f;
@@ -83,6 +93,20 @@ namespace ProjectFossil.Core
                     biomeAssetName.EndsWith(b.biome, StringComparison.OrdinalIgnoreCase))
                     return b;
             return null;
+        }
+
+        // The look for player number `slot` (0 = solo or host), or `fallback` without bought survivors.
+        public static ModelDefinition Survivor(int slot, ModelDefinition fallback)
+        {
+            var art = Current;
+            if (art == null || art.survivors == null) return fallback;
+            int n = art.survivors.Length;
+            for (int i = 0; i < n; i++)
+            {
+                var def = art.survivors[((slot + i) % n + n) % n];
+                if (def != null && def.HasModel) return def;
+            }
+            return fallback;
         }
 
         // A list with at least one model still present (a pack deleted after setup leaves empty slots).

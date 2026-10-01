@@ -43,8 +43,11 @@ namespace ProjectFossil.Audio
         private AudioClip[] _steps, _softSteps, _screeches, _roars, _bites, _swings, _hits, _hurts, _sniffs;
         private AudioClip _coin, _sting, _chime, _ambience, _heartbeat, _rotor, _victory, _nightAmbience, _rainLoop;
         private AudioClip[] _thunders, _skyCalls;
+        private AudioClip[] _growls, _breaths;   // recorded only; null without the sound library
+        private AudioClip _stormLoop, _windLoop;
         private AudioSource _rain;      // 2D loop, louder in a storm
-        private float _rainTarget;
+        private AudioSource _wind;      // 2D loop, storms only
+        private float _rainTarget, _windTarget;
         private float _nextBeat;
         private readonly Dictionary<ExtractionZone, AudioSource> _rotors = new Dictionary<ExtractionZone, AudioSource>();
 
@@ -92,8 +95,10 @@ namespace ProjectFossil.Audio
         {
             _steps     = Make("Step",     v => SoundSynth.Footstep(v, false));
             _softSteps = Make("SoftStep", v => SoundSynth.Footstep(v, true));
-            _screeches = Make("Screech",  SoundSynth.Screech);
-            _roars     = Make("Roar",     SoundSynth.Roar);
+            _screeches = SoundLibrary.Get("Screech") ?? Make("Screech", SoundSynth.Screech);
+            _roars     = SoundLibrary.Get("Roar")    ?? Make("Roar",    SoundSynth.Roar);
+            _growls    = SoundLibrary.Get("Growl");
+            _breaths   = SoundLibrary.Get("Breath");
             _bites     = Make("Bite",     SoundSynth.Bite);
             _swings    = Make("Swing",    SoundSynth.Swing);
             _hits      = Make("Hit",      SoundSynth.Hit);
@@ -104,11 +109,13 @@ namespace ProjectFossil.Audio
             _ambience  = Clip("Ambience", SoundSynth.Ambience());
             _sniffs    = Make("Sniff",    SoundSynth.Sniff);
             _heartbeat = Clip("Heartbeat", SoundSynth.Heartbeat());
-            _rotor     = Clip("Rotor",    SoundSynth.Rotor());
+            _rotor     = SoundLibrary.One("Rotor") ?? Clip("Rotor", SoundSynth.Rotor());
             _victory   = Clip("Victory",  SoundSynth.Victory());
             _nightAmbience = Clip("NightAmbience", SoundSynth.NightAmbience());
-            _rainLoop  = Clip("Rain",     SoundSynth.Rain());
-            _thunders  = Make("Thunder",  SoundSynth.Thunder);
+            _rainLoop  = SoundLibrary.One("RainLoop") ?? Clip("Rain", SoundSynth.Rain());
+            _stormLoop = SoundLibrary.One("StormLoop") ?? _rainLoop;
+            _windLoop  = SoundLibrary.One("WindLoop");
+            _thunders  = SoundLibrary.Get("Thunder") ?? Make("Thunder", SoundSynth.Thunder);
             _skyCalls  = Make("SkyCall",  SoundSynth.SkyCall);
 
             _ui = gameObject.AddComponent<AudioSource>();
@@ -131,6 +138,13 @@ namespace ProjectFossil.Audio
             _rain.spatialBlend = 0f;
             _rain.volume = 0f;
             _rain.playOnAwake = false;
+
+            _wind = gameObject.AddComponent<AudioSource>();
+            _wind.clip = _windLoop;
+            _wind.loop = true;
+            _wind.spatialBlend = 0f;
+            _wind.volume = 0f;
+            _wind.playOnAwake = false;
         }
 
         // ── Weather and sky ────────────────────────────────────────────────────
@@ -141,6 +155,10 @@ namespace ProjectFossil.Audio
             var clip = c.Time == DayTime.Night ? _nightAmbience : _ambience;
             if (_ambient.clip != clip) { _ambient.clip = clip; if (_ambient.isPlaying) _ambient.Play(); }
             _rainTarget = c.Weather == Weather.Storm ? 0.75f : c.Weather == Weather.Rain ? 0.45f : 0f;
+            _windTarget = c.Weather == Weather.Storm ? 0.45f : 0f;
+            // A storm has its own recording (heavier rain with thunder rolling in it); plain rain is steadier.
+            var rainClip = c.Weather == Weather.Storm ? _stormLoop : _rainLoop;
+            if (_rain.clip != rainClip) { _rain.clip = rainClip; if (_rain.isPlaying) _rain.Play(); }
         }
 
         // Thunder arrives later the farther away the strike: about 3 s per kilometre.
@@ -162,10 +180,16 @@ namespace ProjectFossil.Audio
 
         private void UpdateRain()
         {
-            float target = _match != null && _match.IsRunning ? _rainTarget : _rainTarget * 0.5f;
-            _rain.volume = Mathf.MoveTowards(_rain.volume, target * masterVolume, Time.deltaTime * 0.3f);
-            if (_rain.volume > 0.001f && !_rain.isPlaying) _rain.Play();
-            else if (_rain.volume <= 0.001f && _rain.isPlaying) _rain.Stop();
+            float k = _match != null && _match.IsRunning ? 1f : 0.5f;
+            Fade(_rain, _rainTarget * k);
+            if (_windLoop != null) Fade(_wind, _windTarget * k);
+        }
+
+        private void Fade(AudioSource src, float target)
+        {
+            src.volume = Mathf.MoveTowards(src.volume, target * masterVolume, Time.deltaTime * 0.3f);
+            if (src.volume > 0.001f && !src.isPlaying) src.Play();
+            else if (src.volume <= 0.001f && src.isPlaying) src.Stop();
         }
 
         private static AudioClip[] Make(string name, System.Func<int, float[]> recipe)
@@ -448,8 +472,13 @@ namespace ProjectFossil.Audio
                     (d.Ai.transform.position - _player.transform.position).sqrMagnitude < sniffRange * sniffRange)
                 {
                     bool big = d.Ai.species != null && d.Ai.species.maxHealth >= bigDinoHealth;
-                    Play3D(Pick(_sniffs), d.Ai.transform.position, big ? 1f : 0.6f,
-                           Random.Range(0.9f, 1.05f) * (big ? 0.75f : 1.2f), sniffRange);
+                    // Close in, the big one's breathing carries over the sniffing.
+                    bool breathe = big && _breaths != null && Random.value < 0.5f;
+                    if (breathe)
+                        Play3D(Pick(_breaths), d.Ai.transform.position, 1f, Random.Range(0.85f, 1f), sniffRange * 0.6f);
+                    else
+                        Play3D(Pick(_sniffs), d.Ai.transform.position, big ? 1f : 0.6f,
+                               Random.Range(0.9f, 1.05f) * (big ? 0.75f : 1.2f), sniffRange);
                     d.NextSniff = Time.time + Random.Range(2.2f, 3.8f);
                 }
 
@@ -460,18 +489,25 @@ namespace ProjectFossil.Audio
                 }
                 else if (state == DinosaurAI.State.Wander && Time.time >= d.NextIdleCall)
                 {
-                    Call(d.Ai, 0.35f); // distant chatter tells you what's around
+                    Call(d.Ai, 0.35f, idle: true); // distant chatter tells you what's around
                     d.NextIdleCall = Time.time + Random.Range(idleCallGap.x, idleCallGap.y);
                 }
             }
             foreach (var g in _gone) _dinos.Remove(g);
         }
 
-        private void Call(DinosaurAI ai, float volume)
+        private void Call(DinosaurAI ai, float volume, bool idle = false)
         {
             bool big = ai.species != null && ai.species.maxHealth >= bigDinoHealth;
             // Plant-eaters bellow: the same voices, pitched down.
             float pitch = ai.species != null && ai.species.temperament != Temperament.Predator ? 0.7f : 1f;
+            // Recorded growls for the chatter of animals going about their business: low for the big ones.
+            if (idle && _growls != null)
+            {
+                Play3D(Pick(_growls), ai.transform.position, volume, Random.Range(0.9f, 1.05f) * pitch * (big ? 0.8f : 1.2f),
+                       big ? 180f : 90f);
+                return;
+            }
             if (big) Play3D(Pick(_roars), ai.transform.position, volume, Random.Range(0.9f, 1.05f) * pitch, 220f);
             else     Play3D(Pick(_screeches), ai.transform.position, volume * 0.9f, Random.Range(0.9f, 1.15f) * pitch, 110f);
         }
