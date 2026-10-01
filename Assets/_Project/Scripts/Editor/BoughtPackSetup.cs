@@ -55,6 +55,7 @@ namespace ProjectFossil.Editor
                 EditorUtility.DisplayDialog("Bought packs", "Neither the dinosaur pack nor the forest pack is imported.", "OK");
                 return;
             }
+            if (forest != null && OfferForestUrpPackage(forest)) return;
 
             EnsureFolder(Out + "/Resources");
             EnsureFolder(Out + "/Models");
@@ -253,14 +254,15 @@ namespace ProjectFossil.Editor
             var picked = new Dictionary<string, AnimationClip>();
             if (flyer)
             {
-                picked["Fly"] = Best(clips, new[] { "fly", "flap", "glide", "soar" }) ?? Best(clips, new[] { "idle" });
+                picked["Fly"] = Best(clips, new[] { "flight", "glide", "fly", "flap", "soar" }) ?? Best(clips, new[] { "idle" });
             }
             else
             {
                 picked["Idle"]   = Best(clips, new[] { "idle", "stand", "breath" });
                 picked["Walk"]   = Best(clips, new[] { "walk" });
                 picked["Run"]    = Best(clips, new[] { "run", "sprint", "gallop", "trot", "charge" }) ?? picked["Walk"];
-                picked["Attack"] = Best(clips, new[] { "bite", "attack", "claw", "strike", "headbutt", "tail", "horn", "charge" });
+                // The pack names attacks IdleAtk1, StepAtk1, AtkA...; a standing bite or swipe reads best.
+                picked["Attack"] = Best(clips, new[] { "idleatk", "atka", "stepatk", "atk", "bite", "attack", "claw", "strike" });
                 picked["Death"]  = Best(clips, new[] { "die", "death", "dead", "fall" });
                 if (picked["Idle"] == null) picked["Idle"] = clips.FirstOrDefault();
                 if (picked["Walk"] == null) picked["Walk"] = picked["Idle"];
@@ -318,6 +320,7 @@ namespace ProjectFossil.Editor
         {
             "back", "left", "right", "turn", "jump", "swim", "land", "takeoff", "take off", "start", "end", "stop",
             "eat", "drink", "sleep", "limp", "growl", "call", "roar", "getup", "get up", "rise", "water", "air",
+            "crouch", "strafe", "sit", "ground", "-",
         };
 
         private static AnimationClip Best(List<AnimationClip> clips, string[] words)
@@ -380,11 +383,17 @@ namespace ProjectFossil.Editor
                     if (t != null && t != inst.transform && t.GetComponentsInChildren<Component>(true).All(c => c is Transform) && t.childCount == 0
                         && !IsBone(inst, t))
                         Object.DestroyImmediate(t.gameObject);
-                inst.transform.position = Vector3.zero;
-                inst.transform.rotation = Quaternion.identity;
-                return PrefabUtility.SaveAsPrefabAsset(inst, path);
+                // Keep the pack's own root rotation and scale (models exported Z-up stand on it) under a plain
+                // parent that ModelFit can turn and scale freely.
+                var wrapper = new GameObject(Path.GetFileNameWithoutExtension(path));
+                inst.transform.SetParent(wrapper.transform, false);
+                inst.transform.localPosition = Vector3.zero;
+                inst.transform.localRotation = source.transform.localRotation;
+                inst.transform.localScale    = source.transform.localScale;
+                try { return PrefabUtility.SaveAsPrefabAsset(wrapper, path); }
+                finally { Object.DestroyImmediate(wrapper); inst = null; }
             }
-            finally { Object.DestroyImmediate(inst); }
+            finally { if (inst != null) Object.DestroyImmediate(inst); }
         }
 
         private static bool Keep(Component c) =>
@@ -407,6 +416,13 @@ namespace ProjectFossil.Editor
             tree.AddChild(clips["Idle"], 0f);
             tree.AddChild(clips["Walk"], Mathf.Max(0.5f, walk));
             tree.AddChild(clips["Run"],  Mathf.Max(walk + 0.5f, run));
+            if (clips["Run"] == clips["Walk"])
+            {
+                // No run in the pack (the big theropod and the long-neck): a quicker walk instead of sliding feet.
+                var children = tree.children;
+                children[2].timeScale = Mathf.Clamp(run / Mathf.Max(0.5f, walk), 1f, 2.2f);
+                tree.children = children;
+            }
             sm.defaultState = loco;
 
             if (clips["Attack"] != null)
@@ -533,6 +549,34 @@ namespace ProjectFossil.Editor
                 if (Path.GetFileName(p).StartsWith(fileStart)) return AssetDatabase.LoadAssetAtPath<TerrainLayer>(p);
             }
             return null;
+        }
+
+        // The forest pack ships for the built-in pipeline, with its URP version as a package inside it. Until that's
+        // imported, every plant shows magenta. Returns true when the import was started (run the setup again after).
+        private static bool OfferForestUrpPackage(string forest)
+        {
+            int builtIn = 0;
+            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { forest }))
+            {
+                var m = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if (m != null && !IsUrp(m.shader) && !m.shader.name.StartsWith("Particles") && !m.shader.name.StartsWith("Legacy")) builtIn++;
+            }
+            if (builtIn == 0) return false;
+            string package = Directory.GetFiles(forest, "*.unitypackage", SearchOption.AllDirectories)
+                                      .Where(p => Path.GetFileName(p).StartsWith("URP"))
+                                      .OrderByDescending(p => p).FirstOrDefault();
+            if (package == null)
+            {
+                Log.AppendLine($"{builtIn} forest materials use built-in shaders and no URP package was found in the pack.");
+                return false;
+            }
+            if (!EditorUtility.DisplayDialog("Forest pack for URP",
+                    $"{builtIn} forest materials are built for the old render pipeline and show pink.\n\n" +
+                    $"The pack includes its URP version ({Path.GetFileName(package)}). Import it now? " +
+                    "Click Import in the next window, then run Set Up Bought Packs again.",
+                    "Import", "Skip")) return false;
+            AssetDatabase.ImportPackage(package, true);
+            return true;
         }
 
         // The forest pack's own shaders: anything URP can't draw shows magenta, so list it.

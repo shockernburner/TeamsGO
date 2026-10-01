@@ -300,3 +300,7 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
   - Writes everything to `Art/Bought` (git-ignored), ending in `Resources/BoughtArt.asset`, and a report to `Logs/BoughtArtReport.txt`.
 - At runtime `BoughtArt.Current` is read first, and the free Quaternius models are the fallback. A machine without the packs, such as a joiner's, still plays the same island from the same seed; only the looks differ.
 - Bought trees are real-sized: 16 m at scatter scale 1 (was 7 m). Models that bring their own LODGroup keep it.
+- First run (3:52 PM recording): the dinosaurs showed with their real skins, but the forest was pink because the forest pack ships for the built-in pipeline. Its URP version is a `.unitypackage` inside the pack, and the setup now offers to import it. Two more fixes:
+  - The creature prefabs had lost their root rotation, so a raptor stood on its tail. The copy now keeps the pack's root transform under a plain parent.
+  - The pack names attacks `IdleAtk1`/`AtkA`, and the flight loop is `Flight`. The big theropod and the long-neck have no run clip, so their walk plays up to 2.2× faster at a run.
+- `SkyParticle.shader` sat next to `SkyParticle.mat` in Resources, so `Resources.Load<Material>("Shaders/SkyParticle")` tried to read the shader as a material ("isMapping" assertion), which broke clouds, stars and rain. The shader moved to `Art/Shaders`.
