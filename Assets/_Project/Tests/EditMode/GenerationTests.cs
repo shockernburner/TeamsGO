@@ -307,10 +307,11 @@ namespace ProjectFossil.Tests.EditMode
         }
 
 
-        // The drawn water surfaces reach past their channels so their edges tuck under the banks. If the ground
-        // there is lower, the water hangs in the air as a flat sheet with a straight edge.
+        // The water drawn, walked, swum and pathed on all comes from one field, and it has to hold together on the
+        // game's island: no edge over lower ground (a floating sheet), no surface falling like a cliff (a curtain),
+        // streams shallow enough to wade, lakes deep enough to swim, and still plenty of water.
         [Test]
-        public void WaterEdges_TuckUnderTheBanks_OnFineTerrain()
+        public void WaterField_HoldsTogether_OnTheGamesIsland()
         {
             var s = MakeSettings(257);
             s.worldSize = 1000f;
@@ -319,68 +320,87 @@ namespace ProjectFossil.Tests.EditMode
             s.riverCount = 5;
             s.lakeCount = 6;
             s.terrainDetail = 4;
-            const float slack = 0.02f;
-            int lakes = 0, riverPoints = 0, falls = 0;
-            var rim = new List<Vector3>();
+            int wetTotal = 0, deepTotal = 0, rapids = 0;
             for (int seed = 0; seed < 8; seed++)
             {
-                var data = new IslandGenerator(seed, s).Generate();
-                var fine = TerrainDetail.Refine(data);
-                void Check(Vector3 q, float y, string what)
-                {
-                    if (WaterShape.SurfaceOver(s, data.Rivers, data.Lakes, q, IslandGenerator.CoverInset) >= y - IslandGenerator.WaterStep) return;
-                    float ground = FineGround(fine, s, q);
-                    if (WaterShape.EdgeTucked(s, ground, y, -slack, IslandGenerator.WaterStep)) return;
-                    Assert.GreaterOrEqual(ground, y - slack, $"Seed {seed}: {what} hangs over the ground at ({q.x:F0}, {q.z:F0})");
-                }
-                foreach (var river in data.Rivers)
-                {
-                    // A river gets somewhere: it doesn't coil round a hollow. Its surface is level or falls gently,
-                    // except at a stream's falls, which the decorator draws as steps, not tilted sheets.
-                    int n = river.Points.Count;
-                    float length = 0f;
-                    for (int i = 1; i < n; i++)
+                var world = WaterField.Build(new IslandGenerator(seed, s).Generate());
+                int n = world.Size;
+                rapids += world.Rapids.Count;
+                for (int z = 0; z < n; z++)
+                    for (int x = 0; x < n; x++)
                     {
-                        Vector3 a = river.Points[i - 1], b = river.Points[i];
-                        float run = Mathf.Sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
-                        length += run;
-                        float drop = a.y - b.y;
-                        bool gentle = drop <= s.maxRiverGradient * Mathf.Max(run, 0.5f) + 0.01f;
-                        Assert.IsTrue(gentle || drop >= 0.2f, $"Seed {seed}: river surface tilts at {i} ({drop:F2} m over {run:F1} m)");
-                        if (!gentle) falls++;
+                        float w = world.WaterAtVertex(x, z);
+                        if (float.IsNaN(w)) continue;
+                        wetTotal++;
+                        float depth = w - world.GroundAtVertex(x, z);
+                        Assert.Greater(depth, 0.2f, $"Seed {seed}: water with no depth at [{z},{x}]");
+                        Assert.LessOrEqual(depth, WaterField.LakeDepth + 1e-3f, $"Seed {seed}: a pit at [{z},{x}]");
+                        if (depth > 0.9f) deepTotal++;
+                        for (int dz = -1; dz <= 1; dz++)
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                int nx = x + dx, nz = z + dz;
+                                if ((dx == 0 && dz == 0) || nx < 0 || nz < 0 || nx >= n || nz >= n) continue;
+                                float o = world.WaterAtVertex(nx, nz);
+                                float g = world.GroundAtVertex(nx, nz);
+                                if (float.IsNaN(o))
+                                {
+                                    if (g < world.SeaLevel) continue; // meets the sea
+                                    Assert.GreaterOrEqual(g, w + WaterField.Clearance - 1e-3f,
+                                        $"Seed {seed}: water at [{z},{x}] hangs over the ground beside it");
+                                    float drawn = WaterField.DrawnSurface(world, nx, nz);
+                                    Assert.Less(drawn, g, $"Seed {seed}: the surface's edge at [{nz},{nx}] stands above the bank");
+                                }
+                                else
+                                {
+                                    float run = world.Cell * (dx != 0 && dz != 0 ? 1.41421356f : 1f);
+                                    Assert.LessOrEqual((w - o) / run, WaterField.MaxSurfaceGrade + 1e-3f,
+                                        $"Seed {seed}: the surface falls like a cliff at [{z},{x}]");
+                                }
+                            }
                     }
-                    Vector3 first = river.Points[0], last = river.Points[n - 1];
-                    float reach = Mathf.Sqrt((last.x - first.x) * (last.x - first.x) + (last.z - first.z) * (last.z - first.z));
-                    Assert.Greater(reach, length * 0.4f, $"Seed {seed}: river coils round on itself");
-                    for (int i = 0; i < n; i++)
-                    {
-                        riverPoints++;
-                        WaterShape.RiverRim(s, river, i, rim);
-                        foreach (var q in rim) Check(q, river.Points[i].y, $"river edge {i}");
-                    }
-                }
-                foreach (var lake in data.Lakes)
-                {
-                    lakes++;
-                    WaterShape.LakeRim(s, lake, rim);
-                    foreach (var q in rim) Check(q, lake.Center.y, "lake rim");
-                }
             }
-            Assert.Greater(lakes, 8 * 2, "Too few lakes left in 8 islands");
-            Assert.Greater(riverPoints, 8 * 30, "Too little running water in 8 islands");
-            Assert.Greater(falls, 8, "Streams have no falls");
-            System.Console.WriteLine($"Water in 8 islands: {riverPoints} river points, {falls} falls, {lakes} lakes");
+            Assert.Greater(wetTotal * 1f / 8f, 5000f, "Too little water on the islands");
+            Assert.Greater(deepTotal, 8 * 1000, "No lakes deep enough to swim in");
+            Assert.Less(deepTotal, wetTotal, "Every stream is too deep to wade");
+            Assert.Greater(rapids, 8, "No stream runs fast enough to hear");
+            System.Console.WriteLine($"Water in 8 islands: {wetTotal} wet vertices, {deepTotal} deep, {rapids} rapids");
         }
 
-        private static float FineGround(float[,] fine, IslandSettings s, Vector3 p)
+        // Every stream is shallow enough for anyone to wade.
+        [Test]
+        public void WaterField_StreamsAreWadeable()
         {
-            int res = fine.GetLength(0);
-            float cell = s.worldSize / (res - 1);
-            float gx = Mathf.Clamp(p.x / cell, 0f, res - 1.001f), gz = Mathf.Clamp(p.z / cell, 0f, res - 1.001f);
-            int x0 = (int)gx, z0 = (int)gz;
-            float tx = gx - x0, tz = gz - z0;
-            float v = Mathf.Lerp(Mathf.Lerp(fine[z0, x0], fine[z0, x0 + 1], tx), Mathf.Lerp(fine[z0 + 1, x0], fine[z0 + 1, x0 + 1], tx), tz);
-            return v * s.maxHeight;
+            var s = MakeSettings(257);
+            s.worldSize = 1000f; s.maxHeight = 150f; s.noiseScale = 0.0045f; s.terrainDetail = 4;
+            s.riverCount = 5; s.lakeCount = 0;
+            for (int seed = 0; seed < 4; seed++)
+            {
+                var world = WaterField.Build(new IslandGenerator(seed, s).Generate());
+                for (int z = 0; z < world.Size; z++)
+                    for (int x = 0; x < world.Size; x++)
+                    {
+                        float w = world.WaterAtVertex(x, z);
+                        if (!float.IsNaN(w))
+                            Assert.LessOrEqual(w - world.GroundAtVertex(x, z), WaterField.StreamDepth + 1e-3f,
+                                               $"Seed {seed}: a stream too deep to wade at [{z},{x}]");
+                    }
+            }
+        }
+
+        [Test]
+        public void WaterField_IsDeterministic()
+        {
+            var s = MakeSettings(129);
+            s.terrainDetail = 2; s.riverCount = 3; s.lakeCount = 3;
+            var a = WaterField.Build(new IslandGenerator(11, s).Generate());
+            var b = WaterField.Build(new IslandGenerator(11, s).Generate());
+            for (int z = 0; z < a.Size; z++)
+                for (int x = 0; x < a.Size; x++)
+                {
+                    Assert.AreEqual(a.GroundAtVertex(x, z), b.GroundAtVertex(x, z));
+                    Assert.AreEqual(a.WetVertex(x, z), b.WetVertex(x, z));
+                }
         }
     }
 }

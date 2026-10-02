@@ -92,8 +92,8 @@ namespace ProjectFossil.Environment
         // Each shaft stands in a gap beside a tree within reach of the camera, leaning towards the sun.
         private bool PlaceShaft(Transform shaft, Vector3 cam)
         {
-            var terrain = Terrain.activeTerrain;
-            if (terrain == null) return false;
+            var world = IslandWorld.Current;
+            if (world == null) return false;
             for (int attempt = 0; attempt < 24; attempt++)
             {
                 var tree = _trees[Random.Range(0, _trees.Count)];
@@ -101,8 +101,8 @@ namespace ProjectFossil.Environment
                 var p = new Vector3(tree.x + off.x, 0f, tree.z + off.y);
                 float d = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(cam.x, cam.z));
                 if (d < ShaftNear || d > ShaftFar) continue;
-                p.y = terrain.SampleHeight(p) + terrain.transform.position.y - 1f;
-                if (p.y < ViewBlockers.SurfaceAt(p)) continue; // not out of a river or lake
+                p.y = world.GroundAt(p) - 1f;
+                if (p.y < world.WaterSurfaceAt(p)) continue; // not out of a stream or lake
                 shaft.position = p;
                 shaft.rotation = Quaternion.FromToRotation(Vector3.up, _toSun) * Quaternion.Euler(0f, Random.Range(0f, 60f), 0f);
                 float w = Random.Range(0.6f, 1.4f);
@@ -214,23 +214,23 @@ namespace ProjectFossil.Environment
         private void EmitMist(Vector3 cam, float dt)
         {
             if (_mist == null || _mistAmount <= 0f) return;
-            var terrain = Terrain.activeTerrain;
-            if (terrain == null) return;
+            var world = IslandWorld.Current;
+            if (world == null) return;
             _mistDebt += MistPerSecond * _mistAmount * dt;
             int tries = 0;
             while (_mistDebt >= 1f && tries++ < 8)
             {
                 Vector2 o = Random.insideUnitCircle * MistRadius;
                 var p = new Vector3(cam.x + o.x, 0f, cam.z + o.y);
-                float ground = terrain.SampleHeight(p) + terrain.transform.position.y;
-                float water  = ViewBlockers.SurfaceAt(p);
+                float ground = world.GroundAt(p);
+                float water  = world.WaterSurfaceAt(p);
                 bool overWater = water > ground - 0.1f;
                 // Hollows: lower than the ground a little way round.
                 float around = 0f;
                 for (int i = 0; i < 4; i++)
                 {
                     var q = p + Quaternion.Euler(0f, i * 90f, 0f) * Vector3.forward * 12f;
-                    around += terrain.SampleHeight(q) + terrain.transform.position.y;
+                    around += world.GroundAt(q);
                 }
                 bool hollow = ground < around / 4f - 0.8f;
                 float chance = overWater ? 1f : hollow ? 0.8f : Mathf.Clamp01(_mistAmount - 0.4f);

@@ -15,20 +15,18 @@ namespace ProjectFossil.Generation
         private static readonly Color DirtColor      = new Color(0.36f, 0.29f, 0.19f);
         private static readonly Color MossColor      = new Color(0.15f, 0.25f, 0.09f);
 
-        public static void Decorate(GameObject islandGO, IslandData data)
+        public static void Decorate(GameObject islandGO, IslandData data, IslandWorld world)
         {
             var terrain = islandGO.GetComponent<Terrain>();
             if (terrain != null) PaintTerrain(terrain.terrainData, data);
 
-            var s = data.Settings;
             ViewBlockers.Clear();
-            ViewBlockers.SetWaterHeight(islandGO.transform.TransformPoint(new Vector3(0f, s.seaLevel * s.maxHeight, 0f)).y);
 
             AddWater(islandGO.transform, data);
-            AddInlandWater(islandGO.transform, data);
+            AddInlandWater(islandGO.transform, world);
             var plan = ScatterPlanner.Plan(data);
-            if (terrain != null) AddGrass(terrain, data, plan);
-            if (terrain != null) AddScatter(islandGO.transform, terrain, data, plan);
+            if (terrain != null) AddGrass(terrain, data, world, plan);
+            AddScatter(islandGO.transform, data, world, plan);
             if (Application.isPlaying)
             {
                 var wind = islandGO.GetComponent<IslandWind>();
@@ -146,7 +144,7 @@ namespace ProjectFossil.Generation
         private const float GrassNoSlope     = 38f;  // degrees: none steeper than this
         private const float GrassFullSlope   = 26f;
 
-        private static void AddGrass(Terrain terrain, IslandData data, List<ScatterInstance> plan)
+        private static void AddGrass(Terrain terrain, IslandData data, IslandWorld island, List<ScatterInstance> plan)
         {
             var s = data.Settings;
             var biomes = s.biomes;
@@ -193,22 +191,14 @@ namespace ProjectFossil.Generation
                 shade[sz, sx] += 1f;
             }
 
-            // Rivers and lakes, including the sloping beds out to where the bank rises above the water.
+            // No grass under water, nor on the strip of shore just above it.
             var wet = new bool[res, res];
-            ViewBlockers.ForEachWater((c, r) =>
-            {
-                float lx = c.x - origin.x, lz = c.z - origin.z;
-                int x0 = Mathf.Max(0, (int)((lx - r) / cell)), x1 = Mathf.Min(res - 1, (int)((lx + r) / cell) + 1);
-                int z0 = Mathf.Max(0, (int)((lz - r) / cell)), z1 = Mathf.Min(res - 1, (int)((lz + r) / cell) + 1);
-                for (int z = z0; z <= z1; z++)
-                    for (int x = x0; x <= x1; x++)
-                    {
-                        float dx = (x + 0.5f) * cell - lx, dz = (z + 0.5f) * cell - lz;
-                        if (dx * dx + dz * dz > r * r || wet[z, x]) continue;
-                        float ground = td.GetInterpolatedHeight((x + 0.5f) / res, (z + 0.5f) / res) + origin.y;
-                        if (ground < c.y + 0.15f) wet[z, x] = true;
-                    }
-            });
+            for (int z = 0; z < res; z++)
+                for (int x = 0; x < res; x++)
+                {
+                    var p = origin + new Vector3((x + 0.5f) * cell, 0f, (z + 0.5f) * cell);
+                    wet[z, x] = island.WaterSurfaceAt(p) > island.GroundAt(p) - 0.15f;
+                }
 
             float sea = s.seaLevel * s.maxHeight + 0.4f;
             var rng = new System.Random(data.Seed ^ 0x6A55);
@@ -320,112 +310,68 @@ namespace ProjectFossil.Generation
             return _water;
         }
 
-        // Rivers as ribbons following their centre line at the water surface; lakes as flat discs.
-        // The banks were carved by the generator, so the edges tuck under the ground.
-        private static void AddInlandWater(Transform parent, IslandData data)
+        // Lakes and streams, drawn straight from the island's water field: one surface over the wet vertices, reaching
+        // one vertex past them, where the bank stands above it, so every edge tucks under the ground. The field
+        // keeps surfaces gentle, so there are no falls, curtains or floating sheets. In chunks, so the camera only
+        // draws what it can see.
+        private const int WaterChunk = 128; // vertices along a chunk's side
+
+        private static void AddInlandWater(Transform parent, IslandWorld world)
         {
-            if (data.Rivers.Count == 0 && data.Lakes.Count == 0) return;
             var root = new GameObject("InlandWater").transform;
             root.SetParent(parent, false);
             var art = BoughtArt.Current;
-            // Rivers wear the calm swamp water too: the bought river material's foam read as white sheets on our
-            // slow, wide rivers.
-            Material riverMat = null;
-            if (art != null) riverMat = art.lakeWater != null ? art.lakeWater : art.riverWater;
+            // The calm swamp water: the bought river material's foam read as white sheets.
+            Material mat = art != null ? (art.lakeWater != null ? art.lakeWater : art.riverWater) : null;
 
-            foreach (var river in data.Rivers)
-                if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river, data.Settings), riverMat);
-            foreach (var lake in data.Lakes)
-                AddMesh(root, "Lake", DiscMesh(lake.Center, data.Settings.LakeSurfaceRadius(lake.Radius), 32), art != null ? art.lakeWater : null);
-
-            // White water at the foot of each fall, and its sound.
-            var splashes = new List<Vector3>();
-            foreach (var river in data.Rivers)
-                for (int i = 1; i < river.Points.Count; i++)
-                    if (IsFall(river, data.Settings, i))
-                    {
-                        Vector3 a = river.Points[i - 1], b = river.Points[i];
-                        var foot = Vector3.Lerp(a, b, FallLip + 0.05f);
-                        foot.y = b.y;
-                        var world = parent.TransformPoint(foot);
-                        splashes.Add(world);
-                        ViewBlockers.RegisterFall(world);
-                    }
-            if (splashes.Count > 0) AddSplashes(root, splashes);
-
-            // Wading through inland water breaks a scent trail too.
-            foreach (var river in data.Rivers)
-                for (int i = 0; i < river.Points.Count; i += 2)
-                    ViewBlockers.RegisterWater(parent.TransformPoint(river.Points[i]), river.HalfWidths[i] + 0.5f);
-            foreach (var lake in data.Lakes)
-                ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), data.Settings.LakeSurfaceRadius(lake.Radius)); // as wide as the drawn surface
-        }
-
-        // Spray and foam where the falls land: one small particle system each, drawn with the URP particle
-        // material kept in Resources.
-        private static void AddSplashes(Transform root, List<Vector3> feet)
-        {
-            var baseMat = Resources.Load<Material>("Shaders/RotorDust");
-            if (baseMat == null) return;
-            var mat = new Material(baseMat) { name = "Fall spray" };
-            mat.SetTexture("_BaseMap", SoftDot());
-            foreach (var foot in feet)
-            {
-                var go = new GameObject("Fall spray");
-                go.transform.SetParent(root, true);
-                go.transform.position = foot + Vector3.up * 0.1f;
-                var ps = go.AddComponent<ParticleSystem>();
-                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                var main = ps.main;
-                main.loop            = true;
-                main.prewarm         = true;
-                main.startLifetime   = new ParticleSystem.MinMaxCurve(0.6f, 1.2f);
-                main.startSpeed      = new ParticleSystem.MinMaxCurve(0.6f, 1.6f);
-                main.startSize       = new ParticleSystem.MinMaxCurve(0.5f, 1.3f);
-                main.startColor      = new Color(0.92f, 0.95f, 0.97f, 0.35f);
-                main.gravityModifier = 0.15f;
-                main.simulationSpace = ParticleSystemSimulationSpace.World;
-                main.maxParticles    = 40;
-                var emission = ps.emission;
-                emission.rateOverTime = 26f;
-                var shape = ps.shape;
-                shape.shapeType = ParticleSystemShapeType.Hemisphere;
-                shape.radius    = 0.8f;
-                var col = ps.colorOverLifetime;
-                col.enabled = true;
-                var fade = new Gradient();
-                fade.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-                             new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.15f), new GradientAlphaKey(0f, 1f) });
-                col.color = fade;
-                var size = ps.sizeOverLifetime;
-                size.enabled = true;
-                size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 1.4f));
-                var r = go.GetComponent<ParticleSystemRenderer>();
-                r.sharedMaterial = mat;
-                r.renderMode = ParticleSystemRenderMode.Billboard;
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                r.receiveShadows = false;
-                ps.Play();
-            }
-        }
-
-        private static Texture2D _softDot;
-        private static Texture2D SoftDot()
-        {
-            if (_softDot != null) return _softDot;
-            const int n = 32;
-            _softDot = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "Soft dot", wrapMode = TextureWrapMode.Clamp };
-            var px = new Color[n * n];
-            for (int y = 0; y < n; y++)
+            int n = world.Size;
+            var drawn = new float[n * n];
+            for (int z = 0; z < n; z++)
                 for (int x = 0; x < n; x++)
+                    drawn[z * n + x] = WaterField.DrawnSurface(world, x, z);
+
+            var verts = new List<Vector3>();
+            var uvs   = new List<Vector2>();
+            var tris  = new List<int>();
+            var index = new Dictionary<int, int>();
+            for (int cz = 0; cz < n - 1; cz += WaterChunk)
+                for (int cx = 0; cx < n - 1; cx += WaterChunk)
                 {
-                    float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
-                    float a = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
-                    px[y * n + x] = new Color(1f, 1f, 1f, a * a);
+                    verts.Clear(); uvs.Clear(); tris.Clear(); index.Clear();
+                    int ex = Mathf.Min(cx + WaterChunk, n - 1), ez = Mathf.Min(cz + WaterChunk, n - 1);
+                    for (int z = cz; z < ez; z++)
+                        for (int x = cx; x < ex; x++)
+                        {
+                            int a = z * n + x, b = a + 1, c = a + n, d = c + 1;
+                            if (float.IsNaN(drawn[a]) || float.IsNaN(drawn[b]) || float.IsNaN(drawn[c]) || float.IsNaN(drawn[d])) continue;
+                            if (!world.WetVertex(x, z) && !world.WetVertex(x + 1, z)
+                                && !world.WetVertex(x, z + 1) && !world.WetVertex(x + 1, z + 1)) continue;
+                            int ia = Vertex(a), ib = Vertex(b), ic = Vertex(c), id = Vertex(d);
+                            tris.Add(ia); tris.Add(ic); tris.Add(id);
+                            tris.Add(ia); tris.Add(id); tris.Add(ib);
+                        }
+                    if (tris.Count == 0) continue;
+                    var mesh = new Mesh { name = "Water", indexFormat = IndexFormat.UInt32 };
+                    mesh.SetVertices(verts);
+                    mesh.SetUVs(0, uvs);
+                    mesh.SetColors(White(verts.Count));
+                    mesh.SetTriangles(tris, 0);
+                    mesh.RecalculateNormals();
+                    mesh.RecalculateBounds();
+                    AddMesh(root, "Water", mesh, mat);
                 }
-            _softDot.SetPixels(px);
-            _softDot.Apply();
-            return _softDot;
+
+            int Vertex(int i)
+            {
+                if (index.TryGetValue(i, out int v)) return v;
+                int x = i % n, z = i / n;
+                var p = new Vector3(x * world.Cell, drawn[i], z * world.Cell);
+                v = verts.Count;
+                verts.Add(p);
+                uvs.Add(new Vector2(p.x, p.z) * 0.05f);
+                index[i] = v;
+                return v;
+            }
         }
 
         // The forest pack's water where this machine has it, a plain see-through surface otherwise.
@@ -439,95 +385,6 @@ namespace ProjectFossil.Generation
             r.shadowCastingMode = ShadowCastingMode.Off;
         }
 
-        private static Mesh RiverMesh(RiverPath river, IslandSettings settings)
-        {
-            // The ribbon, plus a rounded end at each end. A river's water stops where its run turns steep, in the
-            // round hollow its channel's end is carved into; cut off square there, the surface hung over that
-            // hollow as a flat sheet with a straight edge. The rounded end reaches the hollow's rim all round.
-            int n = river.Points.Count;
-            var pts = new List<Vector3>(n + 2 * CapRows);
-            var ws  = new List<float>(n + 2 * CapRows);
-            AddCap(river, settings, 0, -1f, pts, ws);
-            for (int i = 0; i < n; i++)
-            {
-                float w = settings.RiverSurfaceHalfWidth(river.HalfWidths[i]);
-                if (i > 0 && IsFall(river, settings, i))
-                {
-                    // A stream's fall: the upper pool runs level almost to the next point, then the water drops
-                    // in a short, steep curtain, instead of a tilted sheet down the whole step.
-                    Vector3 a = river.Points[i - 1], b = river.Points[i];
-                    var lip = Vector3.Lerp(a, b, FallLip);
-                    lip.y = a.y;
-                    pts.Add(lip);
-                    ws.Add(Mathf.Lerp(ws[ws.Count - 1], w, FallLip));
-                }
-                pts.Add(river.Points[i]);
-                ws.Add(w);
-            }
-            AddCap(river, settings, n - 1, 1f, pts, ws);
-
-            int m = pts.Count;
-            var verts = new Vector3[m * 2];
-            var uvs   = new Vector2[m * 2]; // u across, v along the flow in widths, for flowing water shaders
-            var tris  = new int[(m - 1) * 6];
-            float along = 0f, uvWidth = 2f * settings.RiverSurfaceHalfWidth(river.HalfWidths[n / 2]);
-            for (int i = 0; i < m; i++)
-            {
-                if (i > 0) along += Vector3.Distance(pts[i], pts[i - 1]);
-                Vector3 dir = pts[Mathf.Min(m - 1, i + 1)] - pts[Mathf.Max(0, i - 1)]; dir.y = 0f;
-                Vector3 side = dir.sqrMagnitude > 1e-4f ? Vector3.Cross(Vector3.up, dir.normalized) : Vector3.right;
-                verts[i * 2]     = pts[i] - side * ws[i];
-                verts[i * 2 + 1] = pts[i] + side * ws[i];
-                uvs[i * 2]     = new Vector2(0.5f - ws[i] / uvWidth, along / uvWidth);
-                uvs[i * 2 + 1] = new Vector2(0.5f + ws[i] / uvWidth, along / uvWidth);
-            }
-            for (int i = 0; i < m - 1; i++)
-            {
-                int v = i * 2, t = i * 6;
-                tris[t] = v; tris[t + 1] = v + 2; tris[t + 2] = v + 1;
-                tris[t + 3] = v + 1; tris[t + 4] = v + 2; tris[t + 5] = v + 3;
-            }
-            var mesh = new Mesh { name = "River", vertices = verts, uv = uvs, colors = White(verts.Length), triangles = tris };
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
-        }
-
-        private const float FallLip = 0.9f; // how far along a step the upper pool reaches before its fall
-
-        // Whether the surface drops from point i-1 to i more steeply than a calm river: a stream's fall.
-        public static bool IsFall(RiverPath river, IslandSettings settings, int i)
-        {
-            Vector3 a = river.Points[i - 1], b = river.Points[i];
-            float run = Mathf.Sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
-            return a.y - b.y > settings.maxRiverGradient * Mathf.Max(run, 0.5f) + 0.01f;
-        }
-
-        private const int CapRows = 4;
-        private static readonly float[] CapSteps = { 0.4f, 0.7f, 0.9f, 1f };
-
-        // Rows beyond one end of the river (sign -1: before the first point, +1: after the last), in path order.
-        private static void AddCap(RiverPath river, IslandSettings settings, int end, float sign, List<Vector3> pts, List<float> ws)
-        {
-            int n = river.Points.Count;
-            Vector3 d = river.Points[Mathf.Min(n - 1, end + 1)] - river.Points[Mathf.Max(0, end - 1)]; d.y = 0f;
-            if (d.sqrMagnitude < 1e-4f) return;
-            d = d.normalized * sign;
-            // A half disc as wide as the ribbon: its rim lies on the bank top round the end, above the surface.
-            float w = settings.RiverSurfaceHalfWidth(river.HalfWidths[end]);
-            var row = new Vector3[CapRows]; var width = new float[CapRows];
-            for (int k = 0; k < CapRows; k++)
-            {
-                float t = CapSteps[k];
-                row[k]   = river.Points[end] + d * (w * t);
-                width[k] = Mathf.Max(0.05f, w * Mathf.Sqrt(1f - t * t));
-            }
-            if (sign < 0f)
-                for (int k = CapRows - 1; k >= 0; k--) { pts.Add(row[k]); ws.Add(width[k]); }
-            else
-                for (int k = 0; k < CapRows; k++) { pts.Add(row[k]); ws.Add(width[k]); }
-        }
-
         private static Color[] White(int n)
         {
             var c = new Color[n];
@@ -535,28 +392,10 @@ namespace ProjectFossil.Generation
             return c;
         }
 
-        private static Mesh DiscMesh(Vector3 centre, float radius, int segments)
-        {
-            var verts = new Vector3[segments + 1];
-            var tris  = new int[segments * 3];
-            verts[0] = centre;
-            for (int i = 0; i < segments; i++)
-            {
-                float a = i * Mathf.PI * 2f / segments;
-                verts[i + 1] = centre + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * radius;
-                tris[i * 3] = 0; tris[i * 3 + 1] = 1 + (i + 1) % segments; tris[i * 3 + 2] = 1 + i;
-            }
-            var uvs = new Vector2[verts.Length];
-            for (int i = 0; i < verts.Length; i++) uvs[i] = new Vector2(verts[i].x - centre.x, verts[i].z - centre.z) * 0.05f;
-            var mesh = new Mesh { name = "Lake", vertices = verts, uv = uvs, colors = White(verts.Length), triangles = tris };
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
-        }
 
         // ── Trees and rocks ────────────────────────────────────────────────────
 
-        private static void AddScatter(Transform parent, Terrain terrain, IslandData data, List<ScatterInstance> plan)
+        private static void AddScatter(Transform parent, IslandData data, IslandWorld world, List<ScatterInstance> plan)
         {
             var root = new GameObject("Scatter").transform;
             root.SetParent(parent, false);
@@ -566,16 +405,18 @@ namespace ProjectFossil.Generation
             var deadTrk = NewLit(DeadTrunkColor, 0.05f);
             var foliage = new Dictionary<int, Material>();
             var rocks   = new Dictionary<int, Material>();
-            float GroundAt(Vector3 local) => terrain.SampleHeight(parent.TransformPoint(local)) + terrain.transform.position.y;
+            float GroundAt(Vector3 local) => world.GroundAt(parent.TransformPoint(local)); // the island sits unrotated at its origin
 
             foreach (var inst in plan)
             {
                 var b = biomes[inst.BiomeIndex];
                 Vector3 pos = inst.WorldPos;
                 pos.y = GroundAt(pos);
-                // Nothing grows on a river or lake bed (leaves stuck up through the surface). Rocks may.
-                if (inst.Kind != ScatterKind.Rock && ViewBlockers.SurfaceAt(parent.TransformPoint(pos)) > parent.TransformPoint(pos).y + 0.05f)
-                    continue;
+                // Nothing grows in the water or right at its edge (leaves stuck up through the surface). Rocks may sit
+                // in the shallows, but not out of sight in a lake.
+                var at = parent.TransformPoint(pos);
+                float depth = world.WaterSurfaceAt(at) - world.GroundAt(at);
+                if (inst.Kind != ScatterKind.Rock ? depth > -0.3f : depth > 0.4f) continue;
 
                 // Bought models first, then the biome's free imported models, then primitives.
                 var bought = BoughtArt.BiomeFor(b.name);
@@ -730,17 +571,14 @@ namespace ProjectFossil.Generation
                 // Bought models bring their own detail levels; keep them and only make the last one drop out
                 // at the same distance as everything else.
                 var levels = own.GetLODs();
-                // Plants' far levels are flat cards that turn to face the camera. Over the bright ground they read
-                // as leaves and caps hanging in the air, spinning as you walk round them. Keep the real mesh
-                // instead.
+                // Far levels made of flat cards turn to face the camera: from a distance a forest's leaves spun in
+                // circles as you moved, and plants read as leaves and caps hanging in the air. Trees and plants keep
+                // their last real mesh instead, and fade out in the haze.
                 int keep = levels.Length;
-                if (inst.Kind != ScatterKind.Tree)
+                while (keep > 1 && AllStandIns(levels[keep - 1].renderers))
                 {
-                    while (keep > 1 && AllStandIns(levels[keep - 1].renderers))
-                    {
-                        foreach (var r in levels[keep - 1].renderers) if (r != null) r.enabled = false;
-                        keep--;
-                    }
+                    foreach (var r in levels[keep - 1].renderers) if (r != null) r.enabled = false;
+                    keep--;
                 }
                 bool dropped = keep < levels.Length;
                 if (dropped) System.Array.Resize(ref levels, keep);

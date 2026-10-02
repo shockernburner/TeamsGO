@@ -98,16 +98,6 @@ namespace ProjectFossil.Tests.EditMode
         }
 
         [Test]
-        public void ViewBlockers_WaterHeightResetsWithTheIsland()
-        {
-            ViewBlockers.SetWaterHeight(3.5f);
-            Assert.AreEqual(3.5f, ViewBlockers.WaterHeight);
-            ViewBlockers.Clear();
-            Assert.IsTrue(float.IsNegativeInfinity(ViewBlockers.WaterHeight));
-        }
-    
-
-        [Test]
         public void ViewBlockers_LoneBushIsThinCover_ForestHides()
         {
             ViewBlockers.Clear();
@@ -135,19 +125,47 @@ namespace ProjectFossil.Tests.EditMode
             ViewBlockers.Clear();
         }
 
-        [Test]
-        public void ViewBlockers_InWater_SeaRiversAndLakes()
+        // A 4 x 4 vertex island, 10 m a cell, its ground 5 m up, with a pond 2 m deep over vertex (1, 1).
+        private static IslandWorld TinyWorld()
         {
-            ViewBlockers.Clear();
-            ViewBlockers.SetWaterHeight(2f);
-            ViewBlockers.RegisterWater(new Vector3(50f, 10f, 50f), 4f); // a river 8 m above the sea
+            var ground = new float[16];
+            var water  = new float[16];
+            for (int i = 0; i < 16; i++) { ground[i] = 5f; water[i] = float.NaN; }
+            ground[1 * 4 + 1] = 3f; water[1 * 4 + 1] = 4.8f;
+            return new IslandWorld(4, 10f, 2f, ground, water) { Origin = new Vector3(100f, 1f, 0f) };
+        }
 
-            Assert.IsTrue(ViewBlockers.InWater(new Vector3(0f, 1.5f, 0f)), "wading in the sea");
-            Assert.IsFalse(ViewBlockers.InWater(new Vector3(0f, 3f, 0f)), "on the beach");
-            Assert.IsTrue(ViewBlockers.InWater(new Vector3(51f, 9.6f, 50f)), "standing in the river");
-            Assert.IsFalse(ViewBlockers.InWater(new Vector3(51f, 11f, 50f)), "on a bank above it");
-            Assert.IsFalse(ViewBlockers.InWater(new Vector3(60f, 9.6f, 50f)), "beside it");
-            ViewBlockers.Clear();
+        [Test]
+        public void IslandWorld_GroundAndWater_AgreeEverywhere()
+        {
+            var w = TinyWorld();
+            Assert.AreEqual(4f, w.GroundAt(new Vector3(110f, 0f, 10f)), 1e-4f, "the pond's bed, in world space");
+            Assert.AreEqual(6f, w.GroundAt(new Vector3(130f, 0f, 30f)), 1e-4f, "the far corner");
+            Assert.AreEqual(5f, w.GroundAt(new Vector3(105f, 0f, 10f)), 1e-4f, "halfway down the pond's bank");
+            Assert.AreEqual(5.8f, w.WaterSurfaceAt(new Vector3(110f, 0f, 10f)), 1e-4f, "the pond's surface");
+            Assert.AreEqual(3f, w.SeaSurface, 1e-4f);
+            Assert.AreEqual(3f, w.WaterSurfaceAt(new Vector3(130f, 0f, 30f)), 1e-4f, "away from the pond only the sea");
+            Assert.AreEqual(1.8f, w.WaterDepthAt(new Vector3(110f, 0f, 10f)), 1e-4f);
+            Assert.AreEqual(0f, w.WaterDepthAt(new Vector3(130f, 0f, 30f)), 1e-4f);
+            Assert.AreEqual(0.8f, w.WaterDepthAt(new Vector3(105f, 0f, 10f)), 1e-3f, "shallow on the bank");
+
+            Assert.IsTrue(w.InWater(new Vector3(110f, 4.5f, 10f)), "standing in the pond");
+            Assert.IsFalse(w.InWater(new Vector3(110f, 6f, 10f)), "above it");
+            Assert.IsTrue(w.InWater(new Vector3(130f, 2.5f, 30f)), "wading in the sea");
+            Assert.IsFalse(w.InWater(new Vector3(130f, 6f, 30f)), "on dry ground");
+        }
+
+        [Test]
+        public void IslandWorld_Shortcuts_AreSafeWithoutAnIsland()
+        {
+            IslandWorld.SetCurrent(null);
+            Assert.IsTrue(float.IsNegativeInfinity(IslandWorld.SurfaceOver(Vector3.zero)));
+            Assert.IsTrue(float.IsNegativeInfinity(IslandWorld.Sea));
+            Assert.IsFalse(IslandWorld.Wet(Vector3.zero));
+
+            IslandWorld.SetCurrent(TinyWorld());
+            Assert.IsTrue(IslandWorld.Wet(new Vector3(110f, 4.5f, 10f)));
+            IslandWorld.SetCurrent(null);
         }
 
         // ── Scent trail ────────────────────────────────────────────────────────

@@ -474,3 +474,26 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Overcast looked like a clear day:** under cloud the sky is now a grey lid instead of blue, with more cloud, a dimmer sun and softer shadows.
 - **Bought rain:** *Set Up Bought Packs* now picks the rain pack's falling-rain effects by name (steady rain, and heavy rain for storms), skipping splashes, ripples, drops on glass and anything whose shaders don't draw under URP. It runs again by itself once for this. Rain and storms play that effect around the camera; without it the simple streaks remain.
 - **Mountain streams (Firdous chose these next):** on slopes a stream is a run of level pools, each cut about 2 m into the slope below the lip of the one above, with a fall between. Where the ground is gentle the water falls smoothly with it, as before. Streams narrow on the slopes; there is no water on cliffs steeper than 70 %. A fall is drawn as a short steep curtain at the end of the upper pool, with white spray at its foot and a looping rush (synthesized, or `WaterfallLoop` from the sound library) on the three nearest falls. Across eight test islands there are now about 900 points of running water with about 300 falls, plus lakes.
+
+## 2026-10-02 — One world: IslandWorld (8.03 PM recording)
+
+The 8.03 PM clip still showed water sheets on ridgetops, terraced pools with vertical walls, big white blocks
+(the fall spray), dinosaurs biting from under lakes, and distant leaves spinning. Root cause: no single source of
+truth. About ten places each worked out ground and water their own way (coarse map, drawn terrain, raycasts,
+circles round each lake), so water was drawn over one ground, walked on over another and swum in over a third.
+
+- `ProjectFossil.Core.IslandWorld` is now the one answer. It holds the fine ground grid (exactly what the terrain
+  draws), the water surface per vertex, the sea level, fast-stream spots for sound, and a registry of survivors and
+  dinosaurs. Terrain, drawn water, grass, scatter, NavMesh, swimming, wading, scent, camera, mist, light shafts,
+  birds, extraction and the minimap all read it.
+- `WaterField.Build` makes it from the generator's plan: lakes (wobbly shores) and streams laid on the fine grid,
+  surfaces limited to a 0.2 grade (no falls, curtains or tilted sheets), beds shaped by distance to shore (streams
+  at most 0.7 m deep, lakes 2.4 m), gentle banks and levees, every dry vertex beside water at least 0.15 m above
+  it, deep cuts and puddles left out. Tested on 8 game-sized seeds.
+- The water is one chunked mesh over the wet vertices plus one ring past them, so every edge tucks under a bank.
+  River ribbons, lake discs and the fall spray are gone.
+- Dinosaurs: the NavMesh excludes water deeper than 0.9 m (strips built from IslandWorld), so they wait on the
+  shore; streams stay crossable.
+- Trees lose camera-facing far LODs (cross, billboard, impostor) like plants did; they keep their last real mesh
+  and fade out in the haze.
+- Terrain pixel error 3 so far shores don't sink under their water.

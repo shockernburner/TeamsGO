@@ -14,9 +14,11 @@ namespace ProjectFossil.Generation
         {
             var s   = data.Settings;
 
-            // Drawn and walked on a grid finer than the generator's (TerrainDetail), so slopes curve instead of
-            // breaking into 4 m facets.
-            var heights = TerrainDetail.Refine(data);
+            // One world for everything: the fine ground (TerrainDetail, so slopes curve instead of breaking into 4 m
+            // facets) with the lakes and streams laid into it. The terrain draws exactly that ground, and the water,
+            // plants, NavMesh, player, dinosaurs and camera all read the same IslandWorld.
+            var world   = WaterField.Build(data);
+            var heights = WaterField.TerrainHeights(world, s.maxHeight);
             var td = new TerrainData();
             td.heightmapResolution = heights.GetLength(0);
             td.size = new Vector3(s.worldSize, s.maxHeight, s.worldSize);
@@ -30,8 +32,13 @@ namespace ProjectFossil.Generation
             var terrainMat = Resources.Load<Material>(TerrainMaterialPath);
             if (terrainMat != null) go.GetComponent<Terrain>().materialTemplate = terrainMat;
             if (parent != null) go.transform.SetParent(parent, false);
+            // Finer distant ground than the default, so far shores don't sink under their water.
+            go.GetComponent<Terrain>().heightmapPixelError = 3f;
 
-            if (decorate) IslandDecorator.Decorate(go, data);
+            world.Origin = go.transform.position;
+            IslandWorld.SetCurrent(world);
+
+            if (decorate) IslandDecorator.Decorate(go, data, world);
             if (showPoiMarkers) AddPoiMarkers(data, go.transform);
 
             return go;

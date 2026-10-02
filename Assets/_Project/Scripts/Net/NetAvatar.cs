@@ -72,6 +72,7 @@ namespace ProjectFossil.Net
         public override void OnStartClient()
         {
             if (!All.Contains(this)) All.Add(this);
+            if (!IsOwner) IslandWorld.Register(transform, IslandWorld.ActorKind.Survivor); // a teammate (I'm my PlayerController)
             if (IsOwner)
             {
                 // My own body: the local player already shows me, and dinosaurs on the host chase that player.
@@ -83,7 +84,11 @@ namespace ProjectFossil.Net
             _visual = PlayerVisual.Attach(gameObject, BoughtArt.Survivor(Owner.ClientId, content != null ? content.playerModel : null));
         }
 
-        public override void OnStopClient() => All.Remove(this);
+        public override void OnStopClient()
+        {
+            All.Remove(this);
+            IslandWorld.Unregister(transform);
+        }
         public override void OnStopServer() => All.Remove(this);
 
         private void Update()

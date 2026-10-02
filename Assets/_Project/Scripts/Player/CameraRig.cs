@@ -74,12 +74,12 @@ namespace ProjectFossil.Player
                       : Mathf.MoveTowards(_distance, allowed, returnSpeed * Time.deltaTime);
 
             Vector3 pos = origin + dir * _distance;
-            float floor = ViewBlockers.SurfaceAt(pos) + aboveWater; // the sea, or a lake or river under the camera
+            float floor = IslandWorld.SurfaceOver(pos) + aboveWater; // the sea, or a lake or stream under the camera
             if (pos.y < floor) pos.y = floor;
-            var terrain = Terrain.activeTerrain;
-            if (terrain != null)
+            var world = IslandWorld.Current;
+            if (world != null)
             {
-                float ground = terrain.SampleHeight(pos) + terrain.transform.position.y + aboveGround;
+                float ground = world.GroundAt(pos) + aboveGround;
                 if (pos.y < ground) pos.y = ground;
             }
             transform.position = pos;

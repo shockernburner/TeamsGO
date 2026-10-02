@@ -50,7 +50,7 @@ namespace ProjectFossil.Audio
         private AudioSource _rain;      // 2D loop, louder in a storm
         private AudioSource _wind;      // 2D loop, storms only
         private AudioClip _fallLoop;
-        private readonly AudioSource[] _falls = new AudioSource[3]; // 3D loops on the nearest stream falls
+        private readonly AudioSource[] _falls = new AudioSource[3]; // 3D loops on the nearest fast streams
         private float _nextFallPick;
         private float _rainTarget, _windTarget;
         private float _nextBeat;
@@ -279,10 +279,12 @@ namespace ProjectFossil.Audio
             UpdateFalls();
         }
 
-        // The nearest few stream falls each get a looping rush; the rest are too far to hear.
+        // The nearest few stretches of fast stream each get a looping rush; the rest are too far to hear.
         private void UpdateFalls()
         {
-            var falls = ViewBlockers.WaterFalls;
+            var world = IslandWorld.Current;
+            if (world == null) return;
+            var falls = world.Rapids;
             var cam = Camera.main;
             if (Time.time >= _nextFallPick && cam != null)
             {
@@ -301,7 +303,7 @@ namespace ProjectFossil.Audio
                         if (!taken) { best = i; bestD = d; }
                     }
                     if (best >= 0) _falls[k].transform.position = falls[best];
-                    _falls[k].volume = best >= 0 ? 0.55f * masterVolume * (_match.IsRunning ? 1f : 0.5f) : 0f;
+                    _falls[k].volume = best >= 0 ? 0.4f * masterVolume * (_match.IsRunning ? 1f : 0.5f) : 0f;
                 }
             }
             foreach (var src in _falls)

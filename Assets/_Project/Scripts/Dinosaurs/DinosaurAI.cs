@@ -74,8 +74,17 @@ namespace ProjectFossil.Dinosaurs
             new Dictionary<Transform, List<DinosaurAI>>();
 
         private static readonly List<DinosaurAI> Living = new List<DinosaurAI>();
-        private void OnEnable()  => Living.Add(this);
-        private void OnDisable() => Living.Remove(this);
+        private void OnEnable()
+        {
+            Living.Add(this);
+            IslandWorld.Register(transform, IslandWorld.ActorKind.Dinosaur);
+        }
+
+        private void OnDisable()
+        {
+            Living.Remove(this);
+            IslandWorld.Unregister(transform);
+        }
 
         // A loud noise (a helicopter, an explosion): wandering animals within `radius` react to it. Hunters come to
         // look, skittish ones bolt away. Animals already busy with someone ignore it.
