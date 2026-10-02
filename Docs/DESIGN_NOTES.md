@@ -410,3 +410,11 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Pink first-person hands:** the pack's FPS prefab uses materials the URP can't draw. Setup now saves a clean copy (Art/Bought/Survivors/FirstPersonArms.prefab) with the pack's "Materials URP" versions, as for the bodies. FirstPersonRig also swaps any undrawable material for a plain lit one as a safety net.
 - **First-person hands:** relaxed and low when walking, swinging with the stride, pumping as loose fists when sprinting, and up in a guard for 1.6 s after an attack. With a weapon, the right hand carries it low on the right, tilted away from the view. The fingers blend between an open hand and a fist. Which sign of the humanoid finger muscles closes the hand is found at runtime by trying both.
 - **Saplings:** young beeches are small trees. Shrunk to plant height, they looked like the crown of a buried tree swaying on the ground, so they're now in the tree lists.
+
+## 2026-10-02 — Screenshot fixes: grounded foliage, extraction stakes, bought axe
+
+- **Floating leaves:** PR #34 turned bought (shader-wind) plants as a whole for pushing and gusts. Their leaves then rotated about the root and lifted into the air. Bought foliage is no longer turned, as before, and only keeps its shader ripple. The Quaternius plants still part and lean, with a gentler push bend (14° instead of 38°).
+- **Leaves over lakes:** plants are no longer placed where the water surface is above the ground. Lakes register their full mesh radius (+4 m), so their edges count too.
+- **Red disc and pole:** the closed extraction pad was a flat disc that cut into slopes, plus a 40 m red pillar. It is now a ring of short stakes with coloured flags, each set on the terrain, and a slimmer beacon standing on the ground beside it.
+- **Axe pack:** Sky Den Games' Mid poly Axes Collection (`Assets/Skyden_Games/Axe Package`) is detected by Set Up Bought Packs. The first axe becomes `BoughtArt.axe`, and the held axe uses it (longest axis up, gripped near the bottom). Without the pack, the primitive axe remains.
+- **Rain pack:** AIK Studio's Rain System VFX (`Assets/Rainy VFX`) is detected and listed in the setup report. It isn't wired yet; the report shows which prefabs and shaders it uses.

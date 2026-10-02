@@ -13,7 +13,7 @@ namespace ProjectFossil.Generation
         public float plantBend    = 7f;    // degrees at full gust
         public float frequency    = 1.3f;  // sway cycles per second (roughly)
         public float gustSpeed    = 0.12f; // how fast gusts come and go
-        public float pushBend     = 38f;   // degrees a plant leans away from someone standing in it
+        public float pushBend     = 14f;   // degrees a plant leans away from someone standing in it (more lifts leaves off the ground)
 
         private Vector3 _windDir = Vector3.right;
         private Vector3 _axis    = Vector3.forward;

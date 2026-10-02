@@ -73,12 +73,16 @@ namespace ProjectFossil.Editor
             string dinoPack  = creatures != null ? Parent(Parent(creatures)) : null;
             string survivors = FindDir("Survivalist");
             string heliPack  = FindDir("OH-1_Basic");
+            string axePack   = FindDir("Axe Package");
+            string rainPack  = FindDir("Rainy VFX");
             Log.AppendLine($"Dinosaur pack: {dinoPack ?? "not found"}");
             Log.AppendLine($"Forest pack:   {forest ?? "not found"}");
             Log.AppendLine($"Survivor pack: {survivors ?? "not found"}");
             Log.AppendLine($"Heli pack:     {heliPack ?? "not found"}");
+            Log.AppendLine($"Axe pack:      {axePack ?? "not found"}");
+            Log.AppendLine($"Rain pack:     {rainPack ?? "not found"}");
             int sounds = SoundSetup.Organise(Log);
-            if (dinoPack == null && forest == null && survivors == null && heliPack == null)
+            if (dinoPack == null && forest == null && survivors == null && heliPack == null && axePack == null && rainPack == null)
             {
                 WriteReport();
                 EditorUtility.DisplayDialog("Bought packs", "None of the art packs is imported." +
@@ -115,6 +119,13 @@ namespace ProjectFossil.Editor
                     SetUpHelicopter(art, heliPack);
                 }
                 else art.helicopter = null;
+                if (axePack != null)
+                {
+                    ConvertMaterials(axePack, "axe-pack");
+                    SetUpAxe(art, axePack);
+                }
+                else art.axe = null;
+                if (rainPack != null) ListPack("Rain", rainPack); // wired next, once its layout is known
             }
             finally
             {
@@ -735,6 +746,51 @@ namespace ProjectFossil.Editor
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
             }
             finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        // ── Axe and other packs ────────────────────────────────────────────────
+
+        // The first axe in the pack, cleaned of scripts and physics, carried for the Axe look.
+        private static void SetUpAxe(BoughtArt art, string dir)
+        {
+            Log.AppendLine();
+            var prefabs = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+                                   .Select(p => p.Replace('\\', '/')).OrderBy(p => p).ToList();
+            Log.AppendLine($"Axes: {prefabs.Count} prefabs in {dir}");
+            foreach (var p in prefabs.Take(30))
+            {
+                var g = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (g == null) continue;
+                var b = ModelFit.PrefabBounds(g);
+                Log.AppendLine($"  {Path.GetFileNameWithoutExtension(p)}: {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m");
+            }
+            var source = prefabs.Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                                .FirstOrDefault(g => g != null && g.GetComponentInChildren<Renderer>(true) != null);
+            if (source == null) { art.axe = null; Log.AppendLine("  no usable axe, keeping the stone axe."); return; }
+            string path = $"{Out}/Models/Axe.prefab";
+            CleanPrefab(source, path);
+            art.axe = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            Log.AppendLine($"  Axe <- {AssetDatabase.GetAssetPath(source)}");
+        }
+
+        // What a pack holds (prefabs, their particle systems and shaders), so it can be wired by name.
+        private static void ListPack(string label, string dir)
+        {
+            Log.AppendLine();
+            var prefabs = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+                                   .Select(p => p.Replace('\\', '/')).OrderBy(p => p).ToList();
+            Log.AppendLine($"{label} pack: {prefabs.Count} prefabs in {dir}");
+            foreach (var p in prefabs.Take(40))
+            {
+                var g = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (g == null) continue;
+                var parts = g.GetComponentsInChildren<Component>(true)
+                             .Where(c => c != null && !(c is Transform))
+                             .GroupBy(c => c.GetType().Name).Select(x => $"{x.Key} x{x.Count()}");
+                var shaders = g.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
+                               .Where(m => m != null && m.shader != null).Select(m => m.shader.name).Distinct();
+                Log.AppendLine($"  {p.Substring(dir.Length + 1)}: {string.Join(", ", parts)} | shaders: {string.Join(", ", shaders)}");
+            }
         }
 
         // ── Helicopter ─────────────────────────────────────────────────────────

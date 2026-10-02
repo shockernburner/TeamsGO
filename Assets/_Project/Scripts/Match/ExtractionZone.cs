@@ -59,26 +59,58 @@ namespace ProjectFossil.Match
             root.transform.SetParent(parent, false);
             root.transform.position = position;
 
-            var disc = Placeholder.Primitive(PrimitiveType.Cylinder);
-            disc.name = "Disc";
-            Destroy(disc.GetComponent<Collider>());
-            disc.transform.SetParent(root.transform, false);
-            disc.transform.localScale = new Vector3(radius * 2f, 0.05f, radius * 2f);
+            // The pad is marked by a ring of stakes with coloured tips, each set into the ground where it stands. A
+            // flat disc didn't follow the slope: on a hillside it hung in the air on one side like a red plate.
+            var tips = new System.Collections.Generic.List<Renderer>();
+            const int Stakes = 10;
+            for (int i = 0; i < Stakes; i++)
+            {
+                float a = i * Mathf.PI * 2f / Stakes;
+                Vector3 at = Ground(position + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * radius);
+                var stake = Placeholder.Primitive(PrimitiveType.Cylinder);
+                stake.name = "Stake";
+                Destroy(stake.GetComponent<Collider>());
+                stake.transform.SetParent(root.transform, true);
+                stake.transform.position   = at + Vector3.up * 0.35f;
+                stake.transform.localScale = new Vector3(0.07f, 0.45f, 0.07f);
+                stake.GetComponent<Renderer>().sharedMaterial = Placeholder.Lit(new Color(0.3f, 0.22f, 0.14f));
+                var tip = Placeholder.Primitive(PrimitiveType.Cube);
+                tip.name = "Flag";
+                Destroy(tip.GetComponent<Collider>());
+                tip.transform.SetParent(root.transform, true);
+                tip.transform.position   = at + new Vector3(0f, 0.72f, 0f) + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * 0.08f;
+                tip.transform.rotation   = Quaternion.Euler(0f, -a * Mathf.Rad2Deg, 0f);
+                tip.transform.localScale = new Vector3(0.18f, 0.12f, 0.02f);
+                tips.Add(tip.GetComponent<Renderer>());
+            }
 
+            // The beacon: a slim column beside the pad, standing on the ground there, seen from across the island.
+            Vector3 beaconFoot = Ground(position + new Vector3(radius + 1f, 0f, 0f));
             var pillar = Placeholder.Primitive(PrimitiveType.Cylinder);
             pillar.name = "Beacon";
             Destroy(pillar.GetComponent<Collider>());
-            pillar.transform.SetParent(root.transform, false);
-            pillar.transform.localPosition = new Vector3(radius + 1f, 20f, 0f); // beside the pad, clear of the rotor
-            pillar.transform.localScale    = new Vector3(0.6f, 20f, 0.6f);
+            pillar.transform.SetParent(root.transform, true);
+            pillar.transform.position   = beaconFoot + Vector3.up * 20f;
+            pillar.transform.localScale = new Vector3(0.3f, 20f, 0.3f);
+            tips.Add(pillar.GetComponent<Renderer>());
 
             var zone = root.AddComponent<ExtractionZone>();
             zone.radius = radius;
-            zone._beaconRenderers = new[] { pillar.GetComponent<Renderer>() };
-            zone._pad = disc.GetComponent<Renderer>();
+            zone._beaconRenderers = tips.ToArray();
             zone.BuildHelicopter();
             zone.SetOpen(false);
             return zone;
+        }
+
+        // The terrain under a point (or the point itself if nothing is below or above it).
+        private static Vector3 Ground(Vector3 p)
+        {
+            if (Physics.Raycast(p + Vector3.up * 60f, Vector3.down, out var hit, 200f, Physics.DefaultRaycastLayers,
+                                QueryTriggerInteraction.Ignore) && hit.collider is TerrainCollider)
+                return hit.point;
+            var t = Terrain.activeTerrain;
+            if (t != null) p.y = t.SampleHeight(p) + t.transform.position.y;
+            return p;
         }
 
         public bool Contains(Vector3 position)

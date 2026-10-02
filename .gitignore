@@ -129,3 +129,8 @@ InitTestScene*.unity*
 # Licensed sound effects stay local; the game finds them by name.
 /[Aa]ssets/SoundLibrary/
 /[Aa]ssets/SoundLibrary.meta
+# Free Asset Store packs (Standard EULA: no redistribution in a public repo)
+/[Aa]ssets/Skyden_Games/
+/[Aa]ssets/Skyden_Games.meta
+/[Aa]ssets/Rainy VFX/
+/[Aa]ssets/Rainy VFX.meta

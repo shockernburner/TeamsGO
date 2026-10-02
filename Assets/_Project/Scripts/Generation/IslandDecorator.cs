@@ -177,7 +177,7 @@ namespace ProjectFossil.Generation
                 for (int i = 0; i < river.Points.Count; i += 2)
                     ViewBlockers.RegisterWater(parent.TransformPoint(river.Points[i]), river.HalfWidths[i] + 0.5f);
             foreach (var lake in data.Lakes)
-                ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), lake.Radius + 2f);
+                ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), lake.Radius + 4f); // as wide as the drawn surface
         }
 
         private static void AddMesh(Transform root, string name, Mesh mesh)
@@ -252,6 +252,9 @@ namespace ProjectFossil.Generation
                 var b = biomes[inst.BiomeIndex];
                 Vector3 pos = inst.WorldPos;
                 pos.y = GroundAt(pos);
+                // Nothing grows on a river or lake bed (leaves stuck up through the surface). Rocks may.
+                if (inst.Kind != ScatterKind.Rock && ViewBlockers.SurfaceAt(parent.TransformPoint(pos)) > parent.TransformPoint(pos).y + 0.05f)
+                    continue;
 
                 // Bought models first, then the biome's free imported models, then primitives.
                 var bought = BoughtArt.BiomeFor(b.name);
@@ -382,8 +385,9 @@ namespace ProjectFossil.Generation
                     float radius = Mathf.Max(wb.extents.x, wb.extents.z);
                     // Bushes and tall ferns you can crouch in count as cover; ankle-high grass doesn't.
                     bool cover = radius >= 0.55f && wb.size.y >= 0.7f;
-                    // Shader-wind foliage already ripples; it still leans with gusts (less) and gets pushed aside.
-                    ViewBlockers.Register(wb.center, radius, renderers, go.transform, shaderWind ? 0.5f : 1f, cover);
+                    // Shader-wind foliage moves in its own shader and is left unturned: tilting a whole bought bush
+                    // (with gusts, or pushed aside) lifted its far leaves off the ground, where they hung in the air.
+                    ViewBlockers.Register(wb.center, radius, renderers, shaderWind ? null : go.transform, 1f, cover);
                 }
             }
 

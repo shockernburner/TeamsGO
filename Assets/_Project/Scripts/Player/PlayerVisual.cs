@@ -189,11 +189,47 @@ namespace ProjectFossil.Player
                     break;
 
                 case HeldLook.Axe:
+                    var axe = BoughtArt.Current != null ? BoughtArt.Current.axe : null;
+                    if (axe != null && BoughtWeapon(root, axe, 0.62f)) break;
                     Shape(root, PrimitiveType.Cylinder, _wood, new Vector3(0f, 0.17f, 0f), new Vector3(0.045f, 0.38f, 0.045f));
                     Shape(root, PrimitiveType.Cube,     _stone, new Vector3(0.09f, 0.48f, 0f), new Vector3(0.18f, 0.13f, 0.035f));
                     Shape(root, PrimitiveType.Cylinder, _cord, new Vector3(0f, 0.48f, 0f), new Vector3(0.06f, 0.07f, 0.06f));
                     break;
             }
+        }
+
+        // A bought weapon model in the hand: its longest side along the handle (+Y), scaled to `length` metres,
+        // with the grip a little above the bottom end. Models are expected head up; the pack is logged by setup.
+        private static bool BoughtWeapon(Transform root, GameObject prefab, float length)
+        {
+            var go = Instantiate(prefab, root, false);
+            go.name = prefab.name;
+            foreach (var c in go.GetComponentsInChildren<Collider>(true)) Destroy(c);
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) { Destroy(go); return false; }
+
+            Bounds Local()
+            {
+                var b = new Bounds(root.InverseTransformPoint(renderers[0].bounds.center), Vector3.zero);
+                foreach (var r in renderers)
+                {
+                    var wb = r.bounds;
+                    for (int i = 0; i < 8; i++)
+                        b.Encapsulate(root.InverseTransformPoint(wb.center + Vector3.Scale(wb.extents,
+                            new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1))));
+                }
+                return b;
+            }
+
+            var lb = Local();
+            Vector3 s = lb.size;
+            if (s.x > s.y && s.x >= s.z) go.transform.localRotation = Quaternion.Euler(0f, 0f, 90f) * go.transform.localRotation;
+            else if (s.z > s.y && s.z > s.x) go.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f) * go.transform.localRotation;
+            lb = Local();
+            go.transform.localScale *= length / Mathf.Max(0.01f, lb.size.y);
+            lb = Local();
+            go.transform.localPosition -= new Vector3(lb.center.x, lb.min.y + length * 0.12f, lb.center.z);
+            return true;
         }
 
         private static GameObject Shape(Transform parent, PrimitiveType type, Material mat, Vector3 pos, Vector3 scale)
