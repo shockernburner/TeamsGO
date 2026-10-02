@@ -432,3 +432,9 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Forest pack water:** setup picks the forest pack's river and swamp water materials (`BoughtArt.riverWater`, `lakeWater`). Rivers carry UVs along their flow, and lakes get planar UVs. Without the pack, the plain see-through water remains.
 - **Weapons from the axe pack:** the shortest axe in the pack is the Hatchet (was the Bone Club, 25 coins), and the longest is the Felling Axe (was the Stone Axe, 45). The simple fallback for the hatchet is now a small axe too.
 - **Crouch flipped the face:** like swimming, crouching uses clips from another library. The body-facing check now runs again on every base-layer state change, once its blend has settled (not after death).
+
+## 2026-10-02 — Minimap
+
+- A 200 px map in the bottom-right corner (`UI/MiniMap`), north up. It is drawn once per island from the generator's data: the sea in deep blue, rivers and lakes lighter, open ground in sand that turns to rock on steep slopes, and forest in greens from light to dark by how many trees stand within about 12 m. Hills are shaded from the north-west.
+- On top of it: the player as an arrow pointing where the camera looks, unsearched supply caches as pulsing yellow dots, and, once extraction opens, every extraction beacon blinking green.
+- Dinosaurs are not on the map. Finding them is the player's job.

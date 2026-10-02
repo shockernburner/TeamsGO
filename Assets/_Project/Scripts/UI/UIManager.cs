@@ -27,6 +27,7 @@ namespace ProjectFossil.UI
         private float            _damageFlash;   // 0..1, fades after the player is hurt
         private float            _damageSide;    // -1 left, 0 front/back, +1 right
 
+        private readonly MiniMap _miniMap = new MiniMap();
         private bool _shopOpen;
         private string _shopMessage;
         private Vector2 _shopScroll;
@@ -220,6 +221,8 @@ namespace ProjectFossil.UI
                 DrawDamageFlash();
                 if (!_shopOpen) DrawCrosshair();
                 if (!_shopOpen) DrawBeaconMarker();
+                if (!_shopOpen && _bootstrap != null && _match.PlayerController != null)
+                    _miniMap.Draw(_bootstrap.LastData, _match, _match.PlayerController.transform, Camera.main != null ? Camera.main.transform : null);
                 DrawHud();
                 DrawAlerts();
                 DrawPrompt();
