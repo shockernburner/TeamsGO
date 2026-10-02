@@ -94,6 +94,7 @@ namespace ProjectFossil.Dinosaurs
             var box = gameObject.AddComponent<BoxCollider>();
             box.center = b.center;
             box.size   = new Vector3(b.size.x * 0.8f, b.size.y * 0.9f, b.size.z * 0.85f); // trim tail tip and snout air
+            PlantPusher.Ensure(gameObject, Mathf.Clamp(Mathf.Min(b.size.x, b.size.z) * 0.6f, 0.4f, 3f));
 
             if (_agent != null)
             {

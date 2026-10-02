@@ -434,10 +434,12 @@ namespace ProjectFossil.UI
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), tex, ScaleMode.StretchToFill);
             if (_damageSide != 0f)
             {
-                float w = Screen.width * 0.6f;
-                float x = _damageSide < 0f ? -w * 0.5f : Screen.width - w * 0.5f;
+                // A sideways fade from the hit edge, so it has no hard inner edge (a stretched vignette left one).
+                float w = Screen.width * 0.35f;
+                var side = _damageSide < 0f ? new Rect(0, 0, w, Screen.height) : new Rect(Screen.width - w, 0, w, Screen.height);
                 GUI.color = new Color(0.55f, 0f, 0f, a * 0.6f);
-                GUI.DrawTexture(new Rect(x, 0, w, Screen.height), tex, ScaleMode.StretchToFill);
+                GUI.DrawTextureWithTexCoords(side, SideFadeTexture(),
+                                             _damageSide < 0f ? new Rect(0, 0, 1, 1) : new Rect(1, 0, -1, 1));
             }
             GUI.color = old;
         }
@@ -597,6 +599,24 @@ namespace ProjectFossil.UI
                       $"SCORE {s.Score}" + (s.NewBest ? "   NEW BEST!" : "") + $"    {s.DinosKilled} kills    survived {FormatTime(s.TimeSurvived)}",
                       _center);
             GUI.color = old;
+        }
+
+        // Opaque at the left edge, fading smoothly to nothing at the right.
+        private Texture2D _sideFade;
+        private Texture2D SideFadeTexture()
+        {
+            if (_sideFade != null) return _sideFade;
+            const int n = 64;
+            _sideFade = new Texture2D(n, 2, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int x = 0; x < n; x++)
+            {
+                float a = 1f - x / (n - 1f);
+                a = a * a * (3f - 2f * a);
+                _sideFade.SetPixel(x, 0, new Color(1f, 1f, 1f, a));
+                _sideFade.SetPixel(x, 1, new Color(1f, 1f, 1f, a));
+            }
+            _sideFade.Apply();
+            return _sideFade;
         }
 
         private Texture2D VignetteTexture()

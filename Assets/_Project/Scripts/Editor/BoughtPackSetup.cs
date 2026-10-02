@@ -140,6 +140,9 @@ namespace ProjectFossil.Editor
             var found = new List<string>();
             if (FindDir("Survivalist") != null && (art == null || art.survivors == null || art.survivors.Length == 0 || art.survivors[0] == null))
                 found.Add("survivor pack");
+            else if (art != null && art.firstPersonArms == null && FindDir("Survivalist") is string sv &&
+                     Directory.Exists($"{sv}/Prefab") && Directory.GetFiles($"{sv}/Prefab", "FPS_*.prefab").Length > 0)
+                found.Add("first-person arms");
             if (FindDir("OH-1_Basic") != null && (art == null || art.helicopter == null))
                 found.Add("helicopter pack");
             if ((FindDir("Creatures/VOLI") != null || FindDir("Forest Environment Dynamic Nature") != null) && art == null)
@@ -605,7 +608,7 @@ namespace ProjectFossil.Editor
                 Log.AppendLine($"  {name} <- {sources[i]}");
             }
             art.survivors = defs.ToArray();
-            LogFirstPersonArms(dir);
+            art.firstPersonArms = FirstPersonArms(dir);
         }
 
         // The pack ships Unity's Starter Assets idle, walk and run, made for this skeleton: a relaxed, natural
@@ -653,34 +656,28 @@ namespace ProjectFossil.Editor
         }
 
         // The pack's first-person prefabs, listed so the next step (real first-person arms) can be wired by name.
-        private static void LogFirstPersonArms(string dir)
+        // The pack's first-person rig: the full skeleton with arm-and-sleeve meshes under FPS_HANDS. The game keeps
+        // only those meshes and bends the arms itself, so no controller is needed.
+        private static GameObject FirstPersonArms(string dir)
         {
             string prefabDir = $"{dir}/Prefab";
-            if (!Directory.Exists(prefabDir)) return;
+            if (!Directory.Exists(prefabDir)) return null;
             foreach (var path in Directory.GetFiles(prefabDir, "FPS_*.prefab").Select(p => p.Replace('\\', '/')).OrderBy(p => p))
             {
                 var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (go == null) continue;
-                Log.AppendLine($"  first-person prefab {path}:");
-                var anim = go.GetComponentInChildren<Animator>();
-                Log.AppendLine($"    animator: {(anim == null ? "none" : $"{anim.name}, avatar {(anim.avatar != null ? anim.avatar.name : "none")}, controller {(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "none")}")}");
-                var b = new Bounds(); bool any = false;
-                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+                if (anim == null || anim.avatar == null || !anim.avatar.isHuman)
                 {
-                    if (any) b.Encapsulate(r.bounds); else { b = r.bounds; any = true; }
-                    string mats = string.Join(", ", r.sharedMaterials.Where(m => m != null).Select(m => m.name));
-                    Log.AppendLine($"    mesh {r.name} ({r.GetType().Name}) [{mats}]");
+                    Log.AppendLine($"  first-person arms: {path} has no humanoid avatar, skipped.");
+                    continue;
                 }
-                if (any) Log.AppendLine($"    size {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m");
-                int n = 0;
-                foreach (var t in go.GetComponentsInChildren<Transform>(true))
-                {
-                    if (++n > 60) { Log.AppendLine("    ..."); break; }
-                    int depth = 0; for (var p = t; p != go.transform; p = p.parent) depth++;
-                    Log.AppendLine($"    {new string(' ', depth * 2)}{t.name}");
-                }
-                break; // one is enough to see the layout
+                var hands = go.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                              .Where(r => r.name.Contains("FPS")).Select(r => r.name).ToArray();
+                Log.AppendLine($"  first-person arms <- {path} ({string.Join(", ", hands)})");
+                return go;
             }
+            Log.AppendLine("  first-person arms: no FPS_*.prefab, keeping the simple arms.");
+            return null;
         }
 
         // The pack's body model, imported as a humanoid. Returns its avatar.
@@ -811,7 +808,9 @@ namespace ProjectFossil.Editor
                                   All(ferns, plants, shrooms, young),           Layer(forest, "Terrain_Layer3_Soil_Wet")),
                 Biome("Beach",    All(palms),                                 All(tropicalRocks, stones),
                                   All(tropicalPlants, grass),                   Layer(forest, "Terrain_Layer1_Sand") ?? Layer(dinoPack, "layer_sand")),
-                Biome("Volcanic", All(boughs),                                All(tropicalRocks, stones, logs),
+                // Dry boughs lie on the ground: as "trees" they were stretched to tree height and stuck up out of
+                // the slopes like giant poles, so they go with the rocks (scaled by width) instead.
+                Biome("Volcanic", All(oldBeech),                              All(tropicalRocks, stones, logs, boughs),
                                   All(shrooms),                                 Layer(forest, "Terrain_Layer8_Stones") ?? Layer(dinoPack, "layer_rock")),
             };
             art.cliff = Layer(dinoPack, "layer_cliff") ?? Layer(forest, "Terrain_Layer8_Stones");
