@@ -12,6 +12,7 @@ namespace ProjectFossil.Environment
         private const float RainHeight  = 16f;
 
         private ParticleSystem _clouds, _stars, _rain;
+        private GameObject _boughtRain;
         private Transform _starRoot;
         private Vector3 _wind = Vector3.right;
 
@@ -31,6 +32,7 @@ namespace ProjectFossil.Environment
             if (_clouds != null) _clouds.transform.position = new Vector3(p.x, CloudHeight, p.z);
             if (_starRoot != null) _starRoot.position = p;
             if (_rain != null) _rain.transform.position = p + Vector3.up * RainHeight + _wind * 3f;
+            if (_boughtRain != null) _boughtRain.transform.position = p; // the pack's rain falls round its own origin
         }
 
         // ── Clouds ─────────────────────────────────────────────────────────────
@@ -45,7 +47,7 @@ namespace ProjectFossil.Environment
             }
             int count = c.Weather switch
             {
-                Weather.Clear => 22, Weather.Cloudy => 90, Weather.Rain => 120, Weather.Storm => 150, _ => 45,
+                Weather.Clear => 22, Weather.Cloudy => 150, Weather.Rain => 120, Weather.Storm => 150, _ => 45,
             };
             float alpha = c.Weather == Weather.Clear ? 0.75f : 0.92f;
 
@@ -152,9 +154,20 @@ namespace ProjectFossil.Environment
         private void SetUpRain(Conditions c)
         {
             bool raining = c.Weather == Weather.Rain || c.Weather == Weather.Storm;
+            if (_boughtRain != null) { Destroy(_boughtRain); _boughtRain = null; }
             if (!raining)
             {
                 if (_rain != null) _rain.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                return;
+            }
+            // The rain pack's effect where it's been set up; the simple streaks below otherwise.
+            var art = BoughtArt.Current;
+            var bought = art == null ? null : c.Weather == Weather.Storm && art.heavyRain != null ? art.heavyRain : art.rain;
+            if (bought != null)
+            {
+                if (_rain != null) _rain.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                _boughtRain = Instantiate(bought);
+                _boughtRain.name = "Rain (pack)";
                 return;
             }
             if (_rain == null)

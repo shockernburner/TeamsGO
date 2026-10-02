@@ -36,6 +36,7 @@ namespace ProjectFossil.Core
         {
             Grid.Clear();
             Water.Clear();
+            Falls.Clear();
             Count = 0;
             _maxRadius = 0f;
             WaterHeight = float.NegativeInfinity;
@@ -50,6 +51,11 @@ namespace ProjectFossil.Core
         {
             if (radius > 0f) Water.Add((surfaceCenter, radius));
         }
+
+        // Where streams fall from one pool to the next (the foot of each fall), for their sound.
+        private static readonly List<Vector3> Falls = new List<Vector3>();
+        public static IReadOnlyList<Vector3> WaterFalls => Falls;
+        public static void RegisterFall(Vector3 foot) => Falls.Add(foot);
 
         // The highest water surface over this spot: the sea, or a river or lake it lies in. -Infinity on dry land
         // away from the sea.

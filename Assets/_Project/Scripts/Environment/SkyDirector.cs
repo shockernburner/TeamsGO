@@ -71,7 +71,7 @@ namespace ProjectFossil.Environment
                 _sun.transform.rotation = Quaternion.Euler(look.Elevation, look.Azimuth, 0f);
                 _sun.color = look.Light;
                 _sun.intensity = _sunIntensity = look.Intensity;
-                _sun.shadowStrength = c.Weather == Weather.Clear ? 0.9f : c.Weather == Weather.Cloudy || c.Weather == Weather.Fog ? 0.5f : 0.25f;
+                _sun.shadowStrength = c.Weather == Weather.Clear ? 0.9f : c.Weather == Weather.Fog ? 0.5f : 0.3f; // soft under cloud
                 RenderSettings.sun = _sun;
             }
 
@@ -86,8 +86,9 @@ namespace ProjectFossil.Environment
             RenderSettings.fogDensity = BaseFog * FogFactor(c);
 
             ApplySkybox(look);
-            _overcast = c.Weather == Weather.Rain || c.Weather == Weather.Storm || c.Weather == Weather.Fog;
-            _overcastColor = Color.Lerp(look.Fog, Color.white, 0.06f);
+            // Under cloud the sky is a grey lid, not blue. Overcast looked like a clear day with more clouds.
+            _overcast = c.Weather != Weather.Clear;
+            _overcastColor = Color.Lerp(look.Fog, Color.white, c.Weather == Weather.Cloudy ? 0.22f : 0.06f);
             _effects.Apply(c, look.CloudTint, look.Fog);
             _birds.Apply(c);
             _mood.Apply(c, _sun, look.Light, look.Fog);
@@ -180,11 +181,11 @@ namespace ProjectFossil.Environment
 
             float dim = c.Weather switch
             {
-                Weather.Cloudy => 0.6f, Weather.Rain => 0.42f, Weather.Storm => 0.28f, Weather.Fog => 0.55f, _ => 1f,
+                Weather.Cloudy => 0.5f, Weather.Rain => 0.42f, Weather.Storm => 0.28f, Weather.Fog => 0.55f, _ => 1f,
             };
             float grey = c.Weather switch
             {
-                Weather.Cloudy => 0.35f, Weather.Rain => 0.6f, Weather.Storm => 0.75f, Weather.Fog => 0.7f, _ => 0f,
+                Weather.Cloudy => 0.6f, Weather.Rain => 0.6f, Weather.Storm => 0.75f, Weather.Fog => 0.7f, _ => 0f,
             };
             float ambientDim = c.Weather == Weather.Storm ? 0.62f : c.Weather == Weather.Rain ? 0.78f : c.Weather == Weather.Cloudy ? 0.92f : 1f;
 

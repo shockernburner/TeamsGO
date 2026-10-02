@@ -125,7 +125,12 @@ namespace ProjectFossil.Editor
                     SetUpAxe(art, axePack);
                 }
                 else art.axe = art.hatchet = null;
-                if (rainPack != null) ListPack("Rain", rainPack); // wired next, once its layout is known
+                if (rainPack != null)
+                {
+                    ListPack("Rain", rainPack);
+                    SetUpRain(art, rainPack);
+                }
+                else art.rain = art.heavyRain = null;
             }
             finally
             {
@@ -161,6 +166,8 @@ namespace ProjectFossil.Editor
                 found.Add("helicopter pack");
             if ((FindDir("Creatures/VOLI") != null || FindDir("Forest Environment Dynamic Nature") != null) && art == null)
                 found.Add("dinosaur or forest pack");
+            if (FindDir("Rainy VFX") != null && art != null && art.rain == null)
+                found.Add("rain pack");
             if (SoundSetup.Misplaced().Count > 0) found.Add("recorded sounds");
             return found.Count == 0 ? null : "New " + string.Join(" and ", found);
         }
@@ -788,6 +795,41 @@ namespace ProjectFossil.Editor
                 return AssetDatabase.LoadAssetAtPath<GameObject>(path);
             }
             float Longest(Vector3 v) => Mathf.Max(v.x, Mathf.Max(v.y, v.z));
+        }
+
+        // Rain: the pack's falling-rain effects, by name. Splashes, ripples, drops on glass and lightning are other
+        // effects. An effect whose shaders don't draw under URP would show magenta, so it is skipped.
+        private static void SetUpRain(BoughtArt art, string dir)
+        {
+            Log.AppendLine();
+            string[] notRain = { "splash", "ripple", "drop", "window", "glass", "screen", "puddle", "lightning", "thunder", "mist", "fog", "cloud", "demo" };
+            var candidates = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+                .Select(p => p.Replace('\\', '/'))
+                .Where(p => Path.GetFileNameWithoutExtension(p).ToLowerInvariant().Contains("rain"))
+                .Where(p => !notRain.Any(w => Path.GetFileNameWithoutExtension(p).ToLowerInvariant().Contains(w)))
+                .Select(p => (path: p, g: AssetDatabase.LoadAssetAtPath<GameObject>(p)))
+                .Where(x => x.g != null && x.g.GetComponentInChildren<ParticleSystem>(true) != null)
+                .ToList();
+            var drawable = candidates.Where(x => x.g.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
+                                                   .All(m => m == null || IsUrp(m.shader) || m.shader.name.Contains("Particles")))
+                                     .ToList();
+            foreach (var x in candidates.Except(drawable)) Log.AppendLine($"  Rain: skipped {x.path} (shader not for URP)");
+            if (drawable.Count == 0)
+            {
+                art.rain = art.heavyRain = null;
+                Log.AppendLine("Rain: no usable falling-rain prefab; keeping the simple rain.");
+                return;
+            }
+            bool Heavy(string p) { var n = Path.GetFileNameWithoutExtension(p).ToLowerInvariant(); return n.Contains("heavy") || n.Contains("storm") || n.Contains("strong"); }
+            bool Light(string p) { var n = Path.GetFileNameWithoutExtension(p).ToLowerInvariant(); return n.Contains("light") || n.Contains("drizzle") || n.Contains("soft"); }
+            var steady = drawable.FirstOrDefault(x => !Heavy(x.path) && !Light(x.path));
+            if (steady.g == null) steady = drawable.FirstOrDefault(x => !Heavy(x.path));
+            if (steady.g == null) steady = drawable[0];
+            var heavy = drawable.FirstOrDefault(x => Heavy(x.path));
+            art.rain      = steady.g;
+            art.heavyRain = heavy.g != null ? heavy.g : steady.g;
+            Log.AppendLine($"Rain <- {steady.path}");
+            Log.AppendLine($"Heavy rain <- {(heavy.g != null ? heavy.path : steady.path)}");
         }
 
         // What a pack holds (prefabs, their particle systems and shaders), so it can be wired by name.
