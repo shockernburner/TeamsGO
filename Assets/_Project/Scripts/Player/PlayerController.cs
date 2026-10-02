@@ -176,10 +176,12 @@ namespace ProjectFossil.Player
         private void OnEnable()
         {
             InputBlocked = _inputBlocked;
+            IslandWorld.Register(transform, IslandWorld.ActorKind.Survivor);
         }
 
         private void OnDisable()
         {
+            IslandWorld.Unregister(transform);
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible   = true;
         }
@@ -269,7 +271,7 @@ namespace ProjectFossil.Player
             if (IsSwimming)
             {
                 // Float: ease the feet to swimDepth under the surface instead of sinking to the bottom.
-                float target = ViewBlockers.SurfaceAt(transform.position) - swimDepth;
+                float target = IslandWorld.SurfaceOver(transform.position) - swimDepth;
                 _verticalVelocity = Mathf.Clamp((target - transform.position.y) * 4f, -3f, 3f);
             }
             else _verticalVelocity += gravity * Time.deltaTime;
@@ -284,7 +286,7 @@ namespace ProjectFossil.Player
         private void StayInShallowWater(Vector3 before)
         {
             Vector3 now = transform.position;
-            float limit = ViewBlockers.WaterHeight - maxWadeDepth;
+            float limit = IslandWorld.Sea - maxWadeDepth;
             if (now.y >= limit || now.y >= before.y) return;
             _cc.Move(new Vector3(before.x - now.x, 0f, before.z - now.z));
         }
@@ -292,7 +294,7 @@ namespace ProjectFossil.Player
         // Deep river or lake water: swim. A little hysteresis so the edge of a pool doesn't flicker in and out.
         private void UpdateSwimming()
         {
-            float depth = ViewBlockers.SurfaceAt(transform.position) - transform.position.y;
+            float depth = IslandWorld.SurfaceOver(transform.position) - transform.position.y;
             bool swim = IsSwimming ? depth > swimDepth - 0.25f : depth > swimDepth;
             if (swim && !IsSwimming)
             {

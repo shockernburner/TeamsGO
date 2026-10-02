@@ -3,14 +3,12 @@ using UnityEngine;
 
 namespace ProjectFossil.Core
 {
-    // What the island tells the camera, the wind and the stealth rules about its vegetation: where the sea surface
-    // is, which plants can get between the camera and the player, which plants and trees sway, and which ones a
-    // player can hide in. Plants have no colliders (they're walk-through), so everything asks here instead.
+    // What the island tells the camera, the wind and the stealth rules about its vegetation: which plants can get
+    // between the camera and the player, which plants and trees sway, and which ones a player can hide in. Plants
+    // have no colliders (they're walk-through), so everything asks here instead. Ground and water are IslandWorld's.
     // The island decorator fills it and clears it for every new island.
     public static class ViewBlockers
     {
-        public static float WaterHeight { get; private set; } = float.NegativeInfinity;
-
         private const float Cell = 8f;
         // Largest plant registered so far: queries look this far into neighbouring cells, so a wide plant whose
         // centre is a few metres off still hides when its leaves reach the camera.
@@ -35,53 +33,8 @@ namespace ProjectFossil.Core
         public static void Clear()
         {
             Grid.Clear();
-            Water.Clear();
-            Falls.Clear();
             Count = 0;
             _maxRadius = 0f;
-            WaterHeight = float.NegativeInfinity;
-        }
-
-        public static void SetWaterHeight(float y) => WaterHeight = y;
-
-        // Rivers and lakes, as circles with their surface height (centre.y). Few enough to scan directly.
-        private static readonly List<(Vector3 center, float radius)> Water = new List<(Vector3, float)>();
-
-        public static void RegisterWater(Vector3 surfaceCenter, float radius)
-        {
-            if (radius > 0f) Water.Add((surfaceCenter, radius));
-        }
-
-        // Where streams fall from one pool to the next (the foot of each fall), for their sound.
-        private static readonly List<Vector3> Falls = new List<Vector3>();
-        public static IReadOnlyList<Vector3> WaterFalls => Falls;
-        public static void RegisterFall(Vector3 foot) => Falls.Add(foot);
-
-        // The highest water surface over this spot: the sea, or a river or lake it lies in. -Infinity on dry land
-        // away from the sea.
-        public static float SurfaceAt(Vector3 p)
-        {
-            float s = WaterHeight;
-            foreach (var (c, r) in Water)
-            {
-                if (c.y <= s) continue;
-                float dx = c.x - p.x, dz = c.z - p.z;
-                if (dx * dx + dz * dz <= r * r) s = c.y;
-            }
-            return s;
-        }
-
-        // Feet in the sea, a river or a lake.
-        public static bool InWater(Vector3 feet)
-        {
-            if (feet.y < WaterHeight - 0.05f) return true;
-            foreach (var (c, r) in Water)
-            {
-                if (feet.y > c.y + 0.05f) continue;
-                float dx = c.x - feet.x, dz = c.z - feet.z;
-                if (dx * dx + dz * dz <= r * r) return true;
-            }
-            return false;
         }
 
         // A walk-through plant: hides from the camera when in the way, sways, and gives cover if it's big enough.
@@ -115,12 +68,6 @@ namespace ProjectFossil.Core
             foreach (var list in Grid.Values)
                 foreach (var e in list)
                     if (e.Tree) visit(e.Center);
-        }
-
-        // Every inland water disc (rivers and lakes), as registered: centre at the water surface, and radius.
-        public static void ForEachWater(System.Action<Vector3, float> visit)
-        {
-            foreach (var (c, r) in Water) visit(c, r);
         }
 
         private static void Add(Entry e)

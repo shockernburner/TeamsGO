@@ -111,13 +111,27 @@ namespace ProjectFossil.UI
             _map = new Texture2D(res, res, TextureFormat.RGB24, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
             var px = new Color[res * res];
             var h = data.Heightmap;
+            var world = IslandWorld.Current; // the water as drawn; the coarse mask only without one
             for (int y = 0; y < res; y++)
             {
                 for (int x = 0; x < res; x++)
                 {
                     Color c;
-                    if (!data.LandMask[y, x])
-                        c = h[y, x] > s.seaLevel ? Inland : Sea;
+                    bool sea, inland;
+                    if (world != null)
+                    {
+                        var q = origin + new Vector3(x * cell, 0f, y * cell);
+                        float g = world.GroundAt(q);
+                        sea    = g < world.SeaSurface;
+                        inland = !sea && world.WaterSurfaceAt(q) > g;
+                    }
+                    else
+                    {
+                        sea    = !data.LandMask[y, x] && h[y, x] <= s.seaLevel;
+                        inland = !data.LandMask[y, x] && !sea;
+                    }
+                    if (sea || inland)
+                        c = inland ? Inland : Sea;
                     else
                     {
                         float count = 0f;

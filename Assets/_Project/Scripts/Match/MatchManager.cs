@@ -296,7 +296,7 @@ namespace ProjectFossil.Match
             {
                 Vector3 p = Player.transform.position;
                 bool hidden = PlayerController != null && PlayerController.IsHidden;
-                _scent.Tick(p, State.Elapsed, !hidden && !ViewBlockers.InWater(p));
+                _scent.Tick(p, State.Elapsed, !hidden && !IslandWorld.Wet(p));
             }
 
             ThreatTarget? target = PickDirectorTarget();
@@ -457,14 +457,14 @@ namespace ProjectFossil.Match
             foreach (var zone in _zones)
                 if (zone != null && Flat(zone.transform.position - p).magnitude <= rules.flareIfFartherThan) return false;
 
-            float waterY = ViewBlockers.WaterHeight;
+            float waterY = IslandWorld.Sea;
             for (int tries = 0; tries < 16; tries++)
             {
                 float angle = _flareRng.NextFloat() * Mathf.PI * 2f;
                 float dist  = Mathf.Lerp(rules.flareDistance.x, rules.flareDistance.y, _flareRng.NextFloat());
                 Vector3 c = p + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * dist;
                 if (!NavMesh.SamplePosition(c, out var hit, 12f, NavMesh.AllAreas)) continue;
-                if (hit.position.y < waterY + 0.5f) continue; // not in the shallows
+                if (hit.position.y < waterY + 0.5f || IslandWorld.Wet(hit.position + Vector3.up * 0.3f)) continue; // not in the shallows
 
                 var zone = ExtractionZone.Create(hit.position, rules.extractionRadius, _islandRoot);
                 zone.SetOpen(true);

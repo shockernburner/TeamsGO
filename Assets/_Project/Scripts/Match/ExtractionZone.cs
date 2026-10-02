@@ -108,8 +108,7 @@ namespace ProjectFossil.Match
             if (Physics.Raycast(p + Vector3.up * 60f, Vector3.down, out var hit, 200f, Physics.DefaultRaycastLayers,
                                 QueryTriggerInteraction.Ignore) && hit.collider is TerrainCollider)
                 return hit.point;
-            var t = Terrain.activeTerrain;
-            if (t != null) p.y = t.SampleHeight(p) + t.transform.position.y;
+            if (IslandWorld.Current != null) p.y = IslandWorld.Current.GroundAt(p);
             return p;
         }
 

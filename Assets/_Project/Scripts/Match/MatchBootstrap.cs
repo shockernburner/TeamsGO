@@ -125,18 +125,51 @@ namespace ProjectFossil.Match
 
         private void BakeNavMesh(GameObject islandGO, IslandData data)
         {
-            // Dinosaurs don't go into deep lakes: they walked the bottom out of sight and bit swimmers from below.
-            // They wait on the shore instead, which makes a lake a place to hide. Rivers stay crossable.
-            foreach (var lake in data.Lakes)
+            // Dinosaurs don't go into water deeper than they can wade: they walked lake beds out of sight and bit
+            // swimmers from below. They wait on the shore instead, which makes a lake a place to hide. Streams are
+            // shallow everywhere, so they stay crossable. The deep water comes from the same IslandWorld the water
+            // is drawn from, in strips of blocks a few metres across.
+            var world = IslandWorld.Current;
+            if (world != null)
             {
-                var go = new GameObject("DeepWater");
-                go.transform.SetParent(islandGO.transform, false);
-                go.transform.localPosition = lake.Center + Vector3.down * 10f;
-                var deep = go.AddComponent<NavMeshModifierVolume>();
-                float side = lake.Radius * 1.4f; // the square inside the shoreline
-                deep.size   = new Vector3(side, 20f, side);
-                deep.center = Vector3.zero;
-                deep.area   = NavMesh.GetAreaFromName("Not Walkable");
+                const int block = 4; // vertices (about 4 m)
+                int blocks = (world.Size - 1) / block;
+                var deepRoot = new GameObject("DeepWater").transform;
+                deepRoot.SetParent(islandGO.transform, false);
+                int area = NavMesh.GetAreaFromName("Not Walkable");
+                for (int bz = 0; bz < blocks; bz++)
+                {
+                    int run = -1; float low = 0f, high = 0f;
+                    for (int bx = 0; bx <= blocks; bx++)
+                    {
+                        bool deep = false; float bed = 0f, top = 0f;
+                        if (bx < blocks)
+                        {
+                            int cx = bx * block + block / 2, cz = bz * block + block / 2;
+                            float w = world.WaterAtVertex(cx, cz);
+                            bed  = world.GroundAtVertex(cx, cz);
+                            top  = w;
+                            deep = !float.IsNaN(w) && w - bed > DinosaurWadeDepth;
+                        }
+                        if (deep)
+                        {
+                            if (run < 0) { run = bx; low = bed; high = top; }
+                            else { low = Mathf.Min(low, bed); high = Mathf.Max(high, top); }
+                            continue;
+                        }
+                        if (run < 0) continue;
+                        float x0 = run * block * world.Cell, x1 = bx * block * world.Cell;
+                        float z0 = bz * block * world.Cell, z1 = (bz + 1) * block * world.Cell;
+                        var go = new GameObject("Deep");
+                        go.transform.SetParent(deepRoot, false);
+                        go.transform.localPosition = new Vector3((x0 + x1) * 0.5f, (low + high) * 0.5f, (z0 + z1) * 0.5f);
+                        var deepVolume = go.AddComponent<NavMeshModifierVolume>();
+                        deepVolume.size   = new Vector3(x1 - x0, high - low + 3f, z1 - z0);
+                        deepVolume.center = Vector3.zero;
+                        deepVolume.area   = area;
+                        run = -1;
+                    }
+                }
             }
 
             var surface = islandGO.GetComponent<NavMeshSurface>();
@@ -147,6 +180,9 @@ namespace ProjectFossil.Match
             surface.useGeometry    = NavMeshCollectGeometry.PhysicsColliders;
             surface.BuildNavMesh();
         }
+
+        // Water deeper than this keeps dinosaurs out (metres): a little over the deepest stream.
+        public const float DinosaurWadeDepth = 0.9f;
 
         // ── Dinosaur spawning ──────────────────────────────────────────────────
 

@@ -108,7 +108,7 @@ namespace ProjectFossil.Environment
             Vector3 around = _cam != null ? _cam.position : Vector3.zero;
             float a = Range(0f, Mathf.PI * 2f), d = Range(80f, 300f);
             f.Centre = new Vector3(around.x + Mathf.Cos(a) * d, 0f, around.z + Mathf.Sin(a) * d);
-            float ground = Terrain.activeTerrain != null ? Terrain.activeTerrain.SampleHeight(f.Centre) + Terrain.activeTerrain.transform.position.y : around.y;
+            float ground = IslandWorld.Current != null ? IslandWorld.Current.GroundAt(f.Centre) : around.y;
             f.Altitude = Mathf.Max(ground, 0f) + Range(45f, 85f);
         }
 
