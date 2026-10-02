@@ -497,3 +497,19 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - Trees lose camera-facing far LODs (cross, billboard, impostor) like plants did; they keep their last real mesh
   and fade out in the haze.
 - Terrain pixel error 3 so far shores don't sink under their water.
+
+## 2026-10-02 — Spinning cards, findable lakes, photographed skies, Windows co-op (8.52, 8.59, 9.04 PM recordings)
+
+- The "leaves rotating round their centre with no branch or root" were bought plants' far LODs: a few crossed
+  quads drawn with the same leaf shader as the near mesh, so the shader-name test missed them. Any renderer of 20
+  triangles or fewer now counts as a card; a far level with any card in it is dropped (shared renderers stay on),
+  and a model made only of cards is left out, trees included.
+- Lakes were too small and too rare to find (16–30 m, and the picker refused hollows). Lakes are now 25–50 m and
+  sit in hollows or on the flat; tests require swimming water on at least 7 of 8 islands.
+- Photographed skies: `Project Fossil > Art > Download Skies` (also runs once by itself) picks the most
+  downloaded sky-only CC0 HDRI from Poly Haven for clear, cloudy, overcast, dawn, dusk and night, finds its sun
+  and horizon colour, and fills `SkyLibrary`. The match uses the photo for the skybox, aims the sun at the
+  photo's sun, takes the haze colour from its horizon and lights the island from it. The drawn clouds and stars
+  are off under a photo. Without the download the drawn sky stays.
+- The Console now says at match start which sky and which rain are in use.
+- `Project Fossil > Co-op > Build for Windows` builds a Windows copy on the Mac for a friend's laptop.

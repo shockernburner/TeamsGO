@@ -314,8 +314,17 @@ namespace ProjectFossil.Generation
             var heap = new MinHeap();
             for (int i = 0; i < water.Length; i++)
             {
-                if (float.IsNaN(water[i])) { dist[i] = 0f; heap.Push(0f, i); }
-                else dist[i] = float.MaxValue;
+                if (!float.IsNaN(water[i])) { dist[i] = float.MaxValue; continue; }
+                dist[i] = 0f;
+                // Only the shoreline seeds the search; dry ground further off never reaches the water first.
+                int x = i % n, z = i / n;
+                for (int k = 0; k < 8; k++)
+                {
+                    int nx = x + Dx[k], nz = z + Dz[k];
+                    if (nx < 0 || nz < 0 || nx >= n || nz >= n || float.IsNaN(water[nz * n + nx])) continue;
+                    heap.Push(0f, i);
+                    break;
+                }
             }
             while (heap.Count > 0)
             {

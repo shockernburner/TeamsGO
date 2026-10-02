@@ -320,12 +320,13 @@ namespace ProjectFossil.Tests.EditMode
             s.riverCount = 5;
             s.lakeCount = 6;
             s.terrainDetail = 4;
-            int wetTotal = 0, deepTotal = 0, rapids = 0;
+            int wetTotal = 0, deepTotal = 0, rapids = 0, islandsWithLakes = 0;
             for (int seed = 0; seed < 8; seed++)
             {
                 var world = WaterField.Build(new IslandGenerator(seed, s).Generate());
                 int n = world.Size;
                 rapids += world.Rapids.Count;
+                int deepBefore = deepTotal;
                 for (int z = 0; z < n; z++)
                     for (int x = 0; x < n; x++)
                     {
@@ -359,7 +360,9 @@ namespace ProjectFossil.Tests.EditMode
                                 }
                             }
                     }
+                if (deepTotal - deepBefore > 1000) islandsWithLakes++; // about 1000 m² of swimming water
             }
+            Assert.GreaterOrEqual(islandsWithLakes, 7, "Lakes are missing from too many islands");
             Assert.Greater(wetTotal * 1f / 8f, 5000f, "Too little water on the islands");
             Assert.Greater(deepTotal, 8 * 1000, "No lakes deep enough to swim in");
             Assert.Less(deepTotal, wetTotal, "Every stream is too deep to wade");

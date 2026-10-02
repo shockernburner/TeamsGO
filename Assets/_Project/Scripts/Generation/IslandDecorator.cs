@@ -494,8 +494,7 @@ namespace ProjectFossil.Generation
 
             var go = Object.Instantiate(prefab, root, false);
             go.name = prefab.name;
-            // A plant made only of camera-facing cards spins as you walk round it: leave it out.
-            if (inst.Kind != ScatterKind.Tree)
+            // A plant or tree made only of cards spins as you walk round it: leave it out.
             {
                 var group = go.GetComponentInChildren<LODGroup>();
                 var first = group != null && group.lodCount > 0 ? group.GetLODs()[0].renderers : go.GetComponentsInChildren<Renderer>();
@@ -574,11 +573,17 @@ namespace ProjectFossil.Generation
                 // Far levels made of flat cards turn to face the camera: from a distance a forest's leaves spun in
                 // circles as you moved, and plants read as leaves and caps hanging in the air. Trees and plants keep
                 // their last real mesh instead, and fade out in the haze.
+                // A far level with any cards in it goes (a trunk with card leaves still spins its leaves), but a
+                // renderer the nearer levels share stays on.
                 int keep = levels.Length;
-                while (keep > 1 && AllStandIns(levels[keep - 1].renderers))
+                while (keep > 1 && AnyStandIn(levels[keep - 1].renderers)) keep--;
+                if (keep < levels.Length)
                 {
-                    foreach (var r in levels[keep - 1].renderers) if (r != null) r.enabled = false;
-                    keep--;
+                    var kept = new HashSet<Renderer>();
+                    for (int i = 0; i < keep; i++)
+                        foreach (var r in levels[i].renderers) if (r != null) kept.Add(r);
+                    for (int i = keep; i < levels.Length; i++)
+                        foreach (var r in levels[i].renderers) if (r != null && !kept.Contains(r)) r.enabled = false;
                 }
                 bool dropped = keep < levels.Length;
                 if (dropped) System.Array.Resize(ref levels, keep);
@@ -607,9 +612,21 @@ namespace ProjectFossil.Generation
             return true;
         }
 
+        private static bool AnyStandIn(Renderer[] renderers)
+        {
+            if (renderers == null) return false;
+            foreach (var r in renderers)
+                if (r != null && IsStandIn(r)) return true;
+            return false;
+        }
+
         private static bool IsStandIn(Renderer r)
         {
             if (r is BillboardRenderer) return true;
+            // A few crossed quads, whatever its shader is called: the bought plants' far levels are cards drawn with
+            // the same leaf shader as the near ones, so the name test missed them and they spun round as you moved.
+            if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null
+                && IndexCount(mf.sharedMesh) <= MaxCardIndices) return true;
             foreach (var m in r.sharedMaterials)
             {
                 if (m == null || m.shader == null) continue;
@@ -619,6 +636,15 @@ namespace ProjectFossil.Generation
                     || n.IndexOf("Impostor", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
             }
             return false;
+        }
+
+        private const int MaxCardIndices = 60; // 20 triangles: up to five crossed quads, both sides
+
+        private static long IndexCount(Mesh mesh)
+        {
+            long n = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++) n += mesh.GetIndexCount(i);
+            return n;
         }
 
         // How far the lowest ground within `reach` of `pos` lies below it (0 on flat ground), capped so a tree on a
