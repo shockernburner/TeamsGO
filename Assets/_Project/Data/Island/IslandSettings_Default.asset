@@ -48,13 +48,13 @@ MonoBehaviour:
   volcanoHeight: 0.5
   volcanoRadius: 0.13
   craterDepth: 0.12
-  riverCount: 3
+  riverCount: 5
   riverWidth: 12
   riverBankSlope: 0.5
   riverSourceHeight: {x: 0.3, y: 0.6}
-  lakeCount: 2
+  lakeCount: 4
   lakeRadius: {x: 16, y: 30}
-  waterDepth: 1.2
+  waterDepth: 2.2
   riverMoisture: 0.3
   moistureContrast: 2.2
   biomes:

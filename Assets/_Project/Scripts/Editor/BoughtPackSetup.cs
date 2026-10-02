@@ -124,7 +124,7 @@ namespace ProjectFossil.Editor
                     ConvertMaterials(axePack, "axe-pack");
                     SetUpAxe(art, axePack);
                 }
-                else art.axe = null;
+                else art.axe = art.hatchet = null;
                 if (rainPack != null) ListPack("Rain", rainPack); // wired next, once its layout is known
             }
             finally
@@ -155,6 +155,8 @@ namespace ProjectFossil.Editor
                      FindDir("Survivalist") is string sv &&
                      Directory.Exists($"{sv}/Prefab") && Directory.GetFiles($"{sv}/Prefab", "FPS_*.prefab").Length > 0)
                 found.Add("first-person arms");
+            if (FindDir("Axe Package") != null && (art == null || art.hatchet == null))
+                found.Add("axe pack");
             if (FindDir("OH-1_Basic") != null && (art == null || art.helicopter == null))
                 found.Add("helicopter pack");
             if ((FindDir("Creatures/VOLI") != null || FindDir("Forest Environment Dynamic Nature") != null) && art == null)
@@ -764,13 +766,28 @@ namespace ProjectFossil.Editor
                 var b = ModelFit.PrefabBounds(g);
                 Log.AppendLine($"  {Path.GetFileNameWithoutExtension(p)}: {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m");
             }
-            var source = prefabs.Select(AssetDatabase.LoadAssetAtPath<GameObject>)
-                                .FirstOrDefault(g => g != null && g.GetComponentInChildren<Renderer>(true) != null);
-            if (source == null) { art.axe = null; Log.AppendLine("  no usable axe, keeping the stone axe."); return; }
-            string path = $"{Out}/Models/Axe.prefab";
-            CleanPrefab(source, path);
-            art.axe = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            Log.AppendLine($"  Axe <- {AssetDatabase.GetAssetPath(source)}");
+            // The longest axe is the felling axe, the shortest the hatchet.
+            var usable = prefabs.Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                                .Where(g => g != null && g.GetComponentInChildren<Renderer>(true) != null)
+                                .Select(g => (g, len: Longest(ModelFit.PrefabBounds(g).size)))
+                                .Where(x => x.len > 0.01f).OrderBy(x => x.len).ToList();
+            if (usable.Count == 0)
+            {
+                art.axe = art.hatchet = null;
+                Log.AppendLine("  no usable axe, keeping the simple ones.");
+                return;
+            }
+            art.axe     = Copy(usable[usable.Count - 1].g, "Axe");
+            art.hatchet = Copy(usable[0].g, "Hatchet");
+
+            GameObject Copy(GameObject source, string name)
+            {
+                string path = $"{Out}/Models/{name}.prefab";
+                CleanPrefab(source, path);
+                Log.AppendLine($"  {name} <- {AssetDatabase.GetAssetPath(source)}");
+                return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            }
+            float Longest(Vector3 v) => Mathf.Max(v.x, Mathf.Max(v.y, v.z));
         }
 
         // What a pack holds (prefabs, their particle systems and shaders), so it can be wired by name.
@@ -882,6 +899,15 @@ namespace ProjectFossil.Editor
 
             string windDir = FindDir("NatureManufacture Wind");
             art.windZone = windDir != null ? AssetDatabase.LoadAssetAtPath<GameObject>($"{windDir}/Prefab_Wind.prefab") : null;
+
+            // The pack's own water: a river that flows along its UVs, and still swamp water for lakes.
+            Material Water(string shaderPart) => forest == null ? null
+                : AssetDatabase.FindAssets("t:Material", new[] { forest })
+                               .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g)))
+                               .FirstOrDefault(m => m != null && m.shader != null && m.shader.isSupported && m.shader.name.Contains(shaderPart));
+            art.riverWater = Water("Water River");
+            art.lakeWater  = Water("Water Swamp") ?? art.riverWater;
+            Log.AppendLine($"Water: river {Name(art.riverWater)}, lake {Name(art.lakeWater)}");
 
             Log.AppendLine();
             foreach (var b in art.biomes)

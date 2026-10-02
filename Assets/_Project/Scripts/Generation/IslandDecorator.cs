@@ -167,11 +167,12 @@ namespace ProjectFossil.Generation
             if (data.Rivers.Count == 0 && data.Lakes.Count == 0) return;
             var root = new GameObject("InlandWater").transform;
             root.SetParent(parent, false);
+            var art = BoughtArt.Current;
 
             foreach (var river in data.Rivers)
-                if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river));
+                if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river, data.Settings), art != null ? art.riverWater : null);
             foreach (var lake in data.Lakes)
-                AddMesh(root, "Lake", DiscMesh(lake.Center, lake.Radius + 4f, 32));
+                AddMesh(root, "Lake", DiscMesh(lake.Center, lake.Radius + 4f, 32), art != null ? art.lakeWater : null);
 
             // Wading through inland water breaks a scent trail too.
             foreach (var river in data.Rivers)
@@ -181,29 +182,36 @@ namespace ProjectFossil.Generation
                 ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), lake.Radius + 4f); // as wide as the drawn surface
         }
 
-        private static void AddMesh(Transform root, string name, Mesh mesh)
+        // The forest pack's water where this machine has it, a plain see-through surface otherwise.
+        private static void AddMesh(Transform root, string name, Mesh mesh, Material bought)
         {
             var go = new GameObject(name);
             go.transform.SetParent(root, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterial = WaterMaterial();
+            r.sharedMaterial = bought != null ? bought : WaterMaterial();
             r.shadowCastingMode = ShadowCastingMode.Off;
         }
 
-        private static Mesh RiverMesh(RiverPath river)
+        private static Mesh RiverMesh(RiverPath river, IslandSettings settings)
         {
             int n = river.Points.Count;
             var verts = new Vector3[n * 2];
+            var uvs   = new Vector2[n * 2]; // u across, v along the flow in widths, for flowing water shaders
             var tris  = new int[(n - 1) * 6];
+            float along = 0f;
             for (int i = 0; i < n; i++)
             {
+                if (i > 0) along += Vector3.Distance(river.Points[i], river.Points[i - 1]);
                 Vector3 prev = river.Points[Mathf.Max(0, i - 1)], next = river.Points[Mathf.Min(n - 1, i + 1)];
                 Vector3 dir = next - prev; dir.y = 0f;
                 Vector3 side = dir.sqrMagnitude > 1e-4f ? Vector3.Cross(Vector3.up, dir.normalized) : Vector3.right;
-                float w = river.HalfWidths[i] + 3f; // run a little under the banks so no gap shows
+                // Out to where the bank rises above the surface, plus a little, so the edge tucks under the ground.
+                float w = river.HalfWidths[i] + (settings.waterDepth + 0.4f) / Mathf.Max(0.05f, settings.riverBankSlope) + 1f;
                 verts[i * 2]     = river.Points[i] - side * w;
                 verts[i * 2 + 1] = river.Points[i] + side * w;
+                uvs[i * 2]     = new Vector2(0f, along / (2f * w));
+                uvs[i * 2 + 1] = new Vector2(1f, along / (2f * w));
             }
             for (int i = 0; i < n - 1; i++)
             {
@@ -211,10 +219,17 @@ namespace ProjectFossil.Generation
                 tris[t] = v; tris[t + 1] = v + 2; tris[t + 2] = v + 1;
                 tris[t + 3] = v + 1; tris[t + 4] = v + 2; tris[t + 5] = v + 3;
             }
-            var mesh = new Mesh { name = "River", vertices = verts, triangles = tris };
+            var mesh = new Mesh { name = "River", vertices = verts, uv = uvs, colors = White(verts.Length), triangles = tris };
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        private static Color[] White(int n)
+        {
+            var c = new Color[n];
+            for (int i = 0; i < n; i++) c[i] = Color.white;
+            return c;
         }
 
         private static Mesh DiscMesh(Vector3 centre, float radius, int segments)
@@ -228,7 +243,9 @@ namespace ProjectFossil.Generation
                 verts[i + 1] = centre + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * radius;
                 tris[i * 3] = 0; tris[i * 3 + 1] = 1 + (i + 1) % segments; tris[i * 3 + 2] = 1 + i;
             }
-            var mesh = new Mesh { name = "Lake", vertices = verts, triangles = tris };
+            var uvs = new Vector2[verts.Length];
+            for (int i = 0; i < verts.Length; i++) uvs[i] = new Vector2(verts[i].x - centre.x, verts[i].z - centre.z) * 0.05f;
+            var mesh = new Mesh { name = "Lake", vertices = verts, uv = uvs, colors = White(verts.Length), triangles = tris };
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;

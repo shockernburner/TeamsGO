@@ -30,7 +30,8 @@ namespace ProjectFossil.Player
         private float            _faceForwardTimer;
         private Transform        _model;
         private int              _facingChecks;  // frames until the animated body's facing is checked
-        private bool             _hasSwim, _wasSwimming;
+        private bool             _hasSwim, _dead;
+        private int              _baseState;   // base layer state last frame
 
         // Weapon in the right hand. The grip is worked out from the finger bones once, in the rest pose,
         // so it works whatever way the rig's hand bone happens to point.
@@ -70,6 +71,7 @@ namespace ProjectFossil.Player
             _remoteCrouch = crouched;
             if (dead == _remoteDead) return;
             _remoteDead = dead;
+            _dead = dead;
             if (_animator != null) _animator.SetBool(DeadId, dead);
         }
 
@@ -182,10 +184,12 @@ namespace ProjectFossil.Player
                     blade.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
                     break;
 
-                case HeldLook.Club:
-                    Shape(root, PrimitiveType.Cylinder, _bone, new Vector3(0f, 0.15f, 0f), new Vector3(0.055f, 0.36f, 0.055f));
-                    Shape(root, PrimitiveType.Capsule,  _bone, new Vector3(0f, 0.58f, 0f), new Vector3(0.14f, 0.16f, 0.14f));
-                    Shape(root, PrimitiveType.Sphere,   _bone, new Vector3(0f, -0.2f, 0f), new Vector3(0.08f, 0.08f, 0.08f));
+                case HeldLook.Club: // the hatchet
+                    var hatchet = BoughtArt.Current != null ? BoughtArt.Current.hatchet : null;
+                    if (hatchet != null && BoughtWeapon(root, hatchet, 0.45f)) break;
+                    Shape(root, PrimitiveType.Cylinder, _wood, new Vector3(0f, 0.13f, 0f), new Vector3(0.04f, 0.28f, 0.04f));
+                    Shape(root, PrimitiveType.Cube,     _stone, new Vector3(0.06f, 0.36f, 0f), new Vector3(0.12f, 0.09f, 0.03f));
+                    Shape(root, PrimitiveType.Cylinder, _cord, new Vector3(0f, 0.36f, 0f), new Vector3(0.05f, 0.05f, 0.05f));
                     break;
 
                 case HeldLook.Axe:
@@ -280,13 +284,15 @@ namespace ProjectFossil.Player
             _animator.SetFloat(SpeedId, speed, 0.1f, Time.deltaTime);
             if (_controller != null) _animator.SetBool(CrouchId, _controller.Stance != Stance.Standing);
             else if (_remote) _animator.SetBool(CrouchId, _remoteCrouch);
-            if (_hasSwim && _controller != null)
+            if (_hasSwim && _controller != null) _animator.SetBool(SwimId, _controller.IsSwimming);
+
+            // Crouching and swimming use clips from another library than walking, and those may face the body the
+            // other way. Check the facing again whenever the base state changes, once its blend has settled.
+            int state = _animator.GetCurrentAnimatorStateInfo(0).shortNameHash;
+            if (state != _baseState)
             {
-                bool swim = _controller.IsSwimming;
-                // The swim clips come from another library and may face the body the other way: check again
-                // once the blend into or out of them has settled.
-                if (swim != _wasSwimming) { _wasSwimming = swim; _facingChecks = 20; }
-                _animator.SetBool(SwimId, swim);
+                if (_baseState != 0 && !_dead) _facingChecks = 2;
+                _baseState = state;
             }
             UpdateActionLayer();
         }
@@ -364,6 +370,7 @@ namespace ProjectFossil.Player
 
         private void OnDied(DamageInfo info)
         {
+            _dead = true;
             if (_animator != null) _animator.SetBool(DeadId, true);
         }
     }

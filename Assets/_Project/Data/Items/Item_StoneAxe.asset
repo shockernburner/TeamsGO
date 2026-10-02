@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Item_StoneAxe
   m_EditorClassIdentifier: ProjectFossil.Economy::ProjectFossil.Economy.ItemDefinition
   itemId: stone_axe
-  displayName: Stone Axe
+  displayName: Felling Axe
   category: 2
   maxStack: 1
   damage: 27

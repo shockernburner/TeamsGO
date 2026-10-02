@@ -231,6 +231,7 @@ namespace ProjectFossil.Generation
                     carved[y, x] = float.MaxValue;
 
             var sources = new List<Vector2Int>();
+            var raised  = new float[res, res]; // banks built up beside the water, so it never hangs over lower ground
             for (int r = 0; r < s.riverCount; r++)
             {
                 if (!TryPickRiverSource(heightmap, res, sources, out var src)) break;
@@ -238,21 +239,42 @@ namespace ProjectFossil.Generation
                 var path = TraceRiver(heightmap, res, src);
                 if (path.Count < 12) continue;
 
-                var river = new RiverPath();
+                // The water surface only ever falls.
+                var surfaces = new float[path.Count];
                 float surface = heightmap[src.y, src.x] - margin;
                 for (int i = 0; i < path.Count; i++)
                 {
                     var p = path[i];
                     surface = Mathf.Max(s.seaLevel, Mathf.Min(surface, heightmap[p.y, p.x] - margin));
-                    float t = (float)i / (path.Count - 1);
-                    float halfWidth = s.riverWidth * Mathf.Lerp(0.35f, 0.7f, t);
-                    Stamp(carved, wetness, water, res, cell, p, halfWidth, surface - depth, MaxAround(heightmap, res, p, 8));
-
-                    river.Points.Add(new Vector3(p.x * cell, surface * s.maxHeight, p.y * cell));
-                    river.HalfWidths.Add(halfWidth);
+                    surfaces[i] = surface;
                 }
-                river.Smooth(2);
-                rivers.Add(river);
+
+                // Water only where the river runs gently. Down a steep hillside it was a thin blue sheet lying on
+                // the slope; those stretches stay dry ground and the river starts (or starts again) below them.
+                int start = -1;
+                for (int i = 0; i <= path.Count; i++)
+                {
+                    bool gentle = i < path.Count && Gradient(path, surfaces, i, cell) * s.maxHeight <= s.maxRiverGradient;
+                    if (gentle) { if (start < 0) start = i; continue; }
+                    if (start >= 0 && i - start >= 12)
+                    {
+                        var river = new RiverPath();
+                        for (int k = start; k < i; k++)
+                        {
+                            var p = path[k];
+                            float t = (float)k / (path.Count - 1);
+                            float halfWidth = s.riverWidth * Mathf.Lerp(0.35f, 0.7f, t);
+                            Stamp(carved, wetness, water, res, cell, p, halfWidth, surfaces[k] - depth, MaxAround(heightmap, res, p, 8));
+                            Bank(raised, res, cell, p, halfWidth + (depth + margin) * s.maxHeight / Mathf.Max(0.05f, s.riverBankSlope) + 2f,
+                                 surfaces[k] + margin);
+                            river.Points.Add(new Vector3(p.x * cell, surfaces[k] * s.maxHeight, p.y * cell));
+                            river.HalfWidths.Add(halfWidth);
+                        }
+                        river.Smooth(2);
+                        rivers.Add(river);
+                    }
+                    start = -1;
+                }
             }
 
             for (int l = 0; l < s.lakeCount; l++)
@@ -270,7 +292,39 @@ namespace ProjectFossil.Generation
 
             for (int y = 0; y < res; y++)
                 for (int x = 0; x < res; x++)
+                {
+                    if (raised[y, x] > heightmap[y, x]) heightmap[y, x] = raised[y, x];
                     if (carved[y, x] < heightmap[y, x]) heightmap[y, x] = carved[y, x];
+                }
+        }
+
+        // Drop of the water surface (normalized height) per metre around point i of a river's path.
+        private static float Gradient(List<Vector2Int> path, float[] surfaces, int i, float cell)
+        {
+            int a = Mathf.Max(0, i - 3), b = Mathf.Min(path.Count - 1, i + 3);
+            float run = Vector2Int.Distance(path[a], path[b]) * cell;
+            return run > 0f ? (surfaces[a] - surfaces[b]) / run : 0f;
+        }
+
+        // Where the ground beside a river is lower than its surface (a river crossing a slope), raise it to a bank
+        // a little above the water out to `reach`, easing back down to the old ground beyond.
+        private void Bank(float[,] raised, int res, float cell, Vector2Int at, float reach, float top)
+        {
+            float slopePerMetre = _settings.riverBankSlope / _settings.maxHeight;
+            int r = Mathf.CeilToInt((reach + 40f) / cell); // far enough to ease down a hillside
+            for (int dy = -r; dy <= r; dy++)
+            {
+                int y = at.y + dy;
+                if (y < 0 || y >= res) continue;
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int x = at.x + dx;
+                    if (x < 0 || x >= res) continue;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy) * cell;
+                    float target = top - Mathf.Max(0f, d - reach) * slopePerMetre;
+                    if (target > raised[y, x]) raised[y, x] = target;
+                }
+            }
         }
 
         // Lowers terrain around a point to a flat bed with sloping banks, and marks the ground around it wet.
