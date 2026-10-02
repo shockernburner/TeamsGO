@@ -1,25 +1,31 @@
+using System.Collections.Generic;
 using UnityEngine;
+using ProjectFossil.Core;
 
 namespace ProjectFossil.Player
 {
     // The bought first-person arms: a humanoid rig of which only the arm and sleeve meshes (names containing FPS)
-    // are kept. FirstPersonView moves two wrist targets around (rest pose, bob, swing); every frame this bends each
-    // arm so its wrist lands on its target, turns the hand to the target's facing and keeps the fingers in a fist.
+    // are kept. FirstPersonView moves two wrist targets around (relaxed, walking, running, attacking); every frame
+    // this bends each arm so its wrist lands on its target, turns the hand to the target's facing and closes the
+    // fingers as far as asked: loose when relaxed, a fist around a weapon or for a punch.
     //
     // Presentation only.
     public class FirstPersonRig
     {
         // Where the rig's head bone sits relative to the eye camera: a little below and behind the eyes.
         private static readonly Vector3 HeadFromEye = new Vector3(0f, -0.1f, -0.1f);
-        // How far the fingers curl (-1..1 on the humanoid finger muscles; negative closes the hand).
-        private const float FingerCurl = -0.75f;
-        private const float ThumbCurl  = -0.3f;
+        // How far the humanoid finger muscles go for a fist, and how much of that a relaxed hand keeps.
+        private const float FistCurl  = 0.8f;
+        private const float ThumbCurl = 0.35f;
+        private const float Relaxed   = 0.3f;
 
         private class Arm
         {
             public Transform Upper, Lower, Hand, Index, Middle, Little;
             public Quaternion UpperRest, LowerRest, HandRest;
             public float Side; // +1 right, -1 left
+            public Transform[] Fingers;
+            public Quaternion[] Open, Fist;
         }
 
         public Transform Root { get; private set; }
@@ -48,7 +54,7 @@ namespace ProjectFossil.Player
                 return null;
             }
 
-            CurlFingers(anim);
+            HandPoses(anim, rig._right, rig._left);
             anim.enabled = false; // nothing animates it but us
 
             // Only the arms and sleeves; no shadows (the body casts them). The pack has bare and gloved versions of
@@ -61,6 +67,7 @@ namespace ProjectFossil.Player
                 if (!r.name.Contains("FPS") || (gloved && bareArms)) { r.enabled = false; continue; }
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 if (r is SkinnedMeshRenderer s) s.updateWhenOffscreen = true;
+                Drawable(r);
             }
 
             // Face the camera's way: the shoulders run along +X.
@@ -76,6 +83,33 @@ namespace ProjectFossil.Player
             return rig;
         }
 
+        // A material this pipeline can't draw renders bright pink. Swap it for a plain lit one with the same
+        // texture and colour (setup normally hands over the pack's URP materials, so this is a safety net).
+        private static void Drawable(Renderer r)
+        {
+            var mats = r.sharedMaterials;
+            bool changed = false;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var m = mats[i];
+                if (m == null || (m.shader != null && m.shader.isSupported && !m.shader.name.StartsWith("HDRP")
+                                  && m.shader.name != "Hidden/InternalErrorShader")) continue;
+                Texture tex = m.HasProperty("_BaseColorMap") ? m.GetTexture("_BaseColorMap")
+                            : m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : m.mainTexture;
+                Color col = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : m.HasProperty("_Color") ? m.color : Color.white;
+                var lit = Placeholder.Lit(col);
+                if (tex != null)
+                {
+                    if (lit.HasProperty("_BaseMap")) lit.SetTexture("_BaseMap", tex);
+                    lit.mainTexture = tex;
+                }
+                lit.name = m.name + " (URP)";
+                mats[i] = lit;
+                changed = true;
+            }
+            if (changed) r.sharedMaterials = mats;
+        }
+
         private Arm Bones(Animator a, bool right)
         {
             var arm = new Arm
@@ -88,7 +122,18 @@ namespace ProjectFossil.Player
                 Little = a.GetBoneTransform(right ? HumanBodyBones.RightLittleProximal : HumanBodyBones.LeftLittleProximal),
                 Side   = right ? 1f : -1f,
             };
-            return arm.Upper != null && arm.Lower != null && arm.Hand != null ? arm : null;
+            if (arm.Upper == null || arm.Lower == null || arm.Hand == null) return null;
+
+            var fingers = new List<Transform>();
+            var first = right ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal;
+            var last  = right ? HumanBodyBones.RightLittleDistal  : HumanBodyBones.LeftLittleDistal;
+            for (var b = first; b <= last; b++)
+            {
+                var t = a.GetBoneTransform(b);
+                if (t != null) fingers.Add(t);
+            }
+            arm.Fingers = fingers.ToArray();
+            return arm;
         }
 
         private void Remember(Arm a)
@@ -98,27 +143,67 @@ namespace ProjectFossil.Player
             a.HandRest  = a.Hand.localRotation;
         }
 
-        private static void CurlFingers(Animator anim)
+        // An open hand and a fist, as finger rotations to blend between. Which sign of the finger muscles closes
+        // the hand isn't certain across rigs, so try both and keep whichever brings the fingertips nearer the palm.
+        private static void HandPoses(Animator anim, Arm right, Arm left)
         {
             var handler = new HumanPoseHandler(anim.avatar, anim.transform);
-            var pose = new HumanPose();
-            handler.GetHumanPose(ref pose);
+            var start = new HumanPose();
+            handler.GetHumanPose(ref start);
+
+            float Reach(float sign)
+            {
+                Pose(handler, start, sign * FistCurl, sign * ThumbCurl);
+                var tip = anim.GetBoneTransform(HumanBodyBones.RightMiddleDistal);
+                return tip != null ? Vector3.Distance(tip.position, right.Hand.position) : 0f;
+            }
+            float sign = Reach(1f) <= Reach(-1f) ? 1f : -1f;
+
+            Pose(handler, start, sign * FistCurl * Relaxed, sign * ThumbCurl * Relaxed);
+            right.Open = Capture(right.Fingers);
+            left.Open  = Capture(left.Fingers);
+            Pose(handler, start, sign * FistCurl, sign * ThumbCurl);
+            right.Fist = Capture(right.Fingers);
+            left.Fist  = Capture(left.Fingers);
+            handler.Dispose();
+        }
+
+        private static void Pose(HumanPoseHandler handler, HumanPose start, float fingers, float thumb)
+        {
+            var pose = start;
+            pose.muscles = (float[])start.muscles.Clone();
             for (int i = 0; i < pose.muscles.Length && i < HumanTrait.MuscleCount; i++)
             {
                 string n = HumanTrait.MuscleName[i];
                 if (!n.Contains("Stretched")) continue;
-                if (n.Contains("Thumb")) pose.muscles[i] = ThumbCurl;
+                if (n.Contains("Thumb")) pose.muscles[i] = thumb;
                 else if (n.Contains("Index") || n.Contains("Middle") || n.Contains("Ring") || n.Contains("Little"))
-                    pose.muscles[i] = FingerCurl;
+                    pose.muscles[i] = fingers;
             }
             handler.SetHumanPose(ref pose);
-            handler.Dispose();
         }
 
-        public void Solve(Transform rightTarget, Transform leftTarget, Transform view)
+        private static Quaternion[] Capture(Transform[] bones)
+        {
+            var q = new Quaternion[bones.Length];
+            for (int i = 0; i < bones.Length; i++) q[i] = bones[i].localRotation;
+            return q;
+        }
+
+        // grip 0 = relaxed open hand, 1 = closed fist.
+        public void Solve(Transform rightTarget, Transform leftTarget, Transform view, float rightGrip, float leftGrip)
         {
             Solve(_right, rightTarget, view);
             Solve(_left, leftTarget, view);
+            Grip(_right, rightGrip);
+            Grip(_left, leftGrip);
+        }
+
+        private static void Grip(Arm a, float k)
+        {
+            if (a.Open == null || a.Fist == null) return;
+            for (int i = 0; i < a.Fingers.Length; i++)
+                a.Fingers[i].localRotation = Quaternion.Slerp(a.Open[i], a.Fist[i], k);
         }
 
         // Two-bone reach: the elbow bends down and out, the wrist lands on the target, the knuckles point along the

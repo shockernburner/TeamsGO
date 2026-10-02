@@ -43,6 +43,8 @@ namespace ProjectFossil.Core
         [Header("People and machines")]
         [Tooltip("Player looks, one per outfit; teammates get different ones")]
         public ModelDefinition[] survivors;
+        [Tooltip("Axe carried for the Axe look: stood upright (head up), grip at the bottom of the handle")]
+        public GameObject axe;
         [Tooltip("First-person rig: a humanoid whose arm meshes have FPS in their names; the rest is hidden")]
         public GameObject firstPersonArms;
         [Tooltip("Rescue helicopter model (pivot between the skids, nose along +Z after helicopterYaw)")]

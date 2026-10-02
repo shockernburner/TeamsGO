@@ -73,12 +73,16 @@ namespace ProjectFossil.Editor
             string dinoPack  = creatures != null ? Parent(Parent(creatures)) : null;
             string survivors = FindDir("Survivalist");
             string heliPack  = FindDir("OH-1_Basic");
+            string axePack   = FindDir("Axe Package");
+            string rainPack  = FindDir("Rainy VFX");
             Log.AppendLine($"Dinosaur pack: {dinoPack ?? "not found"}");
             Log.AppendLine($"Forest pack:   {forest ?? "not found"}");
             Log.AppendLine($"Survivor pack: {survivors ?? "not found"}");
             Log.AppendLine($"Heli pack:     {heliPack ?? "not found"}");
+            Log.AppendLine($"Axe pack:      {axePack ?? "not found"}");
+            Log.AppendLine($"Rain pack:     {rainPack ?? "not found"}");
             int sounds = SoundSetup.Organise(Log);
-            if (dinoPack == null && forest == null && survivors == null && heliPack == null)
+            if (dinoPack == null && forest == null && survivors == null && heliPack == null && axePack == null && rainPack == null)
             {
                 WriteReport();
                 EditorUtility.DisplayDialog("Bought packs", "None of the art packs is imported." +
@@ -115,6 +119,13 @@ namespace ProjectFossil.Editor
                     SetUpHelicopter(art, heliPack);
                 }
                 else art.helicopter = null;
+                if (axePack != null)
+                {
+                    ConvertMaterials(axePack, "axe-pack");
+                    SetUpAxe(art, axePack);
+                }
+                else art.axe = null;
+                if (rainPack != null) ListPack("Rain", rainPack); // wired next, once its layout is known
             }
             finally
             {
@@ -140,7 +151,8 @@ namespace ProjectFossil.Editor
             var found = new List<string>();
             if (FindDir("Survivalist") != null && (art == null || art.survivors == null || art.survivors.Length == 0 || art.survivors[0] == null))
                 found.Add("survivor pack");
-            else if (art != null && art.firstPersonArms == null && FindDir("Survivalist") is string sv &&
+            else if (art != null && (art.firstPersonArms == null || !AssetDatabase.GetAssetPath(art.firstPersonArms).StartsWith(Out)) &&
+                     FindDir("Survivalist") is string sv &&
                      Directory.Exists($"{sv}/Prefab") && Directory.GetFiles($"{sv}/Prefab", "FPS_*.prefab").Length > 0)
                 found.Add("first-person arms");
             if (FindDir("OH-1_Basic") != null && (art == null || art.helicopter == null))
@@ -608,7 +620,7 @@ namespace ProjectFossil.Editor
                 Log.AppendLine($"  {name} <- {sources[i]}");
             }
             art.survivors = defs.ToArray();
-            art.firstPersonArms = FirstPersonArms(dir);
+            art.firstPersonArms = FirstPersonArms(dir, avatar);
         }
 
         // The pack ships Unity's Starter Assets idle, walk and run, made for this skeleton: a relaxed, natural
@@ -658,7 +670,7 @@ namespace ProjectFossil.Editor
         // The pack's first-person prefabs, listed so the next step (real first-person arms) can be wired by name.
         // The pack's first-person rig: the full skeleton with arm-and-sleeve meshes under FPS_HANDS. The game keeps
         // only those meshes and bends the arms itself, so no controller is needed.
-        private static GameObject FirstPersonArms(string dir)
+        private static GameObject FirstPersonArms(string dir, Avatar avatar)
         {
             string prefabDir = $"{dir}/Prefab";
             if (!Directory.Exists(prefabDir)) return null;
@@ -673,8 +685,13 @@ namespace ProjectFossil.Editor
                 }
                 var hands = go.GetComponentsInChildren<SkinnedMeshRenderer>(true)
                               .Where(r => r.name.Contains("FPS")).Select(r => r.name).ToArray();
+                // A clean copy with the pack's URP materials, like the bodies: the pack's own prefab uses ones the
+                // URP can't draw, which came out bright pink.
+                string outPath = $"{Out}/Survivors/FirstPersonArms.prefab";
+                CleanPrefab(go, outPath);
+                FixSurvivor(outPath, dir, avatar);
                 Log.AppendLine($"  first-person arms <- {path} ({string.Join(", ", hands)})");
-                return go;
+                return AssetDatabase.LoadAssetAtPath<GameObject>(outPath);
             }
             Log.AppendLine("  first-person arms: no FPS_*.prefab, keeping the simple arms.");
             return null;
@@ -729,6 +746,51 @@ namespace ProjectFossil.Editor
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
             }
             finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        // ── Axe and other packs ────────────────────────────────────────────────
+
+        // The first axe in the pack, cleaned of scripts and physics, carried for the Axe look.
+        private static void SetUpAxe(BoughtArt art, string dir)
+        {
+            Log.AppendLine();
+            var prefabs = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+                                   .Select(p => p.Replace('\\', '/')).OrderBy(p => p).ToList();
+            Log.AppendLine($"Axes: {prefabs.Count} prefabs in {dir}");
+            foreach (var p in prefabs.Take(30))
+            {
+                var g = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (g == null) continue;
+                var b = ModelFit.PrefabBounds(g);
+                Log.AppendLine($"  {Path.GetFileNameWithoutExtension(p)}: {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m");
+            }
+            var source = prefabs.Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                                .FirstOrDefault(g => g != null && g.GetComponentInChildren<Renderer>(true) != null);
+            if (source == null) { art.axe = null; Log.AppendLine("  no usable axe, keeping the stone axe."); return; }
+            string path = $"{Out}/Models/Axe.prefab";
+            CleanPrefab(source, path);
+            art.axe = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            Log.AppendLine($"  Axe <- {AssetDatabase.GetAssetPath(source)}");
+        }
+
+        // What a pack holds (prefabs, their particle systems and shaders), so it can be wired by name.
+        private static void ListPack(string label, string dir)
+        {
+            Log.AppendLine();
+            var prefabs = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+                                   .Select(p => p.Replace('\\', '/')).OrderBy(p => p).ToList();
+            Log.AppendLine($"{label} pack: {prefabs.Count} prefabs in {dir}");
+            foreach (var p in prefabs.Take(40))
+            {
+                var g = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (g == null) continue;
+                var parts = g.GetComponentsInChildren<Component>(true)
+                             .Where(c => c != null && !(c is Transform))
+                             .GroupBy(c => c.GetType().Name).Select(x => $"{x.Key} x{x.Count()}");
+                var shaders = g.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
+                               .Where(m => m != null && m.shader != null).Select(m => m.shader.name).Distinct();
+                Log.AppendLine($"  {p.Substring(dir.Length + 1)}: {string.Join(", ", parts)} | shaders: {string.Join(", ", shaders)}");
+            }
         }
 
         // ── Helicopter ─────────────────────────────────────────────────────────
@@ -797,15 +859,16 @@ namespace ProjectFossil.Editor
             var tropicalPlants = T("BananaPlant", "Mimosa");
             var tropicalRocks  = T("RockA", "RockB", "RockC");
 
-            // Mature beeches are fine as jungle canopy giants; young beeches pass for undergrowth.
+            // Mature beeches are fine as jungle canopy giants. Young beeches are small trees: shrunk to plant height
+            // they looked like the crown of a buried tree swaying on the ground, so they count as trees.
             art.biomes = new[]
             {
-                Biome("Jungle",   All(jungleTrees, jungleTrees, palms, beech), All(stones, mossy, tropicalRocks, logs),
-                                  All(ferns, ferns, tropicalPlants, plants, bushes, young), Layer(forest, "Terrain_Layer5_Leaves")),
+                Biome("Jungle",   All(jungleTrees, jungleTrees, palms, beech, young), All(stones, mossy, tropicalRocks, logs),
+                                  All(ferns, ferns, tropicalPlants, plants, bushes), Layer(forest, "Terrain_Layer5_Leaves")),
                 Biome("Plains",   All(beech),                                 All(stones, tropicalRocks),
                                   All(grass, grass, bushes),                    Layer(forest, "Terrain_Layer4_Grass_Plants")),
-                Biome("Swamp",    All(jungleTrees, oldBeech),                 All(logs, mossy, stones),
-                                  All(ferns, plants, shrooms, young),           Layer(forest, "Terrain_Layer3_Soil_Wet")),
+                Biome("Swamp",    All(jungleTrees, oldBeech, young),          All(logs, mossy, stones),
+                                  All(ferns, plants, shrooms),           Layer(forest, "Terrain_Layer3_Soil_Wet")),
                 Biome("Beach",    All(palms),                                 All(tropicalRocks, stones),
                                   All(tropicalPlants, grass),                   Layer(forest, "Terrain_Layer1_Sand") ?? Layer(dinoPack, "layer_sand")),
                 // Dry boughs lie on the ground: as "trees" they were stretched to tree height and stuck up out of

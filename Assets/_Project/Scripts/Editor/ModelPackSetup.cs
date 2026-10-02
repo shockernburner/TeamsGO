@@ -311,7 +311,7 @@ namespace ProjectFossil.Editor
             ctrl.AddLayer("Actions");
             var layers = ctrl.layers;
             layers[1].avatarMask    = UpperBodyMask();
-            layers[1].defaultWeight = 1f;
+            layers[1].defaultWeight = 0f; // PlayerVisual raises it while an action plays
             layers[1].blendingMode  = AnimatorLayerBlendingMode.Override;
             ctrl.layers = layers;
 
