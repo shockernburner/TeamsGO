@@ -69,6 +69,14 @@ namespace ProjectFossil.Dinosaurs
         private float        _castTimer;     // > 0 while it stands where the trail went cold, sniffing around
         private float        _stuckTimer;    // how long a chase has made no headway
         private float        _detourTimer;   // > 0 while it goes around something to get at its target
+        private float        _reachCheck;    // counts down to the next "can I get to them at all" test
+        private float        _noWayTime;     // how long the target has had no path to it
+        private Transform    _ignored;       // a target it gave up on, left alone until _ignoredUntil
+        private float        _ignoredUntil;
+        private NavMeshPath  _reachPath;
+
+        private const float NoWayGiveUp = 10f; // seconds with no way to the target before it wanders off...
+        private const float IgnoreFor   = 15f; // ...and leaves them alone this long
 
         private static readonly Dictionary<Transform, List<DinosaurAI>> Attackers =
             new Dictionary<Transform, List<DinosaurAI>>();
@@ -361,6 +369,8 @@ namespace ProjectFossil.Dinosaurs
         private void UpdateWander()
         {
             var detected = TryDetectPlayer();
+            bool ignoring = _ignored != null && Time.time < _ignoredUntil;
+            if (ignoring && detected == _ignored) detected = null;
             if (detected != null)
             {
                 switch (species.temperament)
@@ -386,7 +396,7 @@ namespace ProjectFossil.Dinosaurs
                 return;
             }
 
-            if (FollowScent()) return;
+            if (!ignoring && FollowScent()) return;
 
             if (_castTimer > 0f)
             {
@@ -487,6 +497,8 @@ namespace ProjectFossil.Dinosaurs
             _agent.speed = species.runSpeed;
             _stuckTimer  = 0f;
             _detourTimer = 0f;
+            _noWayTime   = 0f;
+            _reachCheck  = 0f;
         }
 
         private void UpdateChase()
@@ -544,6 +556,18 @@ namespace ProjectFossil.Dinosaurs
 
             if (gap > reach)
             {
+                // Somewhere it can't get to at all (up a slope too steep for it, across deep water): it doesn't wait
+                // there for ever. After a while it gives up and leaves them alone for a bit, so a pack doesn't
+                // gather at the foot of a slope and pounce the moment someone gets down.
+                if (CannotReach(_target.position))
+                {
+                    _ignored      = _target;
+                    _ignoredUntil = Time.time + IgnoreFor;
+                    _target       = null;
+                    EnterWander();
+                    return;
+                }
+
                 _agent.speed = species.runSpeed;
                 if (_detourTimer > 0f)
                 {
@@ -751,6 +775,20 @@ namespace ProjectFossil.Dinosaurs
             var b = body.bounds;
             Vector3 level = new Vector3(point.x, b.center.y, point.z);
             return Flat(level - body.ClosestPoint(level)).magnitude;
+        }
+
+        // True once the target has had no complete path to it for NoWayGiveUp seconds. Tested once a second.
+        private bool CannotReach(Vector3 target)
+        {
+            _reachCheck -= Time.deltaTime;
+            if (_reachCheck > 0f) return false;
+            _reachCheck = 1f;
+            _reachPath ??= new NavMeshPath();
+            bool way = NavMesh.SamplePosition(target, out var hit, 2f, NavMesh.AllAreas)
+                    && NavMesh.CalculatePath(transform.position, hit.position, NavMesh.AllAreas, _reachPath)
+                    && _reachPath.status == NavMeshPathStatus.PathComplete;
+            _noWayTime = way ? 0f : _noWayTime + 1f;
+            return _noWayTime >= NoWayGiveUp;
         }
 
         // Somewhere else around the target, partway round to one side, to come at it from there.

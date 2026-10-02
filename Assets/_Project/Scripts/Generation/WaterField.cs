@@ -32,6 +32,7 @@ namespace ProjectFossil.Generation
         public const float LeveeReach      = 8f;    // ...for this many metres
         public const int   MinBodyVertices = 24;    // smaller pools are left out
         public const float StreamMargin    = 1.5f;  // metres a stream's surface reaches past its planned channel
+        public const float MaxGroundGrade  = 0.95f; // metres ground may rise per metre: about 45 degrees, what feet and NavMesh climb
 
         public static IslandWorld Build(IslandData data)
         {
@@ -45,6 +46,7 @@ namespace ProjectFossil.Generation
             for (int z = 0; z < n; z++)
                 for (int x = 0; x < n; x++)
                     orig[z * n + x] = h01[z, x] * s.maxHeight;
+            LimitSlope(orig, n, cell);
             var ground = (float[])orig.Clone();
             var water  = new float[n * n];
             var depth  = new float[n * n]; // deepest the bed may lie below each surface
@@ -72,7 +74,7 @@ namespace ProjectFossil.Generation
             for (int i = 0; i < water.Length; i++)
                 if (!float.IsNaN(water[i])) ground[i] = Bed(water[i], shore[i], depth[i], cell);
 
-            ShapeBanks(water, ground, isSea, n, cell);
+            var floor = ShapeBanks(water, ground, isSea, n, cell);
 
             // No edge may hang: every dry vertex stands clear of the water beside it. Raising dry ground only ever
             // helps its other neighbours, so one pass settles it.
@@ -82,8 +84,14 @@ namespace ProjectFossil.Generation
                     int i = z * n + x;
                     if (!float.IsNaN(water[i]) || isSea[i]) continue;
                     float top = HighestWetNeighbour(water, n, x, z);
-                    if (!float.IsNegativeInfinity(top)) ground[i] = Mathf.Max(ground[i], top + Clearance);
+                    if (float.IsNegativeInfinity(top)) continue;
+                    floor[i]  = Mathf.Max(floor[i], top + Clearance);
+                    ground[i] = Mathf.Max(ground[i], floor[i]);
                 }
+
+            // The banks are cut down near water and the land beyond them is not, which left a sheer step where they
+            // meet on a hillside. Ease every step back to a climbable slope, never below what the water needs.
+            LimitSlope(ground, n, cell, water, floor);
 
             for (int i = 0; i < ground.Length; i++) ground[i] = Mathf.Clamp(ground[i], 0f, s.maxHeight);
             return new IslandWorld(n, cell, sea, ground, water, FindRapids(water, n, cell));
@@ -345,8 +353,11 @@ namespace ProjectFossil.Generation
 
         // Shapes the dry ground near water: no higher than a bank rising gently from it (so no walls of earth over a
         // stream), and no lower than a gentle levee falling away from it (so no water perched on a drop).
-        private static void ShapeBanks(float[] water, float[] ground, bool[] isSea, int n, float cell)
+        // Returns the lowest each vertex may stand for the water beside it (-Infinity where nothing holds it up).
+        private static float[] ShapeBanks(float[] water, float[] ground, bool[] isSea, int n, float cell)
         {
+            var floor = new float[water.Length];
+            for (int i = 0; i < floor.Length; i++) floor[i] = float.NegativeInfinity;
             var dist = new float[water.Length];
             var near = new float[water.Length]; // surface of the nearest water
             var heap = new MinHeap();
@@ -381,8 +392,12 @@ namespace ProjectFossil.Generation
                 if (dist[i] <= BankReach)
                     ground[i] = Mathf.Min(ground[i], near[i] + Clearance + BankSlope * out1);
                 if (dist[i] <= LeveeReach)
-                    ground[i] = Mathf.Max(ground[i], near[i] + Clearance - LeveeSlope * out1);
+                {
+                    floor[i]  = near[i] + Clearance - LeveeSlope * out1;
+                    ground[i] = Mathf.Max(ground[i], floor[i]);
+                }
             }
+            return floor;
         }
 
         private static float HighestWetNeighbour(float[] water, int n, int x, int z)
@@ -396,6 +411,36 @@ namespace ProjectFossil.Generation
                 if (!float.IsNaN(w) && w > top) top = w;
             }
             return top;
+        }
+
+        // Ground no steeper than MaxGroundGrade anywhere. The ridge noise made sheer walls (80 degrees and more) that
+        // nobody could climb or walk along: a survivor sliding into the fold between two of them was stuck there
+        // while the dinosaurs, kept off them too, waited above and below. Only lowers ground, from the lowest up,
+        // so valleys stay where they are and peaks and crests become steep but walkable-looking slopes.
+        // With water: wet vertices keep their beds and count as standing at their surface (plus Clearance), and no
+        // dry vertex goes below its floor.
+        private static void LimitSlope(float[] ground, int n, float cell, float[] water = null, float[] floor = null)
+        {
+            var heap = new MinHeap();
+            for (int i = 0; i < ground.Length; i++) heap.Push(Top(i), i);
+            while (heap.Count > 0)
+            {
+                heap.Pop(out float key, out int i);
+                if (key > Top(i)) continue; // stale
+                int x = i % n, z = i / n;
+                for (int k = 0; k < 8; k++)
+                {
+                    int nx = x + Dx[k], nz = z + Dz[k];
+                    if (nx < 0 || nz < 0 || nx >= n || nz >= n) continue;
+                    int j = nz * n + nx;
+                    if (water != null && !float.IsNaN(water[j])) continue;
+                    float cap = key + MaxGroundGrade * Step[k] * cell;
+                    if (floor != null) cap = Mathf.Max(cap, floor[j]);
+                    if (cap < ground[j]) { ground[j] = cap; heap.Push(cap, j); }
+                }
+            }
+
+            float Top(int i) => water != null && !float.IsNaN(water[i]) ? water[i] + Clearance : ground[i];
         }
 
         // A binary min-heap of (key, vertex).

@@ -391,6 +391,44 @@ namespace ProjectFossil.Tests.EditMode
             }
         }
 
+        // No walls: on the game's island every step between two dry vertices is one feet and the NavMesh can
+        // climb (a survivor got stuck between sheer faces beside a stream, with dinosaurs waiting above and below).
+        [Test]
+        public void WaterField_GroundIsClimbable_OnTheGamesIsland()
+        {
+            var s = MakeSettings(257);
+            s.worldSize = 1000f;
+            s.maxHeight = 150f;
+            s.noiseScale = 0.0045f;
+            s.riverCount = 5;
+            s.lakeCount = 6;
+            s.terrainDetail = 4;
+            int[] dx = { 1, 0, 1, -1 }, dz = { 0, 1, 1, 1 };
+            for (int seed = 0; seed < 4; seed++)
+            {
+                var world = WaterField.Build(new IslandGenerator(seed, s).Generate());
+                int n = world.Size, steep = 0, edges = 0;
+                float worst = 0f;
+                for (int z = 0; z < n; z++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        if (world.WetVertex(x, z)) continue;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            int nx = x + dx[k], nz = z + dz[k];
+                            if (nx < 0 || nz >= n || nx >= n || world.WetVertex(nx, nz)) continue;
+                            float run   = world.Cell * (dx[k] != 0 && dz[k] != 0 ? 1.41421356f : 1f);
+                            float grade = Mathf.Abs(world.GroundAtVertex(nx, nz) - world.GroundAtVertex(x, z)) / run;
+                            edges++;
+                            if (grade > WaterField.MaxGroundGrade + 0.02f) steep++;
+                            worst = Mathf.Max(worst, grade);
+                        }
+                    }
+                Assert.Less(worst, 1.5f, $"Seed {seed}: a wall (grade {worst:F2})");
+                Assert.Less(steep, edges / 10000 + 1, $"Seed {seed}: {steep} of {edges} steps steeper than allowed");
+            }
+        }
+
         [Test]
         public void WaterField_IsDeterministic()
         {

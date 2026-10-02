@@ -513,3 +513,15 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   are off under a photo. Without the download the drawn sky stays.
 - The Console now says at match start which sky and which rain are in use.
 - `Project Fossil > Co-op > Build for Windows` builds a Windows copy on the Mac for a friend's laptop.
+
+## 2026-10-02 — No more walls on mountains (10.57 PM recording)
+
+- The survivor got stuck halfway up a mountain with dinosaurs waiting above and below. Cause: the water pass cut
+  stream banks down to a gentle slope for 14 m and left the hillside beyond untouched, so a sheer step (up to 80
+  degrees) stood where they met. The ridge noise made a few more. Neither feet nor the NavMesh climb over 45
+  degrees, so the fold between two such faces was a trap.
+- Ground is now never steeper than about 45 degrees (`WaterField.MaxGroundGrade`): every step is eased back from
+  the lowest ground up, keeping each bed and the levee the water needs. A test checks it across seeds.
+- Ground steeper than the controller's slope limit now slides the survivor down instead of holding them.
+- A dinosaur that has had no path to its target for 10 s gives up, wanders off and leaves that survivor alone for
+  15 s, instead of camping at the foot of the slope.
