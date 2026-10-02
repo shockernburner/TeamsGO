@@ -466,3 +466,10 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **White, foamy rivers:** rivers now use the forest pack's calm swamp water, like lakes.
 - **Brown blobs in fog:** in fog weather there are no clouds; the sky is a grey wash there anyway.
 - **Red "IsMapping" errors at match start:** the mist and sun shafts now load their shader by name, and only fall back to the Resources material.
+
+## 2026-10-02 — Rivers that drain, grey overcast, bought rain (6.41 PM recording)
+
+- **The water sheets were rivers lost in a hollow.** Rivers walked downhill over the bare ground, so a river that reached a hollow wandered round inside it. Three rivers on one island coiled within about 30 m, a knot of water ribbons at different heights with dry ground and tilted steps between. Rivers now follow how water really drains: over the ground with every hollow filled to its brim (priority flood), so each one crosses hollows and runs on to the sea. A river ends where it meets another. Where lowering a surface would leave a steep step between two points, the river breaks there.
+- **Fewer rivers:** traced honestly, almost every course on these steep islands runs at 25–50 %, far steeper than the 15 % a flat ribbon of water can show without looking like a tilted sheet. So rivers are now rare, and the island tries 6 lakes instead of 4. Proper mountain streams (pools with small falls between them) would bring running water back to the slopes; that is a separate piece of work.
+- **Overcast looked like a clear day:** under cloud the sky is now a grey lid instead of blue, with more cloud, a dimmer sun and softer shadows.
+- **Bought rain:** *Set Up Bought Packs* now picks the rain pack's falling-rain effects by name (steady rain, and heavy rain for storms), skipping splashes, ripples, drops on glass and anything whose shaders don't draw under URP. It runs again by itself once for this. Rain and storms play that effect around the camera; without it the simple streaks remain.

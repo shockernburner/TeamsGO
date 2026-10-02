@@ -231,12 +231,19 @@ namespace ProjectFossil.Generation
                     carved[y, x] = float.MaxValue;
 
             var sources = new List<Vector2Int>();
+            var filled  = FillHollows(heightmap, res);
+            var riverCells = new HashSet<int>();
             var raised  = new float[res, res]; // banks built up beside the water, so it never hangs over lower ground
             for (int r = 0; r < s.riverCount; r++)
             {
                 if (!TryPickRiverSource(heightmap, res, sources, out var src)) break;
                 sources.Add(src);
-                var path = TraceRiver(heightmap, res, src);
+                var path = TraceRiver(filled, res, src);
+                // Draining the same ground, rivers meet: one ends where it joins another, instead of running on
+                // down the same channel as a second ribbon of water.
+                for (int i = 0; i < path.Count; i++)
+                    if (NearRiver(riverCells, res, path[i])) { path.RemoveRange(i, path.Count - i); break; }
+                foreach (var c in path) riverCells.Add(c.y * res + c.x);
                 if (path.Count < 12) continue;
 
                 // The water surface only ever falls.
@@ -318,8 +325,10 @@ namespace ProjectFossil.Generation
         {
             float cell = _settings.worldSize / (res - 1);
             RaiseRims(heightmap, res, cell, rivers, lakes);
-            for (int pass = 0; pass < 40; pass++)
-                if (!ContainWaterOnce(heightmap, res, cell, rivers, lakes)) break;
+            bool settled = false;
+            for (int pass = 0; pass < 40 && !settled; pass++)
+                settled = !ContainWaterOnce(heightmap, res, cell, rivers, lakes);
+            if (!settled) DropHangingWater(heightmap, res, cell, rivers, lakes);
 
             for (int y = 0; y < res; y++)
                 for (int x = 0; x < res; x++)
@@ -415,6 +424,20 @@ namespace ProjectFossil.Generation
                         WaterShape.RiverRim(s, river, i, rim);
                         y = Mathf.Min(y, Mathf.Min(original, Ceiling(heightmap, res, cell, rim, original, oldRivers, oldLakes)));
                         ok = original - y <= maxDrop;
+                        // Lowering one point can leave a steep step from the one before it, drawn as a tilted
+                        // sheet of water: the river breaks there instead, each side with its own rounded end.
+                        if (ok && part != null && part.Points.Count > 0)
+                        {
+                            var prev = part.Points[part.Points.Count - 1];
+                            var pi = river.Points[i];
+                            float run = Mathf.Sqrt((pi.x - prev.x) * (pi.x - prev.x) + (pi.z - prev.z) * (pi.z - prev.z));
+                            if (prev.y - y > s.maxRiverGradient * Mathf.Max(run, 0.5f) + 1e-3f)
+                            {
+                                if (part.Points.Count >= MinRiverRun) kept.Add(part);
+                                part = null;
+                                changed = true;
+                            }
+                        }
                         if (original - y > 1e-4f) changed = true;
                     }
                     if (ok)
@@ -446,6 +469,30 @@ namespace ProjectFossil.Generation
                 lakes[l] = lake;
             }
             return changed;
+        }
+
+        // Rarely the passes above keep shifting; then any water still hanging is simply left out.
+        private void DropHangingWater(float[,] h, int res, float cell, List<RiverPath> rivers, List<Lake> lakes)
+        {
+            var rim = new List<Vector3>();
+            bool hangs;
+            do
+            {
+                hangs = false;
+                for (int r = rivers.Count - 1; r >= 0 && !hangs; r--)
+                    for (int i = 0; i < rivers[r].Points.Count; i++)
+                    {
+                        WaterShape.RiverRim(_settings, rivers[r], i, rim);
+                        float y = rivers[r].Points[i].y;
+                        if (Ceiling(h, res, cell, rim, y, rivers, lakes) < y - 1e-4f) { rivers.RemoveAt(r); hangs = true; break; }
+                    }
+                for (int l = lakes.Count - 1; l >= 0 && !hangs; l--)
+                {
+                    WaterShape.LakeRim(_settings, lakes[l], rim);
+                    float y = lakes[l].Center.y;
+                    if (Ceiling(h, res, cell, rim, y, rivers, lakes) < y - 1e-4f) { lakes.RemoveAt(l); hangs = true; }
+                }
+            } while (hangs);
         }
 
         // Highest a surface at height y may stand so that none of its rim points hang: each must be under ground
@@ -597,48 +644,119 @@ namespace ProjectFossil.Generation
             return found;
         }
 
-        // Downhill walk with a pull toward the coast, so rivers climb out of dips instead of pooling forever.
-        private List<Vector2Int> TraceRiver(float[,] h, int res, Vector2Int start)
+        // Rivers follow the way water would really drain: downhill over the ground with every hollow filled to
+        // its brim, so a river crosses a hollow and leaves by its lowest edge, all the way to the sea. Walking the
+        // bare ground, rivers were trapped in hollows and coiled round in a few metres, a knot of water ribbons.
+        // The water itself still follows the real ground: in a hollow it drops to the floor, and where it would
+        // run in a trench up to the brim, that stretch stays dry (see CarveWater).
+        private List<Vector2Int> TraceRiver(float[,] filled, int res, Vector2Int start)
         {
-            var path    = new List<Vector2Int> { start };
-            var visited = new HashSet<int> { start.y * res + start.x };
-            var cur     = start;
-            float centre = (res - 1) * 0.5f;
-            int maxSteps = res * 3;
-
-            for (int step = 0; step < maxSteps; step++)
+            var path = new List<Vector2Int> { start };
+            var cur  = start;
+            for (int step = 0; step < res * 4; step++)
             {
-                if (h[cur.y, cur.x] < _settings.seaLevel) break; // reached the sea
-
+                if (filled[cur.y, cur.x] < _settings.seaLevel) break; // reached the sea
                 Vector2Int best = cur;
-                bool moved = false;
-                float bestScore = float.MaxValue;
-                float curRadial = Radial(cur, centre);
+                float lowest = filled[cur.y, cur.x];
                 for (int dy = -1; dy <= 1; dy++)
-                {
                     for (int dx = -1; dx <= 1; dx++)
                     {
-                        if (dx == 0 && dy == 0) continue;
                         int x = cur.x + dx, y = cur.y + dy;
-                        if (x < 0 || y < 0 || x >= res || y >= res) continue;
-                        if (visited.Contains(y * res + x)) continue;
-
-                        var n = new Vector2Int(x, y);
-                        float outward = Radial(n, centre) - curRadial; // > 0 = toward the coast
-                        float score = h[y, x] - outward * 0.002f + _rng.NextFloat() * 0.001f;
-                        if (score < bestScore) { bestScore = score; best = n; moved = true; }
+                        if ((dx == 0 && dy == 0) || x < 0 || y < 0 || x >= res || y >= res) continue;
+                        if (filled[y, x] < lowest) { lowest = filled[y, x]; best = new Vector2Int(x, y); }
                     }
-                }
-                if (!moved) break; // boxed in by its own path
-
-                visited.Add(best.y * res + best.x);
-                // Mark neighbours too, so the river doesn't fold back beside itself.
-                visited.Add(cur.y * res + best.x);
-                visited.Add(best.y * res + cur.x);
+                if (best.x == cur.x && best.y == cur.y) break; // the island's edge
                 path.Add(best);
                 cur = best;
             }
             return path;
+        }
+
+        // The ground with every hollow filled just past level, so each cell drains to a lower neighbour and on
+        // to the sea (priority flood, inward from the sea and the map's edge).
+        private float[,] FillHollows(float[,] h, int res)
+        {
+            const float rise = 1e-6f; // a fall too small to see, so filled hollows still drain one way
+            var filled = new float[res, res];
+            var done   = new bool[res, res];
+            var open   = new CellHeap();
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                    if (h[y, x] < _settings.seaLevel || x == 0 || y == 0 || x == res - 1 || y == res - 1)
+                    {
+                        filled[y, x] = h[y, x];
+                        done[y, x] = true;
+                        open.Push(h[y, x], y * res + x);
+                    }
+            while (open.Count > 0)
+            {
+                open.Pop(out float level, out int at);
+                int cx = at % res, cy = at / res;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int x = cx + dx, y = cy + dy;
+                        if (x < 0 || y < 0 || x >= res || y >= res || done[y, x]) continue;
+                        done[y, x] = true;
+                        filled[y, x] = Mathf.Max(h[y, x], level + rise);
+                        open.Push(filled[y, x], y * res + x);
+                    }
+            }
+            return filled;
+        }
+
+        private static bool NearRiver(HashSet<int> cells, int res, Vector2Int p)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int x = p.x + dx, y = p.y + dy;
+                    if (x >= 0 && y >= 0 && x < res && y < res && cells.Contains(y * res + x)) return true;
+                }
+            return false;
+        }
+
+        // A min-heap of grid cells by height.
+        private class CellHeap
+        {
+            private readonly List<float> _keys  = new List<float>();
+            private readonly List<int>   _cells = new List<int>();
+            public int Count => _keys.Count;
+
+            public void Push(float key, int cell)
+            {
+                _keys.Add(key); _cells.Add(cell);
+                int i = _keys.Count - 1;
+                while (i > 0)
+                {
+                    int parent = (i - 1) / 2;
+                    if (_keys[parent] <= _keys[i]) break;
+                    Swap(i, parent); i = parent;
+                }
+            }
+
+            public void Pop(out float key, out int cell)
+            {
+                key = _keys[0]; cell = _cells[0];
+                int last = _keys.Count - 1;
+                _keys[0] = _keys[last]; _cells[0] = _cells[last];
+                _keys.RemoveAt(last); _cells.RemoveAt(last);
+                int i = 0;
+                while (true)
+                {
+                    int l = 2 * i + 1, r = l + 1, m = i;
+                    if (l < _keys.Count && _keys[l] < _keys[m]) m = l;
+                    if (r < _keys.Count && _keys[r] < _keys[m]) m = r;
+                    if (m == i) break;
+                    Swap(i, m); i = m;
+                }
+            }
+
+            private void Swap(int a, int b)
+            {
+                (_keys[a], _keys[b]) = (_keys[b], _keys[a]);
+                (_cells[a], _cells[b]) = (_cells[b], _cells[a]);
+            }
         }
 
         private static float Radial(Vector2Int p, float centre)

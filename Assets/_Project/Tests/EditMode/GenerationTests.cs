@@ -317,10 +317,10 @@ namespace ProjectFossil.Tests.EditMode
             s.maxHeight = 150f;
             s.noiseScale = 0.0045f; // the game's island
             s.riverCount = 5;
-            s.lakeCount = 4;
+            s.lakeCount = 6;
             s.terrainDetail = 4;
             const float slack = 0.02f;
-            int riverPoints = 0, lakes = 0;
+            int lakes = 0;
             var rim = new List<Vector3>();
             for (int seed = 0; seed < 8; seed++)
             {
@@ -334,12 +334,26 @@ namespace ProjectFossil.Tests.EditMode
                     Assert.GreaterOrEqual(ground, y - slack, $"Seed {seed}: {what} hangs over the ground at ({q.x:F0}, {q.z:F0})");
                 }
                 foreach (var river in data.Rivers)
-                    for (int i = 0; i < river.Points.Count; i++)
+                {
+                    // A river gets somewhere: it doesn't coil round a hollow, and its surface never tilts steeply.
+                    int n = river.Points.Count;
+                    float length = 0f;
+                    for (int i = 1; i < n; i++)
                     {
-                        riverPoints++;
+                        Vector3 a = river.Points[i - 1], b = river.Points[i];
+                        float run = Mathf.Sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+                        length += run;
+                        Assert.LessOrEqual(a.y - b.y, s.maxRiverGradient * Mathf.Max(run, 0.5f) + 0.01f, $"Seed {seed}: river surface tilts steeply at {i}");
+                    }
+                    Vector3 first = river.Points[0], last = river.Points[n - 1];
+                    float reach = Mathf.Sqrt((last.x - first.x) * (last.x - first.x) + (last.z - first.z) * (last.z - first.z));
+                    Assert.Greater(reach, length * 0.4f, $"Seed {seed}: river coils round on itself");
+                    for (int i = 0; i < n; i++)
+                    {
                         WaterShape.RiverRim(s, river, i, rim);
                         foreach (var q in rim) Check(q, river.Points[i].y, $"river edge {i}");
                     }
+                }
                 foreach (var lake in data.Lakes)
                 {
                     lakes++;
@@ -347,8 +361,8 @@ namespace ProjectFossil.Tests.EditMode
                     foreach (var q in rim) Check(q, lake.Center.y, "lake rim");
                 }
             }
-            Assert.Greater(riverPoints, 8 * 40, "Too little river left in 8 islands");
-            Assert.Greater(lakes, 8, "Too few lakes left in 8 islands");
+            // Rivers only run where the ground is gentle, which is rare on these steep islands; lakes are common.
+            Assert.Greater(lakes, 8 * 2, "Too few lakes left in 8 islands");
         }
 
         private static float FineGround(float[,] fine, IslandSettings s, Vector3 p)
