@@ -8,6 +8,7 @@
         "ProjectFossil.Player",
         "ProjectFossil.Match",
         "ProjectFossil.Dinosaurs",
+        "ProjectFossil.Generation",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime"
     ],

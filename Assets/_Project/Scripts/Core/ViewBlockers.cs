@@ -103,6 +103,14 @@ namespace ProjectFossil.Core
             });
         }
 
+        // Every registered tree's position, e.g. to shade the forest on the map.
+        public static void ForEachTree(System.Action<Vector3> visit)
+        {
+            foreach (var list in Grid.Values)
+                foreach (var e in list)
+                    if (e.Tree) visit(e.Center);
+        }
+
         private static void Add(Entry e)
         {
             long key = Key(Mathf.FloorToInt(e.Center.x / Cell), Mathf.FloorToInt(e.Center.z / Cell));
