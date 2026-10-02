@@ -8,7 +8,8 @@ namespace ProjectFossil.Generation
     // Pure and deterministic for a seed, like the generator.
     public static class TerrainDetail
     {
-        // Smoothing may lower ground by at most this much, so river and lake banks stay above their water.
+        // Smoothing may lower open ground by at most this much. Near water it may not lower it at all, so the banks
+        // the generator built above each surface's edge stay there.
         private const float MaxLowering = 0.2f; // metres
 
         public static float[,] Refine(IslandData data)
@@ -20,9 +21,10 @@ namespace ProjectFossil.Generation
 
             int fine  = (res - 1) * k + 1;
             var src   = data.Heightmap;
-            var mask  = data.LandMask;
+            // Bumps only well away from water: near it they could dip a bank below the surface beside it.
+            var mask  = Erode(data.LandMask, res, BumpClearCells);
             var flat  = new float[fine, fine]; // straight interpolation of the coarse grid
-            var land  = new float[fine, fine]; // 1 well inland, 0 on water, blended between
+            var land  = new float[fine, fine]; // 1 well away from water, 0 on or near it, blended between
             for (int y = 0; y < fine; y++)
             {
                 float gy = (float)y / k;
@@ -58,10 +60,10 @@ namespace ProjectFossil.Generation
             {
                 for (int x = 0; x < fine; x++)
                 {
-                    float v = Mathf.Max(h[y, x], flat[y, x] - floor);
+                    float v = Mathf.Max(h[y, x], flat[y, x] - floor * land[y, x]);
                     if (amp > 0f)
                     {
-                        float w  = land[y, x] * land[y, x]; // none on or right beside water
+                        float w  = land[y, x] * land[y, x];
                         float wx = x * cellM, wz = y * cellM;
                         float n  = (Mathf.PerlinNoise(wx * 0.11f + ox, wz * 0.11f + oz) - 0.5f)
                                  + (Mathf.PerlinNoise(wx * 0.43f + oz, wz * 0.43f + ox) - 0.5f) * 0.5f;
@@ -71,6 +73,30 @@ namespace ProjectFossil.Generation
                 }
             }
             return h;
+        }
+
+        private const int BumpClearCells = 3; // coarse cells (about 12 m on the default island)
+
+        // Land only where everything within r cells is land.
+        private static bool[,] Erode(bool[,] land, int res, int r)
+        {
+            var rows = new bool[res, res];
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                {
+                    bool all = true;
+                    for (int o = -r; o <= r && all; o++) all = land[y, Mathf.Clamp(x + o, 0, res - 1)];
+                    rows[y, x] = all;
+                }
+            var result = new bool[res, res];
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                {
+                    bool all = true;
+                    for (int o = -r; o <= r && all; o++) all = rows[Mathf.Clamp(y + o, 0, res - 1), x];
+                    result[y, x] = all;
+                }
+            return result;
         }
 
         private static float Lerp2(float a, float b, float c, float d, float tx, float ty) =>
