@@ -86,8 +86,8 @@ namespace ProjectFossil.Audio
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            if (FindFirstObjectByType<GameAudio>() != null) return;
-            if (FindFirstObjectByType<MatchBootstrap>() == null) return;
+            if (FindAnyObjectByType<GameAudio>() != null) return;
+            if (FindAnyObjectByType<MatchBootstrap>() == null) return;
             new GameObject("GameAudio").AddComponent<GameAudio>();
         }
 
@@ -237,7 +237,7 @@ namespace ProjectFossil.Audio
 
         private void Update()
         {
-            if (_bootstrap == null) _bootstrap = FindFirstObjectByType<MatchBootstrap>();
+            if (_bootstrap == null) _bootstrap = FindAnyObjectByType<MatchBootstrap>();
             if (_bootstrap == null) return;
 
             var match = _bootstrap.Match;
@@ -463,7 +463,11 @@ namespace ProjectFossil.Audio
             if (_dinoScanTimer <= 0f)
             {
                 _dinoScanTimer = 0.5f;
+#if UNITY_6000_5_OR_NEWER
+                foreach (var ai in FindObjectsByType<DinosaurAI>())
+#else
                 foreach (var ai in FindObjectsByType<DinosaurAI>(FindObjectsSortMode.None))
+#endif
                 {
                     if (_dinos.ContainsKey(ai)) continue;
                     ai.AttackLanded += () => OnDinoBite(ai);

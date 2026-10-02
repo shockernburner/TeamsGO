@@ -57,8 +57,8 @@ namespace ProjectFossil.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            if (FindFirstObjectByType<UIManager>() != null) return;
-            if (FindFirstObjectByType<MatchBootstrap>() == null) return;
+            if (FindAnyObjectByType<UIManager>() != null) return;
+            if (FindAnyObjectByType<MatchBootstrap>() == null) return;
             new GameObject("UIManager").AddComponent<UIManager>();
         }
 
@@ -92,7 +92,7 @@ namespace ProjectFossil.UI
 
         private void Update()
         {
-            if (_bootstrap == null) _bootstrap = FindFirstObjectByType<MatchBootstrap>();
+            if (_bootstrap == null) _bootstrap = FindAnyObjectByType<MatchBootstrap>();
             if (_bootstrap == null) return;
 
             if (_match != _bootstrap.Match)
