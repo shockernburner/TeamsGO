@@ -949,6 +949,9 @@ namespace ProjectFossil.Editor
         // The packs' ground layers carry mask maps packed for their own terrain shaders. Our URP terrain reads them
         // as wet and metallic, so the forest floor glitters white and blue. A copy with colour and bumps only is matte,
         // and a larger tile hides the repeat grid.
+        // URP terrain also takes smoothness straight from a colour texture's alpha whenever it has one, whatever the
+        // layer's smoothness says. The packs keep gloss there, so hillsides still mirrored the sky like snow and,
+        // seen low, like sheets of river water. The copy gets its own colour texture with no alpha.
         private const float MinGroundTile = 6f;
 
         private static TerrainLayer MatteCopy(TerrainLayer source)
@@ -960,7 +963,7 @@ namespace ProjectFossil.Editor
             bool isNew = layer == null;
             if (isNew) layer = new TerrainLayer();
 
-            layer.diffuseTexture   = source.diffuseTexture;
+            layer.diffuseTexture   = OpaqueCopy(source.diffuseTexture);
             layer.normalMapTexture = source.normalMapTexture;
             layer.normalScale      = Mathf.Min(source.normalScale, 1f);
             layer.maskMapTexture   = null;
@@ -976,6 +979,40 @@ namespace ProjectFossil.Editor
             else EditorUtility.SetDirty(layer);
             Log.AppendLine($"  ground {source.name}: tile {source.tileSize.x:0.#} -> {layer.tileSize.x:0.#} m, mask map {(source.maskMapTexture != null ? "dropped" : "none")}");
             return layer;
+        }
+
+        private static Texture2D OpaqueCopy(Texture2D source)
+        {
+            if (source == null || !UnityEngine.Experimental.Rendering.GraphicsFormatUtility.HasAlphaChannel(source.graphicsFormat))
+                return source;
+            string path = $"{Out}/Ground/{source.name}_Colour.jpg";
+            if (!File.Exists(path))
+            {
+                // Blit rather than read the texture's pixels: the pack's textures aren't marked readable.
+                var rt = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                Graphics.Blit(source, rt);
+                var active = RenderTexture.active;
+                RenderTexture.active = rt;
+                var copy = new Texture2D(source.width, source.height, TextureFormat.RGB24, false);
+                copy.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0);
+                copy.Apply();
+                RenderTexture.active = active;
+                RenderTexture.ReleaseTemporary(rt);
+                File.WriteAllBytes(path, copy.EncodeToJPG(92));
+                Object.DestroyImmediate(copy);
+                AssetDatabase.ImportAsset(path);
+            }
+            if (AssetImporter.GetAtPath(path) is TextureImporter importer
+                && (importer.alphaSource != TextureImporterAlphaSource.None || importer.wrapMode != TextureWrapMode.Repeat || !importer.sRGBTexture))
+            {
+                importer.alphaSource = TextureImporterAlphaSource.None;
+                importer.wrapMode    = TextureWrapMode.Repeat;
+                importer.sRGBTexture = true;
+                importer.SaveAndReimport();
+            }
+            var opaque = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            Log.AppendLine($"  ground {source.name}: colour alpha (read as gloss) {(opaque != null ? "removed" : "could not be removed")}");
+            return opaque != null ? opaque : source;
         }
 
         // The forest pack ships for the built-in pipeline, with its URP version as a package inside it. Until that's

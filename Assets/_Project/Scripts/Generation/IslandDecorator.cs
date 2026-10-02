@@ -350,6 +350,13 @@ namespace ProjectFossil.Generation
 
             var go = Object.Instantiate(prefab, root, false);
             go.name = prefab.name;
+            // A plant made only of camera-facing cards spins as you walk round it: leave it out.
+            if (inst.Kind != ScatterKind.Tree)
+            {
+                var group = go.GetComponentInChildren<LODGroup>();
+                var first = group != null && group.lodCount > 0 ? group.GetLODs()[0].renderers : go.GetComponentsInChildren<Renderer>();
+                if (AllStandIns(first)) { Object.DestroyImmediate(go); return; }
+            }
             go.transform.localRotation = Quaternion.Euler(0f, inst.Yaw, 0f);
             go.transform.localScale    = Vector3.one * s;
             // Sink rocks a little so they sit in the ground rather than on it.
@@ -420,7 +427,21 @@ namespace ProjectFossil.Generation
                 // Bought models bring their own detail levels; keep them and only make the last one drop out
                 // at the same distance as everything else.
                 var levels = own.GetLODs();
-                if (levels.Length > 0 && levels[levels.Length - 1].screenRelativeTransitionHeight < cullBelow)
+                // Plants' far levels are flat cards that turn to face the camera. Over the bright ground they read
+                // as leaves and caps hanging in the air, spinning as you walk round them. Keep the real mesh
+                // instead.
+                int keep = levels.Length;
+                if (inst.Kind != ScatterKind.Tree)
+                {
+                    while (keep > 1 && AllStandIns(levels[keep - 1].renderers))
+                    {
+                        foreach (var r in levels[keep - 1].renderers) if (r != null) r.enabled = false;
+                        keep--;
+                    }
+                }
+                bool dropped = keep < levels.Length;
+                if (dropped) System.Array.Resize(ref levels, keep);
+                if (levels.Length > 0 && (dropped || levels[levels.Length - 1].screenRelativeTransitionHeight < cullBelow))
                 {
                     levels[levels.Length - 1].screenRelativeTransitionHeight = cullBelow;
                     for (int i = levels.Length - 2; i >= 0; i--)
@@ -434,6 +455,29 @@ namespace ProjectFossil.Generation
             var lod = go.AddComponent<LODGroup>();
             lod.SetLODs(new[] { new LOD(cullBelow, go.GetComponentsInChildren<Renderer>()) });
             lod.RecalculateBounds();
+        }
+
+        // A camera-facing card (billboard, cross or impostor shader) rather than a model.
+        private static bool AllStandIns(Renderer[] renderers)
+        {
+            if (renderers == null || renderers.Length == 0) return false;
+            foreach (var r in renderers)
+                if (r != null && !IsStandIn(r)) return false;
+            return true;
+        }
+
+        private static bool IsStandIn(Renderer r)
+        {
+            if (r is BillboardRenderer) return true;
+            foreach (var m in r.sharedMaterials)
+            {
+                if (m == null || m.shader == null) continue;
+                string n = m.shader.name;
+                if (n.IndexOf("Cross", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || n.IndexOf("Billboard", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || n.IndexOf("Impostor", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
+            return false;
         }
 
         // How far the lowest ground within `reach` of `pos` lies below it (0 on flat ground), capped so a tree on a
