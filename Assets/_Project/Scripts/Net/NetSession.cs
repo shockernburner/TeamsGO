@@ -72,7 +72,7 @@ namespace ProjectFossil.Net
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            var boot = FindFirstObjectByType<MatchBootstrap>();
+            var boot = FindAnyObjectByType<MatchBootstrap>();
             if (boot == null || boot.GetComponent<NetSession>() != null) return;
             boot.holdStart = true; // runs after Awake and before Start, so the match waits for the menu
             boot.gameObject.AddComponent<NetSession>();

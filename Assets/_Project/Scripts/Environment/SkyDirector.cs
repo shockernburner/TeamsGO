@@ -42,7 +42,7 @@ namespace ProjectFossil.Environment
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            if (FindFirstObjectByType<SkyDirector>() != null) return;
+            if (FindAnyObjectByType<SkyDirector>() != null) return;
             new GameObject("Sky").AddComponent<SkyDirector>();
         }
 
@@ -207,7 +207,11 @@ namespace ProjectFossil.Environment
         {
             var sun = RenderSettings.sun;
             if (sun != null && sun.type == LightType.Directional) return sun;
+#if UNITY_6000_5_OR_NEWER
+            foreach (var l in FindObjectsByType<Light>())
+#else
             foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+#endif
                 if (l.type == LightType.Directional) return l;
             return null;
         }

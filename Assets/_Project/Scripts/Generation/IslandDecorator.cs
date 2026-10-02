@@ -42,7 +42,7 @@ namespace ProjectFossil.Generation
         {
             var art = BoughtArt.Current;
             if (art == null || art.windZone == null || !Application.isPlaying) return;
-            if (Object.FindFirstObjectByType<WindZone>() != null) return;
+            if (Object.FindAnyObjectByType<WindZone>() != null) return;
             Object.Instantiate(art.windZone, island, false).name = "Wind";
         }
 
@@ -567,7 +567,11 @@ namespace ProjectFossil.Generation
             if (sun == null || sun.type != LightType.Directional)
             {
                 sun = null;
+#if UNITY_6000_5_OR_NEWER
+                foreach (var l in Object.FindObjectsByType<Light>())
+#else
                 foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+#endif
                     if (l.type == LightType.Directional) { sun = l; break; }
             }
             if (sun == null)

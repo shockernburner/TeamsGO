@@ -59,7 +59,11 @@ namespace ProjectFossil.UI
             {
                 _nextCacheScan = t + 1f;
                 _caches.Clear();
+#if UNITY_6000_5_OR_NEWER
+                _caches.AddRange(Object.FindObjectsByType<LootContainer>());
+#else
                 _caches.AddRange(Object.FindObjectsByType<LootContainer>(FindObjectsSortMode.None));
+#endif
             }
             GUI.color = new Color(1f, 0.85f, 0.2f, 0.75f + 0.25f * Mathf.Sin(t * 3f));
             foreach (var c in _caches)

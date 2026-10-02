@@ -34,8 +34,8 @@ namespace ProjectFossil.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            if (FindFirstObjectByType<CinematicLook>() != null) return;
-            if (FindFirstObjectByType<MatchBootstrap>() == null) return;
+            if (FindAnyObjectByType<CinematicLook>() != null) return;
+            if (FindAnyObjectByType<MatchBootstrap>() == null) return;
             new GameObject("CinematicLook").AddComponent<CinematicLook>();
         }
 
@@ -86,7 +86,7 @@ namespace ProjectFossil.UI
                 }
             }
 
-            if (_bootstrap == null) _bootstrap = FindFirstObjectByType<MatchBootstrap>();
+            if (_bootstrap == null) _bootstrap = FindAnyObjectByType<MatchBootstrap>();
             var match = _bootstrap != null ? _bootstrap.Match : null;
             float target = 0f;
             if (match != null && match.IsRunning && match.Player != null)

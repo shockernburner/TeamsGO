@@ -83,7 +83,11 @@ namespace ProjectFossil.Generation
 
         public static void DestroyExisting(string namePrefix = "Island_")
         {
+#if UNITY_6000_5_OR_NEWER
+            var terrains = Object.FindObjectsByType<Terrain>();
+#else
             var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
+#endif
             foreach (var t in terrains)
                 if (t.gameObject.name.StartsWith(namePrefix))
                     Object.DestroyImmediate(t.gameObject);
