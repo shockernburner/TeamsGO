@@ -85,16 +85,52 @@ namespace ProjectFossil.Environment
             RenderSettings.fogColor   = look.Fog;
             RenderSettings.fogDensity = BaseFog * FogFactor(c);
 
-            ApplySkybox(look);
-            // Under cloud the sky is a grey lid, not blue. Overcast looked like a clear day with more clouds.
-            _overcast = c.Weather != Weather.Clear;
+            // A photographed sky where this machine has them (Project Fossil > Art > Download Skies): real clouds,
+            // with the sun, the haze and the ambient light taken from the picture. The drawn sky otherwise.
+            var photo = SkyLibrary.Current != null ? SkyLibrary.Current.For(c.Time, c.Weather) : null;
+            if (photo != null) ApplyPhotoSky(photo, c);
+            else ApplySkybox(look);
+            // Under cloud the drawn sky is a grey lid, not blue. Overcast looked like a clear day with more clouds.
+            _overcast = photo == null && c.Weather != Weather.Clear;
             _overcastColor = Color.Lerp(look.Fog, Color.white, c.Weather == Weather.Cloudy ? 0.22f : 0.06f);
-            _effects.Apply(c, look.CloudTint, look.Fog);
+            _effects.Apply(c, look.CloudTint, look.Fog, photo != null);
+            Debug.Log($"[Sky] {(photo != null ? $"photo sky '{photo.source}' ({photo.key})" : "drawn sky (run Project Fossil > Art > Download Skies for photographed ones)")}; rain: {_effects.RainSource}");
             _birds.Apply(c);
             _mood.Apply(c, _sun, look.Light, look.Fog);
 
             _lampOn = c.Time == DayTime.Night;
             _nextLightning = Time.time + Random.Range(6f, 14f);
+        }
+
+        private void ApplyPhotoSky(SkyLibrary.Sky photo, Conditions c)
+        {
+            _sky = new Material(photo.material) { name = $"Sky ({photo.key})" };
+            float exposure = _sky.HasProperty("_Exposure") ? _sky.GetFloat("_Exposure") : 1f;
+            // The overcast photo serves rain, storms and fog too, darker and greyer for each.
+            float dim = c.Weather switch
+            {
+                Weather.Rain => 0.75f, Weather.Storm => 0.5f, Weather.Fog => 0.9f,
+                Weather.Cloudy when c.Time == DayTime.Night => 0.6f, _ => 1f,
+            };
+            _skyExposure = exposure * dim;
+            if (_sky.HasProperty("_Exposure")) _sky.SetFloat("_Exposure", _skyExposure);
+            RenderSettings.skybox = _sky;
+
+            // The sun (or moon) stands where the picture has it.
+            if (_sun != null && photo.hasSun && c.Weather != Weather.Rain && c.Weather != Weather.Storm && c.Weather != Weather.Fog
+                && photo.sunDirection.sqrMagnitude > 0.5f)
+                _sun.transform.rotation = Quaternion.LookRotation(-photo.sunDirection.normalized);
+
+            // Haze the colour of the photo's horizon, so far hills melt into the sky instead of a band of other grey.
+            var haze = photo.horizon * dim;
+            if (c.Weather == Weather.Fog) haze = Color.Lerp(haze, new Color(0.7f, 0.72f, 0.7f) * dim, 0.4f);
+            haze.a = 1f;
+            RenderSettings.fogColor = haze;
+
+            // Light the island from the photographed sky too.
+            RenderSettings.ambientMode = AmbientMode.Skybox;
+            RenderSettings.ambientIntensity = c.Time == DayTime.Night ? 0.6f : 1f;
+            DynamicGI.UpdateEnvironment();
         }
 
         private static float FogFactor(Conditions c)

@@ -786,17 +786,19 @@ namespace ProjectFossil.Generation
         private bool TryPickLake(float[,] h, bool[,] water, int res, float cell, out Vector2Int centre)
         {
             float mid = (res - 1) * 0.5f;
-            // Keep clear of rivers: a lake's hollow cut into a river's bank left the river hanging over it.
+            // A little clear of rivers, so each lake has its own shore. Where a stream does run into one, the water
+            // field joins them at the lake's level.
             var s = _settings;
-            int clear = Mathf.CeilToInt((s.lakeRadius.y + 2f * (s.waterDepth + 0.4f) / Mathf.Max(0.05f, s.riverBankSlope) + s.riverWidth) / cell);
-            for (int attempt = 0; attempt < 300; attempt++)
+            int clear = Mathf.CeilToInt((s.lakeRadius.y + s.riverWidth) / cell);
+            for (int attempt = 0; attempt < 400; attempt++)
             {
                 int x = _rng.Next(res), y = _rng.Next(res);
                 float v = h[y, x];
-                if (v < 0.07f || v > 0.22f || water[y, x]) continue;
+                if (v < 0.06f || v > 0.3f || water[y, x]) continue;
                 var c = new Vector2Int(x, y);
-                if (Radial(c, mid) > mid * 0.65f) continue;
-                if (MaxAround(h, res, c, 8) - v > 0.05f) continue; // needs fairly flat ground, not a hillside
+                if (Radial(c, mid) > mid * 0.68f) continue;
+                // In a hollow or on the flat, not on a hillside: the centre lies near the lowest ground round it.
+                if (v - MinAround(h, res, c, 6) > 3f / s.maxHeight) continue;
                 if (AnyWaterAround(water, res, c, clear)) continue;
                 centre = c;
                 return true;

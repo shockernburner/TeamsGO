@@ -50,7 +50,7 @@ namespace ProjectFossil.Generation
         [Tooltip("Rivers start between these normalized heights")]
         public Vector2 riverSourceHeight = new Vector2(0.3f, 0.6f);
         public int   lakeCount = 2;
-        public Vector2 lakeRadius = new Vector2(16f, 30f); // metres
+        public Vector2 lakeRadius = new Vector2(25f, 50f); // metres
         [Tooltip("Water depth in rivers and lakes, metres")]
         public float waterDepth = 2.2f;
         // How far a drawn water surface reaches from its middle: out past where the bank rises above it, so its

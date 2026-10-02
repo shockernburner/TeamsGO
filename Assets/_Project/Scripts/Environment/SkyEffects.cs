@@ -18,13 +18,27 @@ namespace ProjectFossil.Environment
 
         // ── Setup for a match ──────────────────────────────────────────────────
 
-        public void Apply(Conditions c, Color cloudTint, Color fog)
+        // photoSky: a photographed sky is up, with its own clouds and stars, so none are drawn over it.
+        public void Apply(Conditions c, Color cloudTint, Color fog, bool photoSky = false)
         {
             _wind = Quaternion.Euler(0f, c.WindDegrees, 0f) * Vector3.forward;
-            SetUpClouds(c, cloudTint);
-            SetUpStars(c);
+            if (photoSky)
+            {
+                if (_clouds != null) _clouds.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                if (_stars != null) _stars.Clear();
+            }
+            else
+            {
+                SetUpClouds(c, cloudTint);
+                SetUpStars(c);
+            }
             SetUpRain(c);
         }
+
+        // Which rain is falling, for the start-of-match log.
+        public string RainSource => _boughtRain != null ? $"rain pack ({_boughtRain.name})"
+                                  : _rain != null && _rain.isPlaying ? "simple streaks (run Project Fossil > Art > Set Up Bought Packs for the rain pack)"
+                                  : "none";
 
         public void Follow(Transform cam)
         {
@@ -167,7 +181,7 @@ namespace ProjectFossil.Environment
             {
                 if (_rain != null) _rain.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 _boughtRain = Instantiate(bought);
-                _boughtRain.name = "Rain (pack)";
+                _boughtRain.name = $"Rain (pack: {bought.name})";
                 return;
             }
             if (_rain == null)

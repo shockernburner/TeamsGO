@@ -134,3 +134,6 @@ InitTestScene*.unity*
 /[Aa]ssets/Skyden_Games.meta
 /[Aa]ssets/Rainy VFX/
 /[Aa]ssets/Rainy VFX.meta
+# Photographed skies (CC0, Poly Haven) are downloaded on each machine by Project Fossil > Art > Download Skies.
+/[Aa]ssets/_Project/Art/Skies/
+/[Aa]ssets/_Project/Art/Skies.meta
