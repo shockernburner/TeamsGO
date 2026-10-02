@@ -33,6 +33,7 @@ namespace ProjectFossil.Environment
 
         private SkyEffects _effects;
         private Pterosaurs _birds;
+        private AtmosphereMood _mood;
         private Light      _lamp;
         private bool       _lampOn;
 
@@ -53,6 +54,7 @@ namespace ProjectFossil.Environment
         {
             _effects = gameObject.AddComponent<SkyEffects>();
             _birds   = gameObject.AddComponent<Pterosaurs>();
+            _mood    = gameObject.AddComponent<AtmosphereMood>();
         }
 
         // ── A new match's sky ──────────────────────────────────────────────────
@@ -88,6 +90,7 @@ namespace ProjectFossil.Environment
             _overcastColor = Color.Lerp(look.Fog, Color.white, 0.06f);
             _effects.Apply(c, look.CloudTint, look.Fog);
             _birds.Apply(c);
+            _mood.Apply(c, _sun, look.Light, look.Fog);
 
             _lampOn = c.Time == DayTime.Night;
             _nextLightning = Time.time + Random.Range(6f, 14f);
@@ -227,6 +230,7 @@ namespace ProjectFossil.Environment
                 PaintBackground(cam);
                 _effects.Follow(cam.transform);
                 _birds.Follow(cam.transform);
+                _mood.Follow(cam.transform, Time.deltaTime);
                 UpdateLamp(cam);
             }
             UpdateLightning();

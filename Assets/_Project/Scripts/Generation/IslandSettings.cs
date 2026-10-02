@@ -11,6 +11,11 @@ namespace ProjectFossil.Generation
         public int resolution = 257;
         public float worldSize = 1000f;
         public float maxHeight = 150f;
+        [Tooltip("The drawn terrain is this many times finer than the generator's grid (4 on a 257 grid over 1 km = "
+               + "about 1 m). The generator's rules run on the coarse grid; the fine one smooths its 4 m facets.")]
+        [Range(1, 4)] public int terrainDetail = 4;
+        [Tooltip("Height of the small bumps added to open ground on the fine terrain, metres.")]
+        [Range(0f, 1f)] public float terrainBumps = 0.35f;
 
         [Header("Noise")]
         public float noiseScale = 0.003f;

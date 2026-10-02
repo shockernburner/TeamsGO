@@ -267,5 +267,43 @@ namespace ProjectFossil.Tests.EditMode
             Assert.Greater(hilly, land / 10, "Island is too flat");
             Assert.Greater(flat, land / 10, "Island has no open ground");
         }
+
+        // ── Fine terrain ──────────────────────────────────────────────────────
+
+        [Test]
+        public void TerrainDetail_IsFinerAndDeterministic()
+        {
+            var s = MakeSettings();
+            s.terrainDetail = 4;
+            var data = new IslandGenerator(7, s).Generate();
+            var a = TerrainDetail.Refine(data);
+            var b = TerrainDetail.Refine(new IslandGenerator(7, s).Generate());
+            Assert.AreEqual((data.Resolution - 1) * 4 + 1, a.GetLength(0));
+            for (int y = 0; y < a.GetLength(0); y += 37)
+                for (int x = 0; x < a.GetLength(1); x += 37)
+                    Assert.AreEqual(a[y, x], b[y, x], $"Fine terrain differs at [{y},{x}]");
+        }
+
+        [Test]
+        public void TerrainDetail_KeepsWaterBanksAndFollowsTheIsland()
+        {
+            var s = MakeSettings();
+            s.terrainDetail = 4;
+            foreach (int seed in new[] { 3, 11, 29 })
+            {
+                var data = new IslandGenerator(seed, s).Generate();
+                var fine = TerrainDetail.Refine(data);
+                float lowering = 0.2f / s.maxHeight + 1e-5f;
+                float near     = (s.terrainBumps + 6f) / s.maxHeight; // bumps plus smoothing of steep slopes
+                for (int y = 0; y < data.Resolution; y++)
+                    for (int x = 0; x < data.Resolution; x++)
+                    {
+                        float coarse = data.Heightmap[y, x], f = fine[y * 4, x * 4];
+                        if (!data.LandMask[y, x])
+                            Assert.GreaterOrEqual(f, coarse - lowering, $"Seed {seed}: ground under water sank at [{y},{x}]");
+                        Assert.Less(Mathf.Abs(f - coarse), near, $"Seed {seed}: fine terrain strays at [{y},{x}]");
+                    }
+            }
+        }
     }
 }

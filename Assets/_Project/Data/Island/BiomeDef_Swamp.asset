@@ -20,6 +20,8 @@ MonoBehaviour:
   groundColor: {r: 0.25, g: 0.28, b: 0.17, a: 1}
   foliageColor: {r: 0.25, g: 0.33, b: 0.15, a: 1}
   rockColor: {r: 0.33, g: 0.33, b: 0.28, a: 1}
+  grassColor: {r: 0.33, g: 0.42, b: 0.2, a: 1}
+  grassCover: 0.6
   treesPerHectare: 70
   rocksPerHectare: 4
   treeScale: {x: 0.7, y: 1.1}
