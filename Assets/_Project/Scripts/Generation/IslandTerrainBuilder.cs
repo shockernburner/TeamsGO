@@ -13,12 +13,14 @@ namespace ProjectFossil.Generation
                                        bool decorate = true)
         {
             var s   = data.Settings;
-            int res = data.Resolution;
 
+            // Drawn and walked on a grid finer than the generator's (TerrainDetail), so slopes curve instead of
+            // breaking into 4 m facets.
+            var heights = TerrainDetail.Refine(data);
             var td = new TerrainData();
-            td.heightmapResolution = res;
+            td.heightmapResolution = heights.GetLength(0);
             td.size = new Vector3(s.worldSize, s.maxHeight, s.worldSize);
-            td.SetHeights(0, 0, data.Heightmap);
+            td.SetHeights(0, 0, heights);
 
             AddDefaultTerrainLayer(td);
 

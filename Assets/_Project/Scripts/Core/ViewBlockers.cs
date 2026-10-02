@@ -111,6 +111,12 @@ namespace ProjectFossil.Core
                     if (e.Tree) visit(e.Center);
         }
 
+        // Every inland water disc (rivers and lakes), as registered: centre at the water surface, and radius.
+        public static void ForEachWater(System.Action<Vector3, float> visit)
+        {
+            foreach (var (c, r) in Water) visit(c, r);
+        }
+
         private static void Add(Entry e)
         {
             long key = Key(Mathf.FloorToInt(e.Center.x / Cell), Mathf.FloorToInt(e.Center.z / Cell));

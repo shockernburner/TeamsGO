@@ -26,7 +26,9 @@ namespace ProjectFossil.Generation
 
             AddWater(islandGO.transform, data);
             AddInlandWater(islandGO.transform, data);
-            if (terrain != null) AddScatter(islandGO.transform, terrain, data, ScatterPlanner.Plan(data));
+            var plan = ScatterPlanner.Plan(data);
+            if (terrain != null) AddGrass(terrain, data, plan);
+            if (terrain != null) AddScatter(islandGO.transform, terrain, data, plan);
             if (Application.isPlaying)
             {
                 var wind = islandGO.GetComponent<IslandWind>();
@@ -73,7 +75,8 @@ namespace ProjectFossil.Generation
             td.terrainLayers = layers;
             float offA = (data.Seed & 0xFFF) * 0.37f, offB = ((data.Seed >> 12) & 0xFFF) * 0.41f;
 
-            int aRes = Mathf.ClosestPowerOfTwo(Mathf.Clamp(data.Resolution - 1, 16, 1024));
+            // About 2 m a texel on the default island, so cliff faces follow the fine terrain's real slopes.
+            int aRes = Mathf.Clamp(Mathf.ClosestPowerOfTwo(td.heightmapResolution - 1) / 2, 16, 1024);
             td.alphamapResolution = aRes;
 
             float world = data.Settings.worldSize;
@@ -93,7 +96,8 @@ namespace ProjectFossil.Generation
                         for (int ox = -1; ox <= 1; ox++)
                             weights[ScatterPlanner.SampleBiome(data, x + ox * step * 1.5f, z + oz * step * 1.5f)] += 1f / 9f;
 
-                    float cliff = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1.1f, ScatterPlanner.SampleSlope(data, x, z)));
+                    float slope = Mathf.Tan(td.GetSteepness((ax + 0.5f) / aRes, (az + 0.5f) / aRes) * Mathf.Deg2Rad);
+                    float cliff = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1.1f, slope));
                     float dirt  = 0.7f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.58f, 0.75f, Mathf.PerlinNoise(x * 0.018f + offA, z * 0.018f + offB)));
                     float moss  = 0.6f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 0.72f, Mathf.PerlinNoise(x * 0.03f + offB, z * 0.03f + offA)));
                     float rest  = (1f - cliff) * (1f - dirt) * (1f - moss);
@@ -129,6 +133,162 @@ namespace ProjectFossil.Generation
                 smoothness     = 0f,
                 metallic       = 0f,
             };
+        }
+
+        // ── Grass ──────────────────────────────────────────────────────────────
+
+        // Short grass drawn by the terrain itself (thousands of blades within a few dozen metres, cheap), one layer per
+        // biome so each gets its own tint and cover. Thick on open meadows, thin in the shade of trees and in patches,
+        // none on cliffs, sand, ash or under water. Blades are fixed crossed cards that bend in the wind, never
+        // camera-facing ones that turn as you walk round them.
+        private const int   GrassPerCell     = 4;    // most blades in one detail cell
+        private const float GrassDistance    = 70f;  // metres; the haze hides where it stops
+        private const float GrassNoSlope     = 38f;  // degrees: none steeper than this
+        private const float GrassFullSlope   = 26f;
+
+        private static void AddGrass(Terrain terrain, IslandData data, List<ScatterInstance> plan)
+        {
+            var s = data.Settings;
+            var biomes = s.biomes;
+            if (biomes == null || biomes.Count == 0) return;
+            var td = terrain.terrainData;
+            int n = biomes.Count;
+
+            var tex = GrassTexture();
+            var dry = new Color(0.62f, 0.55f, 0.32f);
+            var protos = new DetailPrototype[n];
+            for (int i = 0; i < n; i++)
+            {
+                var tint = biomes[i] != null ? biomes[i].grassColor : Color.gray;
+                protos[i] = new DetailPrototype
+                {
+                    prototypeTexture = tex,
+                    usePrototypeMesh = false,
+                    renderMode   = DetailRenderMode.Grass,
+                    minWidth     = 0.5f, maxWidth  = 1.0f,
+                    minHeight    = 0.3f, maxHeight = 0.7f,
+                    noiseSpread  = 0.3f,
+                    healthyColor = tint,
+                    dryColor     = Color.Lerp(tint, dry, 0.55f),
+                };
+            }
+            td.detailPrototypes = protos;
+
+            int res = Mathf.Clamp(Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(s.worldSize)), 128, 1024); // about 1 m a cell
+            td.SetDetailResolution(res, 32);
+#if UNITY_2022_2_OR_NEWER
+            td.SetDetailScatterMode(DetailScatterMode.InstanceCountMode);
+#endif
+            float world = s.worldSize, cell = world / res;
+            Vector3 origin = terrain.transform.position;
+
+            // Under the trees' crowns: how many trees stand in each ~8 m square.
+            const int shadeRes = 128;
+            var shade = new float[shadeRes, shadeRes];
+            foreach (var inst in plan)
+            {
+                if (inst.Kind != ScatterKind.Tree) continue;
+                int sx = Mathf.Clamp((int)(inst.WorldPos.x / world * shadeRes), 0, shadeRes - 1);
+                int sz = Mathf.Clamp((int)(inst.WorldPos.z / world * shadeRes), 0, shadeRes - 1);
+                shade[sz, sx] += 1f;
+            }
+
+            // Rivers and lakes, including the sloping beds out to where the bank rises above the water.
+            var wet = new bool[res, res];
+            ViewBlockers.ForEachWater((c, r) =>
+            {
+                float lx = c.x - origin.x, lz = c.z - origin.z;
+                int x0 = Mathf.Max(0, (int)((lx - r) / cell)), x1 = Mathf.Min(res - 1, (int)((lx + r) / cell) + 1);
+                int z0 = Mathf.Max(0, (int)((lz - r) / cell)), z1 = Mathf.Min(res - 1, (int)((lz + r) / cell) + 1);
+                for (int z = z0; z <= z1; z++)
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        float dx = (x + 0.5f) * cell - lx, dz = (z + 0.5f) * cell - lz;
+                        if (dx * dx + dz * dz > r * r || wet[z, x]) continue;
+                        float ground = td.GetInterpolatedHeight((x + 0.5f) / res, (z + 0.5f) / res) + origin.y;
+                        if (ground < c.y + 0.15f) wet[z, x] = true;
+                    }
+            });
+
+            float sea = s.seaLevel * s.maxHeight + 0.4f;
+            var rng = new System.Random(data.Seed ^ 0x6A55);
+            float ox = (float)rng.NextDouble() * 1000f, oz = (float)rng.NextDouble() * 1000f;
+            var layers = new int[n][,];
+            for (int i = 0; i < n; i++) layers[i] = new int[res, res];
+
+            for (int z = 0; z < res; z++)
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    double roll = rng.NextDouble(); // drawn every cell so the pattern doesn't shift when one changes
+                    if (wet[z, x]) continue;
+                    float nx = (x + 0.5f) / res, nz = (z + 0.5f) / res;
+                    float wx = nx * world, wz = nz * world;
+                    int b = ScatterPlanner.SampleBiome(data, wx, wz);
+                    if (b < 0 || b >= n || biomes[b] == null || biomes[b].grassCover <= 0f) continue;
+                    if (td.GetInterpolatedHeight(nx, nz) < sea) continue;
+
+                    float steep = td.GetSteepness(nx, nz);
+                    if (steep >= GrassNoSlope) continue;
+                    float slopeFade = 1f - Mathf.InverseLerp(GrassFullSlope, GrassNoSlope, steep);
+
+                    int sx = Mathf.Min(shadeRes - 1, (int)(nx * shadeRes)), sz = Mathf.Min(shadeRes - 1, (int)(nz * shadeRes));
+                    float trees = shade[sz, sx];
+                    float shadeFade = 1f / (1f + 0.45f * trees);
+
+                    // Patches: meadows with bare runs between them, not an even lawn.
+                    float patch = Mathf.SmoothStep(0.2f, 1f, Mathf.InverseLerp(0.3f, 0.68f,
+                                      Mathf.PerlinNoise(wx * 0.045f + ox, wz * 0.045f + oz)));
+
+                    float density = biomes[b].grassCover * slopeFade * shadeFade * patch * GrassPerCell;
+                    int count = (int)density + (roll < density - (int)density ? 1 : 0);
+                    if (count > 0) layers[b][z, x] = count;
+                }
+            }
+            for (int i = 0; i < n; i++) td.SetDetailLayer(0, 0, i, layers[i]);
+
+            terrain.detailObjectDistance = GrassDistance;
+            terrain.detailObjectDensity  = 1f;
+            td.wavingGrassAmount   = 0.35f;
+            td.wavingGrassSpeed    = 0.45f;
+            td.wavingGrassStrength = 0.45f;
+            td.wavingGrassTint     = new Color(0.85f, 0.9f, 0.75f);
+        }
+
+        // Grey blades on a clear background, tinted per biome by the detail colours. Drawn here, so no asset needed.
+        private static Texture2D _grassTexture;
+
+        private static Texture2D GrassTexture()
+        {
+            if (_grassTexture != null) return _grassTexture;
+            const int w = 128, h = 128;
+            var px  = new Color32[w * h];
+            var rng = new System.Random(4242);
+            for (int blade = 0; blade < 46; blade++)
+            {
+                float x0     = 4f + (float)rng.NextDouble() * (w - 8);
+                float height = (0.4f + 0.6f * (float)rng.NextDouble()) * (h - 2);
+                float lean   = ((float)rng.NextDouble() - 0.5f) * 0.4f * w;
+                float width  = 2.2f + (float)rng.NextDouble() * 2.6f;
+                float tone   = 0.8f + (float)rng.NextDouble() * 0.35f;
+                for (int y = 0; y < (int)height; y++)
+                {
+                    float t     = y / height;
+                    float cx    = x0 + lean * t * t;
+                    float halfW = width * (1f - t) * 0.5f + 0.3f;
+                    float v     = Mathf.Clamp01((0.45f + 0.55f * t) * tone); // darker at the root
+                    byte  g     = (byte)(v * 255f);
+                    for (int x = Mathf.Max(0, (int)(cx - halfW - 1)); x <= Mathf.Min(w - 1, (int)(cx + halfW + 1)); x++)
+                        if (Mathf.Abs(x + 0.5f - cx) <= halfW) px[y * w + x] = new Color32(g, g, g, 255);
+                }
+            }
+            _grassTexture = new Texture2D(w, h, TextureFormat.RGBA32, true)
+            {
+                name = "Grass", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear,
+            };
+            _grassTexture.SetPixels32(px);
+            _grassTexture.Apply(true);
+            return _grassTexture;
         }
 
         // ── Water ──────────────────────────────────────────────────────────────

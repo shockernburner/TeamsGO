@@ -19,6 +19,11 @@ namespace ProjectFossil.Generation
         public Color groundColor  = new Color(0.35f, 0.45f, 0.2f);
         public Color foliageColor = new Color(0.2f, 0.45f, 0.15f);
         public Color rockColor    = new Color(0.45f, 0.43f, 0.4f);
+        [Tooltip("Colour of the short grass drawn on the terrain (the blades' tint; patches vary towards a drier shade).")]
+        public Color grassColor   = new Color(0.42f, 0.52f, 0.22f);
+        [Tooltip("How thickly short grass covers open ground here: 0 = none (sand, ash), 1 = a full meadow. "
+               + "Thinner under trees and gone on cliffs.")]
+        [Range(0f, 1f)] public float grassCover = 0.5f;
 
         [Header("Scatter (instances per hectare, 100 m x 100 m)")]
         [Min(0f)] public float treesPerHectare = 0f;
