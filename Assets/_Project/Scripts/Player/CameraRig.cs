@@ -17,6 +17,7 @@ namespace ProjectFossil.Player
         public float plantPadding  = 0.35f;  // plants this close to the line of sight hide
         public float plantClearance = 1.2f;  // and plants this close to the camera itself, which fill the frame edges
         public float aboveWater    = 0.35f;
+        public float aboveGround   = 0.6f;   // pulled in low on a slope, the lens skimmed the ground and filled the view
         public float eyeClearance  = 0.45f;  // first person: leaves and grass this close to the eyes hide
 
         // First person: the camera sits in the head (FirstPersonView places it), so there is nothing to pull in.
@@ -75,6 +76,12 @@ namespace ProjectFossil.Player
             Vector3 pos = origin + dir * _distance;
             float floor = ViewBlockers.SurfaceAt(pos) + aboveWater; // the sea, or a lake or river under the camera
             if (pos.y < floor) pos.y = floor;
+            var terrain = Terrain.activeTerrain;
+            if (terrain != null)
+            {
+                float ground = terrain.SampleHeight(pos) + terrain.transform.position.y + aboveGround;
+                if (pos.y < ground) pos.y = ground;
+            }
             transform.position = pos;
 
             HidePlants(pos, origin, plantClearance);

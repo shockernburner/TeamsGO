@@ -32,6 +32,9 @@ namespace ProjectFossil.Player
         private int              _facingChecks;  // frames until the animated body's facing is checked
         private bool             _hasSwim, _dead;
         private int              _baseState;   // base layer state last frame
+        private int              _facingAgree;   // settled frames in a row that read the same wrong facing
+        private int              _facingTries;   // settled frames read since the last state change
+        private float            _facingOff;     // the wrong facing those frames agreed on, degrees
 
         // Weapon in the right hand. The grip is worked out from the finger bones once, in the rest pose,
         // so it works whatever way the rig's hand bone happens to point.
@@ -291,7 +294,7 @@ namespace ProjectFossil.Player
             int state = _animator.GetCurrentAnimatorStateInfo(0).shortNameHash;
             if (state != _baseState)
             {
-                if (_baseState != 0 && !_dead) _facingChecks = 2;
+                if (_baseState != 0 && !_dead) { _facingChecks = 2; _facingAgree = 0; _facingTries = 0; }
                 _baseState = state;
             }
             UpdateActionLayer();
@@ -313,6 +316,8 @@ namespace ProjectFossil.Player
         // A humanoid animation turns the body to face its Animator's forward, which isn't always the way the
         // character pack's prefab faces (the Survivalist ran backwards). After the first animated frames, measure
         // where the chest points from the shoulders and turn the model so it faces the pivot's forward.
+        private const int FacingFrames = 6, FacingMaxTries = 60;
+
         private void LateUpdate()
         {
             if (_facingChecks <= 0 || _animator == null || !_animator.isHuman || _model == null) return;
@@ -326,7 +331,18 @@ namespace ProjectFossil.Player
             if (right.sqrMagnitude < 1e-6f) return;
             Vector3 fwd = Vector3.Cross(right, Vector3.up);
             float off = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
-            if (Mathf.Abs(off) < 30f) return;
+            if (Mathf.Abs(off) < 30f) { _facingAgree = 0; return; }
+            // One frame of a stride or a twist can read the shoulders far off (a 167 degree reading spun the
+            // runner backwards). Turn only when several settled frames in a row agree.
+            if (_facingAgree > 0 && Mathf.Abs(Mathf.DeltaAngle(off, _facingOff)) > 20f) _facingAgree = 0;
+            _facingOff = off;
+            if (++_facingAgree < FacingFrames)
+            {
+                if (++_facingTries < FacingMaxTries) _facingChecks = 1;
+                else _facingAgree = 0; // never settled: leave the model as it is
+                return;
+            }
+            _facingAgree = 0;
             float turn = Mathf.Round(off / 90f) * 90f;
             // Turn about the body's centre so it stays over the capsule.
             Vector3 centre = _pivot.InverseTransformPoint(_animator.GetBoneTransform(HumanBodyBones.Hips) != null
