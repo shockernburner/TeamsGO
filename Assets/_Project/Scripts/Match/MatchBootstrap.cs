@@ -95,7 +95,7 @@ namespace ProjectFossil.Match
             var islandGO = IslandTerrainBuilder.Build(LastData, null, showPoiMarkers: false);
             Physics.SyncTransforms(); // make the new terrain collider solid before anything is placed on it
 
-            BakeNavMesh(islandGO);
+            BakeNavMesh(islandGO, LastData);
             if (content.wildlife == null && !NetRole.IsFollower) SpawnDinosaurs(LastData, islandGO.transform); // otherwise the match spawns wildlife
             _player = SpawnPlayer(LastData);
 
@@ -123,8 +123,22 @@ namespace ProjectFossil.Match
 
         // ── NavMesh ────────────────────────────────────────────────────────────
 
-        private void BakeNavMesh(GameObject islandGO)
+        private void BakeNavMesh(GameObject islandGO, IslandData data)
         {
+            // Dinosaurs don't go into deep lakes: they walked the bottom out of sight and bit swimmers from below.
+            // They wait on the shore instead, which makes a lake a place to hide. Rivers stay crossable.
+            foreach (var lake in data.Lakes)
+            {
+                var go = new GameObject("DeepWater");
+                go.transform.SetParent(islandGO.transform, false);
+                go.transform.localPosition = lake.Center + Vector3.down * 10f;
+                var deep = go.AddComponent<NavMeshModifierVolume>();
+                float side = lake.Radius * 1.4f; // the square inside the shoreline
+                deep.size   = new Vector3(side, 20f, side);
+                deep.center = Vector3.zero;
+                deep.area   = NavMesh.GetAreaFromName("Not Walkable");
+            }
+
             var surface = islandGO.GetComponent<NavMeshSurface>();
             if (surface == null)
                 surface = islandGO.AddComponent<NavMeshSurface>();

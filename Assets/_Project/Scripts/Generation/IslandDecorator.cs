@@ -156,6 +156,7 @@ namespace ProjectFossil.Generation
             if (_water != null) return _water;
             _water = NewLit(new Color(0.1f, 0.3f, 0.36f, 0.82f), 0.85f);
             MakeTransparent(_water);
+            _water.SetFloat("_Cull", 0f); // both faces, so the surface still shows from just under it
             return _water;
         }
 
@@ -326,6 +327,9 @@ namespace ProjectFossil.Generation
                 : (inst.Kind == ScatterKind.Tree ? treeHeight : PlantHeight) * inst.Scale / Mathf.Max(0.01f, b.size.y);
             if (inst.Kind == ScatterKind.Plant)
                 s = Mathf.Min(s, PlantMaxWidth * inst.Scale / Mathf.Max(0.01f, Mathf.Max(b.size.x, b.size.z)));
+            // Bought trees come at their real size. Stretched up to full tree height, a sapling's thin twigs became
+            // long bare poles across the view with a few leaves hanging off their ends, so never enlarge one much.
+            if (shaderWind && inst.Kind == ScatterKind.Tree) s = Mathf.Min(s, 1.25f * inst.Scale);
 
             var go = Object.Instantiate(prefab, root, false);
             go.name = prefab.name;

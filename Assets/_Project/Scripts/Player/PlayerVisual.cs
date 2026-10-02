@@ -30,7 +30,7 @@ namespace ProjectFossil.Player
         private float            _faceForwardTimer;
         private Transform        _model;
         private int              _facingChecks;  // frames until the animated body's facing is checked
-        private bool             _hasSwim;
+        private bool             _hasSwim, _wasSwimming;
 
         // Weapon in the right hand. The grip is worked out from the finger bones once, in the rest pose,
         // so it works whatever way the rig's hand bone happens to point.
@@ -280,7 +280,14 @@ namespace ProjectFossil.Player
             _animator.SetFloat(SpeedId, speed, 0.1f, Time.deltaTime);
             if (_controller != null) _animator.SetBool(CrouchId, _controller.Stance != Stance.Standing);
             else if (_remote) _animator.SetBool(CrouchId, _remoteCrouch);
-            if (_hasSwim && _controller != null) _animator.SetBool(SwimId, _controller.IsSwimming);
+            if (_hasSwim && _controller != null)
+            {
+                bool swim = _controller.IsSwimming;
+                // The swim clips come from another library and may face the body the other way: check again
+                // once the blend into or out of them has settled.
+                if (swim != _wasSwimming) { _wasSwimming = swim; _facingChecks = 20; }
+                _animator.SetBool(SwimId, swim);
+            }
             UpdateActionLayer();
         }
 
@@ -304,6 +311,7 @@ namespace ProjectFossil.Player
         {
             if (_facingChecks <= 0 || _animator == null || !_animator.isHuman || _model == null) return;
             if (--_facingChecks > 0) return;
+            if (_animator.IsInTransition(0)) { _facingChecks = 1; return; } // wait until the new pose has settled
             var l = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
             var r = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
             if (l == null || r == null) return;

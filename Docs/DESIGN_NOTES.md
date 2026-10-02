@@ -418,3 +418,10 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Red disc and pole:** the closed extraction pad was a flat disc that cut into slopes, plus a 40 m red pillar. It is now a ring of short stakes with coloured flags, each set on the terrain, and a slimmer beacon standing on the ground beside it.
 - **Axe pack:** Sky Den Games' Mid poly Axes Collection (`Assets/Skyden_Games/Axe Package`) is detected by Set Up Bought Packs. The first axe becomes `BoughtArt.axe`, and the held axe uses it (longest axis up, gripped near the bottom). Without the pack, the primitive axe remains.
 - **Rain pack:** AIK Studio's Rain System VFX (`Assets/Rainy VFX`) is detected and listed in the setup report. It isn't wired yet; the report shows which prefabs and shaders it uses.
+
+## 2026-10-02 — Movie_007 fixes: sapling poles, swimming backwards, lakes
+
+- **"Floating leaves" at 0:30, 0:47, 1:05:** these were young beeches, which PR #35 moved to the tree lists. Every tree is scaled to the same height, so a 3 m sapling was stretched about four times. Its thin twigs became long bare poles across the view, with a few leaves hanging off the ends. Bought trees now keep roughly their real size (never enlarged more than 1.25×).
+- **Swimming backwards:** the swim clips come from the Quaternius library while walking uses the pack's own clips, and the two face the body opposite ways. The facing check that runs at spawn now runs again whenever swimming starts or stops, once the blend has settled.
+- **Water vanished with the camera under it:** the third-person camera was only kept above the sea, not above lakes and rivers. It now stays above whatever water is under it. The inland water surface is also drawn from both sides.
+- **Unseen dinosaurs biting from under the water:** dinosaurs walked the lake bottom. Deep lakes are now cut out of their NavMesh, so they wait at the shore and a lake is a place to hide. Rivers stay crossable so the island isn't split in two.

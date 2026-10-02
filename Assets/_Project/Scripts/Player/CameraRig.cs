@@ -73,7 +73,7 @@ namespace ProjectFossil.Player
                       : Mathf.MoveTowards(_distance, allowed, returnSpeed * Time.deltaTime);
 
             Vector3 pos = origin + dir * _distance;
-            float floor = ViewBlockers.WaterHeight + aboveWater;
+            float floor = ViewBlockers.SurfaceAt(pos) + aboveWater; // the sea, or a lake or river under the camera
             if (pos.y < floor) pos.y = floor;
             transform.position = pos;
 
