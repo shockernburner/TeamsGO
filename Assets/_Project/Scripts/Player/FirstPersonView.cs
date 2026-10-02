@@ -104,7 +104,7 @@ namespace ProjectFossil.Player
             _cam.transform.localPosition = eyeOffset;
             _cam.transform.localRotation = Quaternion.identity;
             AnimateArms();
-            if (_armRig != null) _armRig.Solve(_right, _left, _cam.transform);
+            if (_armRig != null) _armRig.Solve(_right, _left, _cam.transform, _rightGrip, _leftGrip);
         }
 
         private bool _visualApplied;
@@ -137,6 +137,24 @@ namespace ProjectFossil.Player
         private static readonly Vector3    LeftRest     = new Vector3(-0.21f, -0.27f, 0.32f);
         private static readonly Quaternion RightRestRot = Quaternion.Euler(-22f, -14f, -8f);
         private static readonly Quaternion LeftRestRot  = Quaternion.Euler(-22f,  16f,  8f);
+        // Relaxed: hands hanging low, just under the view, swinging with the stride when walking.
+        private static readonly Vector3    RightLow     = new Vector3( 0.2f,  -0.5f,  0.2f);
+        private static readonly Vector3    LeftLow      = new Vector3(-0.2f,  -0.5f,  0.2f);
+        private static readonly Quaternion LowRot       = Quaternion.Euler(55f, 0f, 0f);
+        // Running: fists pumping at the bottom of the view.
+        private static readonly Vector3    RightRun     = new Vector3( 0.21f, -0.37f, 0.27f);
+        private static readonly Vector3    LeftRun      = new Vector3(-0.21f, -0.37f, 0.27f);
+        private static readonly Quaternion RunRot       = Quaternion.Euler(10f, 0f, 0f);
+        // Carrying a weapon: held low on the right, pointing up and away so it doesn't block the view.
+        private static readonly Vector3    RightArmed   = new Vector3( 0.24f, -0.34f, 0.34f);
+        private static readonly Quaternion ArmedRot     = Quaternion.Euler(-8f, -12f, -6f);
+        // After an attack the hands stay up in a guard this long before dropping again.
+        private const float GuardSeconds = 1.6f;
+
+        private float _guard;              // 0 relaxed .. 1 guard up
+        private float _guardTimer;
+        private float _run;                // 0 walking .. 1 sprinting, smoothed
+        private float _rightGrip, _leftGrip;
 
         private void BuildArms()
         {
@@ -214,7 +232,7 @@ namespace ProjectFossil.Player
             _held.SetParent(_right, false);
             // The bought hands close around a point a little further from the wrist than the simple fist.
             _held.localPosition = new Vector3(0f, -0.01f, _armRig != null ? 0.075f : 0.05f);
-            _held.localRotation = Quaternion.Euler(look == HeldLook.Spear ? 80f : 35f, 0f, 0f);
+            _held.localRotation = Quaternion.Euler(look == HeldLook.Spear ? 80f : 62f, 0f, 0f);
             if (look == HeldLook.Spear) _held.localPosition += new Vector3(0f, 0f, -0.25f); // grip it further back
             PlayerVisual.BuildWeapon(_held, look);
             foreach (var r in _held.GetComponentsInChildren<Renderer>())
@@ -275,13 +293,39 @@ namespace ProjectFossil.Player
                 }
                 if (_swing >= 1f) _swing = -1f;
             }
-            _right.localPosition = RightRest + swingPos;
-            _right.localRotation = RightRestRot * swingRot;
+            // Where the hands are between attacks: relaxed and low, pumping when running, up in a guard just after
+            // an attack; with a weapon, the right hand carries it low on the right.
+            _guardTimer -= dt;
+            _guard = Mathf.MoveTowards(_guard, _guardTimer > 0f ? 1f : 0f, dt * (_guardTimer > 0f ? 8f : 2.5f));
+            bool running = _controller != null && _controller.IsSprinting && moving;
+            _run = Mathf.MoveTowards(_run, running ? 1f : 0f, dt * 4f);
+            bool armed = _heldLook != HeldLook.None;
+
+            float stride = moving ? Mathf.Sin(_bob) : 0f;
+            Vector3 swingR = new Vector3(0f, Mathf.Abs(stride) * 0.02f, stride * Mathf.Lerp(0.07f, 0.11f, _run));
+            Vector3 swingL = new Vector3(0f, Mathf.Abs(stride) * 0.02f, -stride * Mathf.Lerp(0.07f, 0.11f, _run));
+
+            Vector3 lowR = Vector3.Lerp(RightLow, RightRun, _run) + swingR;
+            Vector3 lowL = Vector3.Lerp(LeftLow,  LeftRun,  _run) + swingL;
+            Quaternion lowRot = Quaternion.Slerp(LowRot, RunRot, _run);
+
+            // Armed, the guard lifts the weapon to the shoulder for the chop.
+            Vector3 restR = Vector3.Lerp(armed ? RightArmed : lowR, RightRest, _guard);
+            Quaternion rotR = Quaternion.Slerp(armed ? ArmedRot : lowRot, RightRestRot, _guard);
+            _right.localPosition = restR + swingPos;
+            _right.localRotation = rotR * swingRot;
+            _left.localPosition  = Vector3.Lerp(lowL, LeftRest, armed ? 0f : _guard);
+            _left.localRotation  = Quaternion.Slerp(lowRot, LeftRestRot, armed ? 0f : _guard);
+
+            float loose = Mathf.Lerp(0f, 0.7f, _run);
+            _rightGrip = armed ? 1f : Mathf.Lerp(loose, 1f, _guard);
+            _leftGrip  = armed ? loose : Mathf.Lerp(loose, 1f, _guard);
         }
 
         private void OnAttacked(WeaponStats weapon, Health target)
         {
             _swing = 0f;
+            _guardTimer = GuardSeconds;
             _armedSwing = weapon.Look != HeldLook.None;
         }
 

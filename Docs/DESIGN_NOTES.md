@@ -403,3 +403,10 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Giant poles on rocky slopes:** the volcanic biome used dry boughs as its "trees", so they were scaled to tree height and stood up as huge diagonal logs. They now count as rocks (scaled by width), and old beeches are the trees.
 - **Red hit flash:** the side flush was a stretched vignette and left a hard vertical edge. It is now a smooth sideways fade.
 - **Plants part around you:** `PlantPusher` goes on players and dinosaurs. IslandWind leans bushes and ferns away from any pusher inside them, and they spring back once it has passed. Bought foliage now also leans with gusts (half strength) on top of its shader ripple.
+
+## 2026-10-02 — Movie_005 fixes: relaxed arms, URP first-person skin, saplings
+
+- **Fists up in third person:** the upper-body "Actions" layer sat at full weight with an empty state between attacks, and with Write Defaults off it kept holding the arms in the last action's pose. The layer now starts at weight 0. PlayerVisual raises it while a punch, swing or flinch plays and fades it out afterwards, so idle, walk and run show the pack's natural arms. Needs Set Up Bought Packs (or Set Up Model Packs) to rebuild the controller.
+- **Pink first-person hands:** the pack's FPS prefab uses materials the URP can't draw. Setup now saves a clean copy (Art/Bought/Survivors/FirstPersonArms.prefab) with the pack's "Materials URP" versions, as for the bodies. FirstPersonRig also swaps any undrawable material for a plain lit one as a safety net.
+- **First-person hands:** relaxed and low when walking, swinging with the stride, pumping as loose fists when sprinting, and up in a guard for 1.6 s after an attack. With a weapon, the right hand carries it low on the right, tilted away from the view. The fingers blend between an open hand and a fist. Which sign of the humanoid finger muscles closes the hand is found at runtime by trying both.
+- **Saplings:** young beeches are small trees. Shrunk to plant height, they looked like the crown of a buried tree swaying on the ground, so they're now in the tree lists.

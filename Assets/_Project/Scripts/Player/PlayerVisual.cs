@@ -245,6 +245,20 @@ namespace ProjectFossil.Player
             if (_controller != null) _animator.SetBool(CrouchId, _controller.Stance != Stance.Standing);
             else if (_remote) _animator.SetBool(CrouchId, _remoteCrouch);
             if (_hasSwim && _controller != null) _animator.SetBool(SwimId, _controller.IsSwimming);
+            UpdateActionLayer();
+        }
+
+        // The upper-body layer (punch, swing, flinch) only counts while one of those plays. Left at full weight
+        // between them, its empty state held the arms in the last punch's pose, so the survivor walked and ran
+        // with fists up. It fades out once the action is over.
+        private const float ActionFadeOut = 6f; // weight per second
+        private void UpdateActionLayer()
+        {
+            if (_animator.layerCount < 2) return;
+            bool acting = _animator.IsInTransition(1) || !_animator.GetCurrentAnimatorStateInfo(1).IsName("Empty");
+            float w = _animator.GetLayerWeight(1);
+            w = acting ? 1f : Mathf.MoveTowards(w, 0f, ActionFadeOut * Time.deltaTime);
+            _animator.SetLayerWeight(1, w);
         }
 
         // A humanoid animation turns the body to face its Animator's forward, which isn't always the way the

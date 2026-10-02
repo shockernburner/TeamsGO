@@ -140,7 +140,8 @@ namespace ProjectFossil.Editor
             var found = new List<string>();
             if (FindDir("Survivalist") != null && (art == null || art.survivors == null || art.survivors.Length == 0 || art.survivors[0] == null))
                 found.Add("survivor pack");
-            else if (art != null && art.firstPersonArms == null && FindDir("Survivalist") is string sv &&
+            else if (art != null && (art.firstPersonArms == null || !AssetDatabase.GetAssetPath(art.firstPersonArms).StartsWith(Out)) &&
+                     FindDir("Survivalist") is string sv &&
                      Directory.Exists($"{sv}/Prefab") && Directory.GetFiles($"{sv}/Prefab", "FPS_*.prefab").Length > 0)
                 found.Add("first-person arms");
             if (FindDir("OH-1_Basic") != null && (art == null || art.helicopter == null))
@@ -608,7 +609,7 @@ namespace ProjectFossil.Editor
                 Log.AppendLine($"  {name} <- {sources[i]}");
             }
             art.survivors = defs.ToArray();
-            art.firstPersonArms = FirstPersonArms(dir);
+            art.firstPersonArms = FirstPersonArms(dir, avatar);
         }
 
         // The pack ships Unity's Starter Assets idle, walk and run, made for this skeleton: a relaxed, natural
@@ -658,7 +659,7 @@ namespace ProjectFossil.Editor
         // The pack's first-person prefabs, listed so the next step (real first-person arms) can be wired by name.
         // The pack's first-person rig: the full skeleton with arm-and-sleeve meshes under FPS_HANDS. The game keeps
         // only those meshes and bends the arms itself, so no controller is needed.
-        private static GameObject FirstPersonArms(string dir)
+        private static GameObject FirstPersonArms(string dir, Avatar avatar)
         {
             string prefabDir = $"{dir}/Prefab";
             if (!Directory.Exists(prefabDir)) return null;
@@ -673,8 +674,13 @@ namespace ProjectFossil.Editor
                 }
                 var hands = go.GetComponentsInChildren<SkinnedMeshRenderer>(true)
                               .Where(r => r.name.Contains("FPS")).Select(r => r.name).ToArray();
+                // A clean copy with the pack's URP materials, like the bodies: the pack's own prefab uses ones the
+                // URP can't draw, which came out bright pink.
+                string outPath = $"{Out}/Survivors/FirstPersonArms.prefab";
+                CleanPrefab(go, outPath);
+                FixSurvivor(outPath, dir, avatar);
                 Log.AppendLine($"  first-person arms <- {path} ({string.Join(", ", hands)})");
-                return go;
+                return AssetDatabase.LoadAssetAtPath<GameObject>(outPath);
             }
             Log.AppendLine("  first-person arms: no FPS_*.prefab, keeping the simple arms.");
             return null;
@@ -797,15 +803,16 @@ namespace ProjectFossil.Editor
             var tropicalPlants = T("BananaPlant", "Mimosa");
             var tropicalRocks  = T("RockA", "RockB", "RockC");
 
-            // Mature beeches are fine as jungle canopy giants; young beeches pass for undergrowth.
+            // Mature beeches are fine as jungle canopy giants. Young beeches are small trees: shrunk to plant height
+            // they looked like the crown of a buried tree swaying on the ground, so they count as trees.
             art.biomes = new[]
             {
-                Biome("Jungle",   All(jungleTrees, jungleTrees, palms, beech), All(stones, mossy, tropicalRocks, logs),
-                                  All(ferns, ferns, tropicalPlants, plants, bushes, young), Layer(forest, "Terrain_Layer5_Leaves")),
+                Biome("Jungle",   All(jungleTrees, jungleTrees, palms, beech, young), All(stones, mossy, tropicalRocks, logs),
+                                  All(ferns, ferns, tropicalPlants, plants, bushes), Layer(forest, "Terrain_Layer5_Leaves")),
                 Biome("Plains",   All(beech),                                 All(stones, tropicalRocks),
                                   All(grass, grass, bushes),                    Layer(forest, "Terrain_Layer4_Grass_Plants")),
-                Biome("Swamp",    All(jungleTrees, oldBeech),                 All(logs, mossy, stones),
-                                  All(ferns, plants, shrooms, young),           Layer(forest, "Terrain_Layer3_Soil_Wet")),
+                Biome("Swamp",    All(jungleTrees, oldBeech, young),          All(logs, mossy, stones),
+                                  All(ferns, plants, shrooms),           Layer(forest, "Terrain_Layer3_Soil_Wet")),
                 Biome("Beach",    All(palms),                                 All(tropicalRocks, stones),
                                   All(tropicalPlants, grass),                   Layer(forest, "Terrain_Layer1_Sand") ?? Layer(dinoPack, "layer_sand")),
                 // Dry boughs lie on the ground: as "trees" they were stretched to tree height and stuck up out of
