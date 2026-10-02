@@ -49,6 +49,9 @@ namespace ProjectFossil.Audio
         private float _nextCoin;
         private AudioSource _rain;      // 2D loop, louder in a storm
         private AudioSource _wind;      // 2D loop, storms only
+        private AudioClip _fallLoop;
+        private readonly AudioSource[] _falls = new AudioSource[3]; // 3D loops on the nearest stream falls
+        private float _nextFallPick;
         private float _rainTarget, _windTarget;
         private float _nextBeat;
         private readonly Dictionary<ExtractionZone, AudioSource> _rotors = new Dictionary<ExtractionZone, AudioSource>();
@@ -143,6 +146,24 @@ namespace ProjectFossil.Audio
             _rain.spatialBlend = 0f;
             _rain.volume = 0f;
             _rain.playOnAwake = false;
+
+            _fallLoop = SoundLibrary.One("WaterfallLoop") ?? Clip("Waterfall", SoundSynth.Waterfall());
+            for (int i = 0; i < _falls.Length; i++)
+            {
+                var go = new GameObject($"Waterfall sound {i}");
+                go.transform.SetParent(transform, false);
+                var src = go.AddComponent<AudioSource>();
+                src.clip         = _fallLoop;
+                src.loop         = true;
+                src.spatialBlend = 1f;
+                src.rolloffMode  = AudioRolloffMode.Linear;
+                src.minDistance  = 3f;
+                src.maxDistance  = 40f;
+                src.volume       = 0f;
+                src.playOnAwake  = false;
+                src.timeSamples  = i * 9000; // out of step, so near falls don't phase
+                _falls[i] = src;
+            }
 
             _wind = gameObject.AddComponent<AudioSource>();
             _wind.clip = _windLoop;
@@ -255,6 +276,39 @@ namespace ProjectFossil.Audio
             UpdateHeartbeat();
             UpdateRotors();
             UpdateRain();
+            UpdateFalls();
+        }
+
+        // The nearest few stream falls each get a looping rush; the rest are too far to hear.
+        private void UpdateFalls()
+        {
+            var falls = ViewBlockers.WaterFalls;
+            var cam = Camera.main;
+            if (Time.time >= _nextFallPick && cam != null)
+            {
+                _nextFallPick = Time.time + 0.5f;
+                Vector3 at = cam.transform.position;
+                for (int k = 0; k < _falls.Length; k++)
+                {
+                    int best = -1; float bestD = 45f * 45f;
+                    for (int i = 0; i < falls.Count; i++)
+                    {
+                        float d = (falls[i] - at).sqrMagnitude;
+                        if (d >= bestD) continue;
+                        bool taken = false;
+                        for (int j = 0; j < k; j++)
+                            if (_falls[j].volume > 0f && (_falls[j].transform.position - falls[i]).sqrMagnitude < 0.01f) taken = true;
+                        if (!taken) { best = i; bestD = d; }
+                    }
+                    if (best >= 0) _falls[k].transform.position = falls[best];
+                    _falls[k].volume = best >= 0 ? 0.55f * masterVolume * (_match.IsRunning ? 1f : 0.5f) : 0f;
+                }
+            }
+            foreach (var src in _falls)
+            {
+                if (src.volume > 0f && !src.isPlaying) src.Play();
+                else if (src.volume <= 0f && src.isPlaying) src.Stop();
+            }
         }
 
         private void Bind(MatchManager match)

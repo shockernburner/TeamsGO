@@ -419,6 +419,35 @@ namespace ProjectFossil.Audio
             return Loop(s, 0.45f);
         }
 
+        // A small waterfall into a pool: a low rush with bubbling, looping seamlessly.
+        public static float[] Waterfall(float seconds = 5f, int seed = 9600)
+        {
+            var rng = new Random(seed);
+            var s = Buffer(seconds);
+            var lp = new OnePole(1400f);
+            var hp = new HighPass(120f);
+            var air = new HighPass(2500f);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float n = Noise(rng);
+                s[i] = hp.Next(lp.Next(n)) * 1.6f + air.Next(n) * 0.12f;
+            }
+            // Bubbles: short rising blips in the pool.
+            int bubbles = (int)(seconds * 70f);
+            for (int b = 0; b < bubbles; b++)
+            {
+                int i0 = rng.Next(s.Length);
+                float f0 = 350f + (float)rng.NextDouble() * 700f, amp = 0.05f + (float)rng.NextDouble() * 0.12f;
+                int n = (int)(0.03f * SampleRate);
+                for (int j = 0; j < n && i0 + j < s.Length; j++)
+                {
+                    float tj = j / (float)SampleRate;
+                    s[i0 + j] += (float)Math.Sin(Tau * f0 * (1f + tj * 20f) * tj) * Exp(tj, 0.002f, 0.012f) * amp;
+                }
+            }
+            return Loop(s, 0.5f);
+        }
+
         // Thunder: a sharp crack (close strikes) rolling into a long low rumble.
         public static float[] Thunder(int variant)
         {

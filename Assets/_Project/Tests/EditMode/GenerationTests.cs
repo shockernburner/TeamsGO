@@ -320,7 +320,7 @@ namespace ProjectFossil.Tests.EditMode
             s.lakeCount = 6;
             s.terrainDetail = 4;
             const float slack = 0.02f;
-            int lakes = 0;
+            int lakes = 0, riverPoints = 0, falls = 0;
             var rim = new List<Vector3>();
             for (int seed = 0; seed < 8; seed++)
             {
@@ -335,7 +335,8 @@ namespace ProjectFossil.Tests.EditMode
                 }
                 foreach (var river in data.Rivers)
                 {
-                    // A river gets somewhere: it doesn't coil round a hollow, and its surface never tilts steeply.
+                    // A river gets somewhere: it doesn't coil round a hollow. Its surface is level or falls gently,
+                    // except at a stream's falls, which the decorator draws as steps, not tilted sheets.
                     int n = river.Points.Count;
                     float length = 0f;
                     for (int i = 1; i < n; i++)
@@ -343,13 +344,17 @@ namespace ProjectFossil.Tests.EditMode
                         Vector3 a = river.Points[i - 1], b = river.Points[i];
                         float run = Mathf.Sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
                         length += run;
-                        Assert.LessOrEqual(a.y - b.y, s.maxRiverGradient * Mathf.Max(run, 0.5f) + 0.01f, $"Seed {seed}: river surface tilts steeply at {i}");
+                        float drop = a.y - b.y;
+                        bool gentle = drop <= s.maxRiverGradient * Mathf.Max(run, 0.5f) + 0.01f;
+                        Assert.IsTrue(gentle || drop >= 0.2f, $"Seed {seed}: river surface tilts at {i} ({drop:F2} m over {run:F1} m)");
+                        if (!gentle) falls++;
                     }
                     Vector3 first = river.Points[0], last = river.Points[n - 1];
                     float reach = Mathf.Sqrt((last.x - first.x) * (last.x - first.x) + (last.z - first.z) * (last.z - first.z));
                     Assert.Greater(reach, length * 0.4f, $"Seed {seed}: river coils round on itself");
                     for (int i = 0; i < n; i++)
                     {
+                        riverPoints++;
                         WaterShape.RiverRim(s, river, i, rim);
                         foreach (var q in rim) Check(q, river.Points[i].y, $"river edge {i}");
                     }
@@ -361,8 +366,10 @@ namespace ProjectFossil.Tests.EditMode
                     foreach (var q in rim) Check(q, lake.Center.y, "lake rim");
                 }
             }
-            // Rivers only run where the ground is gentle, which is rare on these steep islands; lakes are common.
             Assert.Greater(lakes, 8 * 2, "Too few lakes left in 8 islands");
+            Assert.Greater(riverPoints, 8 * 30, "Too little running water in 8 islands");
+            Assert.Greater(falls, 8, "Streams have no falls");
+            System.Console.WriteLine($"Water in 8 islands: {riverPoints} river points, {falls} falls, {lakes} lakes");
         }
 
         private static float FineGround(float[,] fine, IslandSettings s, Vector3 p)

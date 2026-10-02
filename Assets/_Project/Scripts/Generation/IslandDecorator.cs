@@ -338,12 +338,94 @@ namespace ProjectFossil.Generation
             foreach (var lake in data.Lakes)
                 AddMesh(root, "Lake", DiscMesh(lake.Center, data.Settings.LakeSurfaceRadius(lake.Radius), 32), art != null ? art.lakeWater : null);
 
+            // White water at the foot of each fall, and its sound.
+            var splashes = new List<Vector3>();
+            foreach (var river in data.Rivers)
+                for (int i = 1; i < river.Points.Count; i++)
+                    if (IsFall(river, data.Settings, i))
+                    {
+                        Vector3 a = river.Points[i - 1], b = river.Points[i];
+                        var foot = Vector3.Lerp(a, b, FallLip + 0.05f);
+                        foot.y = b.y;
+                        var world = parent.TransformPoint(foot);
+                        splashes.Add(world);
+                        ViewBlockers.RegisterFall(world);
+                    }
+            if (splashes.Count > 0) AddSplashes(root, splashes);
+
             // Wading through inland water breaks a scent trail too.
             foreach (var river in data.Rivers)
                 for (int i = 0; i < river.Points.Count; i += 2)
                     ViewBlockers.RegisterWater(parent.TransformPoint(river.Points[i]), river.HalfWidths[i] + 0.5f);
             foreach (var lake in data.Lakes)
                 ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), data.Settings.LakeSurfaceRadius(lake.Radius)); // as wide as the drawn surface
+        }
+
+        // Spray and foam where the falls land: one small particle system each, drawn with the URP particle
+        // material kept in Resources.
+        private static void AddSplashes(Transform root, List<Vector3> feet)
+        {
+            var baseMat = Resources.Load<Material>("Shaders/RotorDust");
+            if (baseMat == null) return;
+            var mat = new Material(baseMat) { name = "Fall spray" };
+            mat.SetTexture("_BaseMap", SoftDot());
+            foreach (var foot in feet)
+            {
+                var go = new GameObject("Fall spray");
+                go.transform.SetParent(root, true);
+                go.transform.position = foot + Vector3.up * 0.1f;
+                var ps = go.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = ps.main;
+                main.loop            = true;
+                main.prewarm         = true;
+                main.startLifetime   = new ParticleSystem.MinMaxCurve(0.6f, 1.2f);
+                main.startSpeed      = new ParticleSystem.MinMaxCurve(0.6f, 1.6f);
+                main.startSize       = new ParticleSystem.MinMaxCurve(0.5f, 1.3f);
+                main.startColor      = new Color(0.92f, 0.95f, 0.97f, 0.35f);
+                main.gravityModifier = 0.15f;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles    = 40;
+                var emission = ps.emission;
+                emission.rateOverTime = 26f;
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Hemisphere;
+                shape.radius    = 0.8f;
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                var fade = new Gradient();
+                fade.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                             new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.15f), new GradientAlphaKey(0f, 1f) });
+                col.color = fade;
+                var size = ps.sizeOverLifetime;
+                size.enabled = true;
+                size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 1.4f));
+                var r = go.GetComponent<ParticleSystemRenderer>();
+                r.sharedMaterial = mat;
+                r.renderMode = ParticleSystemRenderMode.Billboard;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                ps.Play();
+            }
+        }
+
+        private static Texture2D _softDot;
+        private static Texture2D SoftDot()
+        {
+            if (_softDot != null) return _softDot;
+            const int n = 32;
+            _softDot = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "Soft dot", wrapMode = TextureWrapMode.Clamp };
+            var px = new Color[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                    float a = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
+                    px[y * n + x] = new Color(1f, 1f, 1f, a * a);
+                }
+            _softDot.SetPixels(px);
+            _softDot.Apply();
+            return _softDot;
         }
 
         // The forest pack's water where this machine has it, a plain see-through surface otherwise.
@@ -366,7 +448,22 @@ namespace ProjectFossil.Generation
             var pts = new List<Vector3>(n + 2 * CapRows);
             var ws  = new List<float>(n + 2 * CapRows);
             AddCap(river, settings, 0, -1f, pts, ws);
-            for (int i = 0; i < n; i++) { pts.Add(river.Points[i]); ws.Add(settings.RiverSurfaceHalfWidth(river.HalfWidths[i])); }
+            for (int i = 0; i < n; i++)
+            {
+                float w = settings.RiverSurfaceHalfWidth(river.HalfWidths[i]);
+                if (i > 0 && IsFall(river, settings, i))
+                {
+                    // A stream's fall: the upper pool runs level almost to the next point, then the water drops
+                    // in a short, steep curtain, instead of a tilted sheet down the whole step.
+                    Vector3 a = river.Points[i - 1], b = river.Points[i];
+                    var lip = Vector3.Lerp(a, b, FallLip);
+                    lip.y = a.y;
+                    pts.Add(lip);
+                    ws.Add(Mathf.Lerp(ws[ws.Count - 1], w, FallLip));
+                }
+                pts.Add(river.Points[i]);
+                ws.Add(w);
+            }
             AddCap(river, settings, n - 1, 1f, pts, ws);
 
             int m = pts.Count;
@@ -394,6 +491,16 @@ namespace ProjectFossil.Generation
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        private const float FallLip = 0.9f; // how far along a step the upper pool reaches before its fall
+
+        // Whether the surface drops from point i-1 to i more steeply than a calm river: a stream's fall.
+        public static bool IsFall(RiverPath river, IslandSettings settings, int i)
+        {
+            Vector3 a = river.Points[i - 1], b = river.Points[i];
+            float run = Mathf.Sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+            return a.y - b.y > settings.maxRiverGradient * Mathf.Max(run, 0.5f) + 0.01f;
         }
 
         private const int CapRows = 4;
