@@ -525,3 +525,22 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - Ground steeper than the controller's slope limit now slides the survivor down instead of holding them.
 - A dinosaur that has had no path to its target for 10 s gives up, wanders off and leaves that survivor alone for
   15 s, instead of camping at the foot of the slope.
+
+## 2026-10-03 — Island audit: a tester that walks every seed
+
+- `Project Fossil > Audit > Run Island Audit` (in Play mode), or from the terminal `unity cmd fossil_audit
+  --seeds 1,2,3`, then `unity cmd fossil_audit_status`. For each seed it generates the island, walks the survivor
+  from the spawn to every extraction along the NavMesh (scripted input through `PlayerController.ScriptedMove`),
+  notes where it gets stuck, checks every actor against IslandWorld ground and every dinosaur against deep water,
+  times the frames and saves pictures (top-down, four corners, behind the spawn, the player's eye, every arrival
+  and every stuck spot). Report and pictures go to `Logs/FossilAudit/<time>/` (not in git).
+  `unity cmd fossil_snapshot` saves the player's view and returns position, ground, water, health and nearby
+  dinosaurs, for play-testing from the terminal.
+- A long NavMesh path can come back partial only because the search ran out of nodes; the audit walks to its
+  end and plans again, and calls a spot unreachable only when the new plan gets no closer.
+- First run found dinosaurs grazing on the sea floor up to 7 m under the waves: only lakes and streams were
+  fenced off from the NavMesh. The sea now counts, and a block is fenced off when any of its vertices is deeper
+  than a dinosaur can wade (the centre alone let them wade chest-deep along every shore).
+- Dinosaurs on sharp ridges and rounded hills sank up to 3 m into the ground: the NavMesh the agent walks on is
+  simplified and runs under the real ground. The NavMesh now builds its height mesh, and the body is lifted onto
+  IslandWorld ground wherever the agent is still below it (`DinosaurFeedback.GroundLift`).

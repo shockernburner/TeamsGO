@@ -145,11 +145,19 @@ namespace ProjectFossil.Match
                         bool deep = false; float bed = 0f, top = 0f;
                         if (bx < blocks)
                         {
-                            int cx = bx * block + block / 2, cz = bz * block + block / 2;
-                            float w = world.WaterAtVertex(cx, cz);
-                            bed  = world.GroundAtVertex(cx, cz);
-                            top  = w;
-                            deep = !float.IsNaN(w) && w - bed > DinosaurWadeDepth;
+                            // Deep if any vertex of the block is: the centre alone let dinosaurs wade chest-deep
+                            // along every shore. The sea counts too: without it the whole sea floor round the island
+                            // was walkable, and dinosaurs wandered off the beach to graze seven metres under the waves.
+                            bed = float.MaxValue; top = float.MinValue;
+                            for (int vz = bz * block; vz <= (bz + 1) * block; vz++)
+                            for (int vx = bx * block; vx <= (bx + 1) * block; vx++)
+                            {
+                                float w = world.WaterAtVertex(vx, vz);
+                                float g = world.GroundAtVertex(vx, vz);
+                                float s = float.IsNaN(w) ? world.SeaLevel : Mathf.Max(w, world.SeaLevel);
+                                bed = Mathf.Min(bed, g); top = Mathf.Max(top, s);
+                                if (s - g > DinosaurWadeDepth) deep = true;
+                            }
                         }
                         if (deep)
                         {
@@ -178,6 +186,9 @@ namespace ProjectFossil.Match
 
             surface.collectObjects = CollectObjects.All;
             surface.useGeometry    = NavMeshCollectGeometry.PhysicsColliders;
+            // Agents stand on the NavMesh, whose polygons are simplified and cut up to a metre under rounded hills;
+            // the height mesh follows the real ground, so dinosaurs no longer sink to the knees on slopes.
+            surface.buildHeightMesh = true;
             surface.BuildNavMesh();
         }
 

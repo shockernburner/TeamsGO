@@ -91,6 +91,9 @@ namespace ProjectFossil.Player
         public bool  InCover  => Concealment >= ViewBlockers.CoverAt;
         public bool  IsHidden => Concealment >= ViewBlockers.HiddenAt && Stance != Stance.Standing;
 
+        // Tools (the island audit) walk the survivor by setting this; null hands control back to the player.
+        [System.NonSerialized] public Vector2? ScriptedMove;
+
         // Set by UI (shop, results screen) to freeze movement/look and free the cursor.
         public bool InputBlocked
         {
@@ -240,6 +243,7 @@ namespace ProjectFossil.Player
                 _lookInput   = Vector2.zero;
                 _jumpPressed = false;
             }
+            if (ScriptedMove.HasValue) _moveInput = ScriptedMove.Value;
 
             HandleLook();
             HandleMovement();
