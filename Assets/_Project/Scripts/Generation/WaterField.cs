@@ -92,6 +92,8 @@ namespace ProjectFossil.Generation
             // The banks are cut down near water and the land beyond them is not, which left a sheer step where they
             // meet on a hillside. Ease every step back to a climbable slope, never below what the water needs.
             LimitSlope(ground, n, cell, water, floor);
+            // Lowering can't ease a step whose top is a levee the water needs: the low side comes up instead.
+            RaiseToSlope(ground, n, cell, water);
 
             for (int i = 0; i < ground.Length; i++) ground[i] = Mathf.Clamp(ground[i], 0f, s.maxHeight);
             return new IslandWorld(n, cell, sea, ground, water, FindRapids(water, n, cell));
@@ -441,6 +443,32 @@ namespace ProjectFossil.Generation
             }
 
             float Top(int i) => water != null && !float.IsNaN(water[i]) ? water[i] + Clearance : ground[i];
+        }
+
+        // The other half of LimitSlope. A levee holding a lake up can't be lowered, and where the hillside beyond it
+        // had been cut down a sheer step was left (up to 82 degrees, dozens on some islands). Dry ground below such a
+        // step rises until no dry step is steeper than MaxGroundGrade. Only raises, from the highest down; wet
+        // vertices are left as they are.
+        private static void RaiseToSlope(float[] ground, int n, float cell, float[] water)
+        {
+            var heap = new MinHeap(); // keyed by minus the height, so the highest comes first
+            for (int i = 0; i < ground.Length; i++)
+                if (float.IsNaN(water[i])) heap.Push(-ground[i], i);
+            while (heap.Count > 0)
+            {
+                heap.Pop(out float key, out int i);
+                if (-key < ground[i]) continue; // stale
+                int x = i % n, z = i / n;
+                for (int k = 0; k < 8; k++)
+                {
+                    int nx = x + Dx[k], nz = z + Dz[k];
+                    if (nx < 0 || nz < 0 || nx >= n || nz >= n) continue;
+                    int j = nz * n + nx;
+                    if (!float.IsNaN(water[j])) continue;
+                    float need = -key - MaxGroundGrade * Step[k] * cell;
+                    if (need > ground[j]) { ground[j] = need; heap.Push(-need, j); }
+                }
+            }
         }
 
         // A binary min-heap of (key, vertex).

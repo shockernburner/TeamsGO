@@ -56,6 +56,9 @@ namespace ProjectFossil.Editor
                                       System.DateTime.Now.ToString("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory(dir);
 
+            // Keep the game ticking while the Editor is in the background (this Play session only; the project
+            // setting is untouched): unfocused, the walk froze until someone clicked on Unity.
+            Application.runInBackground = true;
             var go = new GameObject("IslandAudit");
             Object.DontDestroyOnLoad(go);
             Runner = go.AddComponent<AuditRunner>();
@@ -78,6 +81,44 @@ namespace ProjectFossil.Editor
             if (Runner == null) return new { stopped = false };
             Runner.Abort();
             return Runner.Status();
+        }
+
+        [CliCommand("fossil_slope_check", "Project Fossil: generate each seed with the game's island settings (no " +
+                    "Play mode needed) and report the steepest dry ground step, how many steps are steeper than 45 " +
+                    "degrees and how many are walls (over 56 degrees), with where the worst one is.",
+                    Tags = new[] { "tests" })]
+        public static object SlopeCheck(
+            [CliArg("seeds", "Comma-separated seeds")] string seeds = "0,1,2,3,4,5,6,7",
+            [CliArg("settings", "IslandSettings asset path")] string settings = "Assets/_Project/Data/Island/IslandSettings_Default.asset")
+        {
+            var s = AssetDatabase.LoadAssetAtPath<ProjectFossil.Generation.IslandSettings>(settings);
+            if (s == null) return new { error = $"No IslandSettings at {settings}" };
+            var rows = new List<object>();
+            int[] dx = { 1, 0, 1, -1 }, dz = { 0, 1, 1, 1 };
+            foreach (int seed in seeds.Split(',').Select(t => int.Parse(t.Trim())))
+            {
+                var world = ProjectFossil.Generation.WaterField.Build(new ProjectFossil.Generation.IslandGenerator(seed, s).Generate());
+                int n = world.Size, steep = 0, walls = 0, wx = 0, wz = 0;
+                float worst = 0f;
+                for (int z = 0; z < n; z++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        if (world.WetVertex(x, z)) continue;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            int nx = x + dx[k], nz = z + dz[k];
+                            if (nx < 0 || nz >= n || nx >= n || world.WetVertex(nx, nz)) continue;
+                            float run = world.Cell * (dx[k] != 0 && dz[k] != 0 ? 1.41421356f : 1f);
+                            float grade = Mathf.Abs(world.GroundAtVertex(nx, nz) - world.GroundAtVertex(x, z)) / run;
+                            if (grade > ProjectFossil.Generation.WaterField.MaxGroundGrade + 0.02f) steep++;
+                            if (grade > 1.5f) walls++;
+                            if (grade > worst) { worst = grade; wx = x; wz = z; }
+                        }
+                    }
+                rows.Add(new { seed, worstDegrees = Mathf.Round(Mathf.Atan(worst) * Mathf.Rad2Deg), steeperThan45 = steep, walls,
+                               worstAt = $"{wx * world.Cell:0},{wz * world.Cell:0}" });
+            }
+            return rows;
         }
 
         [CliCommand("fossil_snapshot", "Project Fossil: in Play mode, save the player camera (and optionally a " +

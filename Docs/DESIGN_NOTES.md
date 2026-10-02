@@ -555,3 +555,8 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   until the downhill corners touch, instead of hanging half in the air. The audit checks it.
 - After these, seeds 1-16 and a random seed: every extraction reached, no stuck spots, no dinosaur in deep water
   or under the ground, no floating cache, no Console errors.
+- The new climbable-ground test failed on seed 3: an 82-degree step was left where a levee holding a lake up
+  (which may not be lowered) met hillside that had been cut down. Easing only lowered ground, so nothing could
+  fix it. A second pass now raises dry ground below such a step until it is climbable. `unity cmd
+  fossil_slope_check --seeds 0,1,2` reports the steepest step per seed with the game's own settings: before, seed
+  3 had 80 walls and seed 4 had 8; after, seeds 0-11 top out at 44 degrees. All 123 EditMode tests pass.
