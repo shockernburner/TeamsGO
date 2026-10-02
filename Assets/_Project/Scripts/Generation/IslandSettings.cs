@@ -40,12 +40,14 @@ namespace ProjectFossil.Generation
         public float riverWidth = 12f;
         [Tooltip("Bank steepness (rise over run)")]
         public float riverBankSlope = 0.5f;
+        [Tooltip("Steepest a river may run (drop over distance). Steeper stretches have no water: a flat sheet of water down a hillside looked like a blue tarp")]
+        public float maxRiverGradient = 0.15f;
         [Tooltip("Rivers start between these normalized heights")]
         public Vector2 riverSourceHeight = new Vector2(0.3f, 0.6f);
         public int   lakeCount = 2;
         public Vector2 lakeRadius = new Vector2(16f, 30f); // metres
         [Tooltip("Water depth in rivers and lakes, metres")]
-        public float waterDepth = 1.2f;
+        public float waterDepth = 2.2f;
         [Tooltip("How much wetter the ground is near rivers and lakes (feeds swamps)")]
         [Range(0f, 1f)] public float riverMoisture = 0.3f;
 

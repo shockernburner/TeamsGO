@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Item_BoneClub
   m_EditorClassIdentifier: ProjectFossil.Economy::ProjectFossil.Economy.ItemDefinition
   itemId: bone_club
-  displayName: Bone Club
+  displayName: Hatchet
   category: 2
   maxStack: 1
   damage: 18

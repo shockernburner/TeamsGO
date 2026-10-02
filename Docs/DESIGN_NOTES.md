@@ -418,3 +418,17 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Red disc and pole:** the closed extraction pad was a flat disc that cut into slopes, plus a 40 m red pillar. It is now a ring of short stakes with coloured flags, each set on the terrain, and a slimmer beacon standing on the ground beside it.
 - **Axe pack:** Sky Den Games' Mid poly Axes Collection (`Assets/Skyden_Games/Axe Package`) is detected by Set Up Bought Packs. The first axe becomes `BoughtArt.axe`, and the held axe uses it (longest axis up, gripped near the bottom). Without the pack, the primitive axe remains.
 - **Rain pack:** AIK Studio's Rain System VFX (`Assets/Rainy VFX`) is detected and listed in the setup report. It isn't wired yet; the report shows which prefabs and shaders it uses.
+
+## 2026-10-02 — Movie_007 fixes: sapling poles, swimming backwards, lakes
+
+- **"Floating leaves" at 0:30, 0:47, 1:05:** these were young beeches, which PR #35 moved to the tree lists. Every tree is scaled to the same height, so a 3 m sapling was stretched about four times. Its thin twigs became long bare poles across the view, with a few leaves hanging off the ends. Bought trees now keep roughly their real size (never enlarged more than 1.25×).
+- **Swimming backwards:** the swim clips come from the Quaternius library while walking uses the pack's own clips, and the two face the body opposite ways. The facing check that runs at spawn now runs again whenever swimming starts or stops, once the blend has settled.
+- **Water vanished with the camera under it:** the third-person camera was only kept above the sea, not above lakes and rivers. It now stays above whatever water is under it. The inland water surface is also drawn from both sides.
+- **Unseen dinosaurs biting from under the water:** dinosaurs walked the lake bottom. Deep lakes are now cut out of their NavMesh, so they wait at the shore and a lake is a place to hide. Rivers stay crossable so the island isn't split in two.
+
+## 2026-10-02 — Screenshot fixes: real rivers, bought axes, crouch facing
+
+- **Rivers as blue sheets on hillsides:** most of a river's course ran down slopes of 30–40 %, and the ribbon of water lay on the slope like a tarp. Where it crossed a slope, its downhill edge hung in the air. Now rivers only have water where they run gently (`maxRiverGradient`, 15 %). Steeper stretches stay dry ground, and the river starts again below them. Beside the water the ground is built up into a bank a little above the surface, so water never hangs over lower ground. Water is deeper (2.2 m), and the ribbon reaches out to where the bank rises above it. Gentle stretches are rarer, so the default island tries 5 rivers and 4 lakes.
+- **Forest pack water:** setup picks the forest pack's river and swamp water materials (`BoughtArt.riverWater`, `lakeWater`). Rivers carry UVs along their flow, and lakes get planar UVs. Without the pack, the plain see-through water remains.
+- **Weapons from the axe pack:** the shortest axe in the pack is the Hatchet (was the Bone Club, 25 coins), and the longest is the Felling Axe (was the Stone Axe, 45). The simple fallback for the hatchet is now a small axe too.
+- **Crouch flipped the face:** like swimming, crouching uses clips from another library. The body-facing check now runs again on every base-layer state change, once its blend has settled (not after death).

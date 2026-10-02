@@ -36,6 +36,8 @@ namespace ProjectFossil.Core
 
         [Tooltip("Wind zone prefab that bought foliage shaders sway with")]
         public GameObject windZone;
+        [Tooltip("Forest pack water: flowing river surface, and still water for lakes")]
+        public Material riverWater, lakeWater;
 
         [Header("Sky")]
         public ModelDefinition flyer;
@@ -43,8 +45,10 @@ namespace ProjectFossil.Core
         [Header("People and machines")]
         [Tooltip("Player looks, one per outfit; teammates get different ones")]
         public ModelDefinition[] survivors;
-        [Tooltip("Axe carried for the Axe look: stood upright (head up), grip at the bottom of the handle")]
+        [Tooltip("Axe carried for the Axe look (the felling axe): the pack's longest axe")]
         public GameObject axe;
+        [Tooltip("Axe carried for the Club look (the hatchet): the pack's shortest axe")]
+        public GameObject hatchet;
         [Tooltip("First-person rig: a humanoid whose arm meshes have FPS in their names; the rest is hidden")]
         public GameObject firstPersonArms;
         [Tooltip("Rescue helicopter model (pivot between the skids, nose along +Z after helicopterYaw)")]
