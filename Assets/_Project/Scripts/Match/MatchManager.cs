@@ -203,7 +203,18 @@ namespace ProjectFossil.Match
             var go = Placeholder.Primitive(PrimitiveType.Cube);
             go.name = label;
             go.transform.SetParent(parent, false);
-            go.transform.position   = pos + Vector3.up * (size * 0.5f);
+            // Sink into the slope until the downhill corners touch: centred on the ground, a box on a steep hillside
+            // hung half in the air.
+            float drop = 0f;
+            var world = IslandWorld.Current;
+            if (world != null)
+            {
+                float h = size * 0.5f, centre = world.GroundAt(pos);
+                for (int i = 0; i < 4; i++)
+                    drop = Mathf.Max(drop, centre - world.GroundAt(pos + new Vector3(i < 2 ? -h : h, 0f, i % 2 == 0 ? -h : h)));
+                drop = Mathf.Min(drop, size * 0.6f);
+            }
+            go.transform.position   = pos + Vector3.up * (size * 0.5f - drop);
             go.transform.localScale = Vector3.one * size;
 
             // A chest (or whatever the content names) in place of the cube; the cube's collider stays for interaction.
@@ -244,6 +255,9 @@ namespace ProjectFossil.Match
 
         private static Vector3 SnapToGround(Vector3 pos)
         {
+            // The island's own ground: a ray from above landed caches on tree trunks and rocks.
+            var world = IslandWorld.Current;
+            if (world != null) return new Vector3(pos.x, world.GroundAt(pos), pos.z);
             if (Physics.Raycast(pos + Vector3.up * 500f, Vector3.down, out var hit, 1000f,
                                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 return hit.point;

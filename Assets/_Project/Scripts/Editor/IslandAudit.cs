@@ -330,6 +330,28 @@ namespace ProjectFossil.Editor
             var eye = pc.GetComponentInChildren<Camera>();
             if (eye != null) r.shots.Add(AuditCamera.SaveFrom(eye, P("06_spawn_eye")));
 
+            // ── Caches: resting on the ground, not hanging off a slope or perched on a tree ──
+            int cacheShots = 0;
+            foreach (var cache in Object.FindObjectsByType<ProjectFossil.Economy.LootContainer>(FindObjectsSortMode.None))
+            {
+                var col = cache.GetComponent<Collider>();
+                if (col == null) continue;
+                var bounds = col.bounds;
+                float gap = float.MaxValue;
+                for (int i = 0; i < 4; i++)
+                {
+                    var corner = new Vector3(i < 2 ? bounds.min.x : bounds.max.x, 0f, i % 2 == 0 ? bounds.min.z : bounds.max.z);
+                    gap = Mathf.Min(gap, bounds.min.y - world.GroundAt(corner));
+                }
+                if (gap > 0.25f) Note(r, "cache-floating", cache.transform.position, $"{cache.name}: lowest corner {gap:0.00} m above the ground");
+                if (cacheShots < 2)
+                {
+                    cacheShots++;
+                    Vector3 cp = cache.transform.position, side = new Vector3(6f, 0f, 3f);
+                    r.shots.Add(AuditCamera.SaveFrom(cp + side + Vector3.up * (world.GroundAt(cp + side) - cp.y + 1.7f), cp, 60f, P($"07_cache{cacheShots}")));
+                }
+            }
+
             // ── Walks ──
             var zones = match.ExtractionZones.Where(z => z != null).Select(z => z.transform.position).ToList();
             r.extractions = zones.Count;

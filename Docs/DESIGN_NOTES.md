@@ -544,3 +544,14 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - Dinosaurs on sharp ridges and rounded hills sank up to 3 m into the ground: the NavMesh the agent walks on is
   simplified and runs under the real ground. The NavMesh now builds its height mesh, and the body is lifted onto
   IslandWorld ground wherever the agent is still below it (`DinosaurFeedback.GroundLift`).
+- The survivor stopped against nothing in open forest. Bought models bring their own colliders (a banyan's is a
+  4.5 m wide, 15 m tall capsule round a much thinner trunk; plants meant to be walk-through came with capsules).
+  The decorator now strips them and adds only its own: a trunk capsule for trees, a box for rocks.
+- Rocks lower than 0.75 m get no collider: the NavMesh climbs anything that low, so paths ran straight over
+  knee-high stones and stumps the survivor (who steps 0.3 m) walked into.
+- Bought trees whose LOD heights are above 1 made `SetLODs` refuse the whole group, a thousand Console errors per
+  island, and those trees never got their far cut-off. The heights are clamped first.
+- Caches stand on IslandWorld ground (a ray from above could land them on a tree or rock) and sink into a slope
+  until the downhill corners touch, instead of hanging half in the air. The audit checks it.
+- After these, seeds 1-16 and a random seed: every extraction reached, no stuck spots, no dinosaur in deep water
+  or under the ground, no floating cache, no Console errors.
