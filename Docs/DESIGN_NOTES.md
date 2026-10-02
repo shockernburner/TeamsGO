@@ -453,3 +453,16 @@ The first co-op test worked: host in the Editor, joiner in a Mac build, both saw
 - **Sun shafts:** in forest, slanted shafts of sunlight stand in gaps beside trees near the camera, leaning towards the sun. They are strongest at dawn and dusk, faint at midday, weak under cloud, and absent in rain, fog and at night. A new shader (`ProjectFossil/SoftVolume`) softens them where they meet the ground and fades crossed cards seen edge-on. The camera now renders a depth texture for this.
 - **Ground mist:** mist lies on water and in hollows, and at dawn, in fog and rain it lies everywhere. It drifts with the wind.
 - **Colour per time of day:** split toning gives warm light and cool shade by day, rose and violet at dawn, amber and blue at dusk, and moonlit blue at night. Rain and fog grey it.
+
+## 2026-10-02 — Water that never floats (5.46 PM recording)
+
+- **Flat water sheets hanging in the forest:** a drawn surface reaches past its channel so its edge tucks under the bank, but several things left that edge over lower ground: river ends cut off square over the hollow their channel ended in, lakes with no bank on their downhill side, one water's hollow cutting into another's bank, and rivers that climbed out of a hollow with their surface still at the hollow's level (a dry trench with water floating in it). Now:
+  - Rivers end where the ground over their course stands more than 3 m above the surface, and have rounded ends.
+  - Lakes get banks like rivers and keep clear of rivers.
+  - Once all water is in place, a low rim (0.4 m) is raised just past every surface's edge, easing down outside it, without filling any channel.
+  - Any surface whose edge still hangs is lowered until it tucks under the ground or steps down at most 0.3 m onto other water. A stretch that would need more than 1.5 m stays dry. This repeats until nothing changes, and the water map is rebuilt from what is left.
+  - The fine terrain never smooths ground near water below the generator's ground, so the edges stay tucked under on the drawn terrain too.
+  - `WaterShape` holds the shape of the drawn surfaces, shared by the generator and the tests. A new test checks every river edge and lake rim against the fine terrain across eight game-sized islands, and that most rivers survive.
+- **White, foamy rivers:** rivers now use the forest pack's calm swamp water, like lakes.
+- **Brown blobs in fog:** in fog weather there are no clouds; the sky is a grey wash there anyway.
+- **Red "IsMapping" errors at match start:** the mist and sun shafts now load their shader by name, and only fall back to the Resources material.

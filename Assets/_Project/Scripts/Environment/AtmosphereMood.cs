@@ -289,14 +289,16 @@ namespace ProjectFossil.Environment
 
         private static Material NewMaterial(string name, Texture2D tex, bool additive)
         {
-            var baseMat = Resources.Load<Material>("Shaders/SoftVolume"); // kept in builds
+            // The shader by name first: loading the Resources material that keeps it in builds logged YAML
+            // "IsMapping" errors on Firdous's Mac. The material is only the fallback.
+            var shader = Shader.Find("ProjectFossil/SoftVolume");
             Material m;
-            if (baseMat != null) m = new Material(baseMat);
+            if (shader != null) m = new Material(shader);
             else
             {
-                var shader = Shader.Find("ProjectFossil/SoftVolume");
-                if (shader == null) return null;
-                m = new Material(shader);
+                var baseMat = Resources.Load<Material>("Shaders/SoftVolume");
+                if (baseMat == null) return null;
+                m = new Material(baseMat);
             }
             m.name = name;
             m.SetTexture("_BaseMap", tex);

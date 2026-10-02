@@ -328,18 +328,22 @@ namespace ProjectFossil.Generation
             var root = new GameObject("InlandWater").transform;
             root.SetParent(parent, false);
             var art = BoughtArt.Current;
+            // Rivers wear the calm swamp water too: the bought river material's foam read as white sheets on our
+            // slow, wide rivers.
+            Material riverMat = null;
+            if (art != null) riverMat = art.lakeWater != null ? art.lakeWater : art.riverWater;
 
             foreach (var river in data.Rivers)
-                if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river, data.Settings), art != null ? art.riverWater : null);
+                if (river.Points.Count >= 2) AddMesh(root, "River", RiverMesh(river, data.Settings), riverMat);
             foreach (var lake in data.Lakes)
-                AddMesh(root, "Lake", DiscMesh(lake.Center, lake.Radius + 4f, 32), art != null ? art.lakeWater : null);
+                AddMesh(root, "Lake", DiscMesh(lake.Center, data.Settings.LakeSurfaceRadius(lake.Radius), 32), art != null ? art.lakeWater : null);
 
             // Wading through inland water breaks a scent trail too.
             foreach (var river in data.Rivers)
                 for (int i = 0; i < river.Points.Count; i += 2)
                     ViewBlockers.RegisterWater(parent.TransformPoint(river.Points[i]), river.HalfWidths[i] + 0.5f);
             foreach (var lake in data.Lakes)
-                ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), lake.Radius + 4f); // as wide as the drawn surface
+                ViewBlockers.RegisterWater(parent.TransformPoint(lake.Center), data.Settings.LakeSurfaceRadius(lake.Radius)); // as wide as the drawn surface
         }
 
         // The forest pack's water where this machine has it, a plain see-through surface otherwise.
@@ -355,25 +359,32 @@ namespace ProjectFossil.Generation
 
         private static Mesh RiverMesh(RiverPath river, IslandSettings settings)
         {
+            // The ribbon, plus a rounded end at each end. A river's water stops where its run turns steep, in the
+            // round hollow its channel's end is carved into; cut off square there, the surface hung over that
+            // hollow as a flat sheet with a straight edge. The rounded end reaches the hollow's rim all round.
             int n = river.Points.Count;
-            var verts = new Vector3[n * 2];
-            var uvs   = new Vector2[n * 2]; // u across, v along the flow in widths, for flowing water shaders
-            var tris  = new int[(n - 1) * 6];
-            float along = 0f;
-            for (int i = 0; i < n; i++)
+            var pts = new List<Vector3>(n + 2 * CapRows);
+            var ws  = new List<float>(n + 2 * CapRows);
+            AddCap(river, settings, 0, -1f, pts, ws);
+            for (int i = 0; i < n; i++) { pts.Add(river.Points[i]); ws.Add(settings.RiverSurfaceHalfWidth(river.HalfWidths[i])); }
+            AddCap(river, settings, n - 1, 1f, pts, ws);
+
+            int m = pts.Count;
+            var verts = new Vector3[m * 2];
+            var uvs   = new Vector2[m * 2]; // u across, v along the flow in widths, for flowing water shaders
+            var tris  = new int[(m - 1) * 6];
+            float along = 0f, uvWidth = 2f * settings.RiverSurfaceHalfWidth(river.HalfWidths[n / 2]);
+            for (int i = 0; i < m; i++)
             {
-                if (i > 0) along += Vector3.Distance(river.Points[i], river.Points[i - 1]);
-                Vector3 prev = river.Points[Mathf.Max(0, i - 1)], next = river.Points[Mathf.Min(n - 1, i + 1)];
-                Vector3 dir = next - prev; dir.y = 0f;
+                if (i > 0) along += Vector3.Distance(pts[i], pts[i - 1]);
+                Vector3 dir = pts[Mathf.Min(m - 1, i + 1)] - pts[Mathf.Max(0, i - 1)]; dir.y = 0f;
                 Vector3 side = dir.sqrMagnitude > 1e-4f ? Vector3.Cross(Vector3.up, dir.normalized) : Vector3.right;
-                // Out to where the bank rises above the surface, plus a little, so the edge tucks under the ground.
-                float w = river.HalfWidths[i] + (settings.waterDepth + 0.4f) / Mathf.Max(0.05f, settings.riverBankSlope) + 1f;
-                verts[i * 2]     = river.Points[i] - side * w;
-                verts[i * 2 + 1] = river.Points[i] + side * w;
-                uvs[i * 2]     = new Vector2(0f, along / (2f * w));
-                uvs[i * 2 + 1] = new Vector2(1f, along / (2f * w));
+                verts[i * 2]     = pts[i] - side * ws[i];
+                verts[i * 2 + 1] = pts[i] + side * ws[i];
+                uvs[i * 2]     = new Vector2(0.5f - ws[i] / uvWidth, along / uvWidth);
+                uvs[i * 2 + 1] = new Vector2(0.5f + ws[i] / uvWidth, along / uvWidth);
             }
-            for (int i = 0; i < n - 1; i++)
+            for (int i = 0; i < m - 1; i++)
             {
                 int v = i * 2, t = i * 6;
                 tris[t] = v; tris[t + 1] = v + 2; tris[t + 2] = v + 1;
@@ -383,6 +394,31 @@ namespace ProjectFossil.Generation
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        private const int CapRows = 4;
+        private static readonly float[] CapSteps = { 0.4f, 0.7f, 0.9f, 1f };
+
+        // Rows beyond one end of the river (sign -1: before the first point, +1: after the last), in path order.
+        private static void AddCap(RiverPath river, IslandSettings settings, int end, float sign, List<Vector3> pts, List<float> ws)
+        {
+            int n = river.Points.Count;
+            Vector3 d = river.Points[Mathf.Min(n - 1, end + 1)] - river.Points[Mathf.Max(0, end - 1)]; d.y = 0f;
+            if (d.sqrMagnitude < 1e-4f) return;
+            d = d.normalized * sign;
+            // A half disc as wide as the ribbon: its rim lies on the bank top round the end, above the surface.
+            float w = settings.RiverSurfaceHalfWidth(river.HalfWidths[end]);
+            var row = new Vector3[CapRows]; var width = new float[CapRows];
+            for (int k = 0; k < CapRows; k++)
+            {
+                float t = CapSteps[k];
+                row[k]   = river.Points[end] + d * (w * t);
+                width[k] = Mathf.Max(0.05f, w * Mathf.Sqrt(1f - t * t));
+            }
+            if (sign < 0f)
+                for (int k = CapRows - 1; k >= 0; k--) { pts.Add(row[k]); ws.Add(width[k]); }
+            else
+                for (int k = 0; k < CapRows; k++) { pts.Add(row[k]); ws.Add(width[k]); }
         }
 
         private static Color[] White(int n)

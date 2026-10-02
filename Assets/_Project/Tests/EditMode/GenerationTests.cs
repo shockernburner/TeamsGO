@@ -305,5 +305,61 @@ namespace ProjectFossil.Tests.EditMode
                     }
             }
         }
+
+
+        // The drawn water surfaces reach past their channels so their edges tuck under the banks. If the ground
+        // there is lower, the water hangs in the air as a flat sheet with a straight edge.
+        [Test]
+        public void WaterEdges_TuckUnderTheBanks_OnFineTerrain()
+        {
+            var s = MakeSettings(257);
+            s.worldSize = 1000f;
+            s.maxHeight = 150f;
+            s.noiseScale = 0.0045f; // the game's island
+            s.riverCount = 5;
+            s.lakeCount = 4;
+            s.terrainDetail = 4;
+            const float slack = 0.02f;
+            int riverPoints = 0, lakes = 0;
+            var rim = new List<Vector3>();
+            for (int seed = 0; seed < 8; seed++)
+            {
+                var data = new IslandGenerator(seed, s).Generate();
+                var fine = TerrainDetail.Refine(data);
+                void Check(Vector3 q, float y, string what)
+                {
+                    if (WaterShape.SurfaceOver(s, data.Rivers, data.Lakes, q, IslandGenerator.CoverInset) >= y - IslandGenerator.WaterStep) return;
+                    float ground = FineGround(fine, s, q);
+                    if (WaterShape.EdgeTucked(s, ground, y, -slack, IslandGenerator.WaterStep)) return;
+                    Assert.GreaterOrEqual(ground, y - slack, $"Seed {seed}: {what} hangs over the ground at ({q.x:F0}, {q.z:F0})");
+                }
+                foreach (var river in data.Rivers)
+                    for (int i = 0; i < river.Points.Count; i++)
+                    {
+                        riverPoints++;
+                        WaterShape.RiverRim(s, river, i, rim);
+                        foreach (var q in rim) Check(q, river.Points[i].y, $"river edge {i}");
+                    }
+                foreach (var lake in data.Lakes)
+                {
+                    lakes++;
+                    WaterShape.LakeRim(s, lake, rim);
+                    foreach (var q in rim) Check(q, lake.Center.y, "lake rim");
+                }
+            }
+            Assert.Greater(riverPoints, 8 * 40, "Too little river left in 8 islands");
+            Assert.Greater(lakes, 8, "Too few lakes left in 8 islands");
+        }
+
+        private static float FineGround(float[,] fine, IslandSettings s, Vector3 p)
+        {
+            int res = fine.GetLength(0);
+            float cell = s.worldSize / (res - 1);
+            float gx = Mathf.Clamp(p.x / cell, 0f, res - 1.001f), gz = Mathf.Clamp(p.z / cell, 0f, res - 1.001f);
+            int x0 = (int)gx, z0 = (int)gz;
+            float tx = gx - x0, tz = gz - z0;
+            float v = Mathf.Lerp(Mathf.Lerp(fine[z0, x0], fine[z0, x0 + 1], tx), Mathf.Lerp(fine[z0 + 1, x0], fine[z0 + 1, x0 + 1], tx), tz);
+            return v * s.maxHeight;
+        }
     }
 }

@@ -254,7 +254,10 @@ namespace ProjectFossil.Generation
                 int start = -1;
                 for (int i = 0; i <= path.Count; i++)
                 {
-                    bool gentle = i < path.Count && Gradient(path, surfaces, i, cell) * s.maxHeight <= s.maxRiverGradient;
+                    // And only where it runs in a valley. Out of a hollow, the trace climbs on with its surface held
+                    // at the hollow's level, and the channel became a dry trench with water floating in it.
+                    bool gentle = i < path.Count && Gradient(path, surfaces, i, cell) * s.maxHeight <= s.maxRiverGradient
+                               && (heightmap[path[i].y, path[i].x] - surfaces[i]) * s.maxHeight <= MaxRiverCut;
                     if (gentle) { if (start < 0) start = i; continue; }
                     if (start >= 0 && i - start >= 12)
                     {
@@ -279,10 +282,14 @@ namespace ProjectFossil.Generation
 
             for (int l = 0; l < s.lakeCount; l++)
             {
-                if (!TryPickLake(heightmap, water, res, out var centre)) break;
+                if (!TryPickLake(heightmap, water, res, cell, out var centre)) break;
                 float radius = Mathf.Lerp(s.lakeRadius.x, s.lakeRadius.y, _rng.NextFloat());
                 float surface = Mathf.Max(s.seaLevel, MinAround(heightmap, res, centre, Mathf.CeilToInt(radius / cell)) - margin);
                 Stamp(carved, wetness, water, res, cell, centre, radius, surface - depth, MaxAround(heightmap, res, centre, 12));
+                // A rim like a river's banks: on the downhill side of a hollow the ground fell away below the
+                // surface, and the lake hung there in the air.
+                Bank(raised, res, cell, centre, radius + (depth + margin) * s.maxHeight / Mathf.Max(0.05f, s.riverBankSlope) + 2f,
+                     surface + margin);
                 lakes.Add(new Lake
                 {
                     Center = new Vector3(centre.x * cell, surface * s.maxHeight, centre.y * cell),
@@ -295,6 +302,189 @@ namespace ProjectFossil.Generation
                 {
                     if (raised[y, x] > heightmap[y, x]) heightmap[y, x] = raised[y, x];
                     if (carved[y, x] < heightmap[y, x]) heightmap[y, x] = carved[y, x];
+                }
+
+            KeepContainedWater(heightmap, water, res, rivers, lakes);
+        }
+
+        // Water must never hang over lower ground. A river's surface steps down along its course, and where one
+        // river's or a lake's hollow cut into another's bank, the edge of the drawn surface stood over lower ground
+        // as a flat sheet in the air. So a low rim is raised round every surface, then any surface whose edge still
+        // hangs is lowered until its edges sit under the ground or just over other water; a stretch that would have
+        // to drop too far stays dry, and so does a lake. Dropping water uncovers edges that lay over it, so this
+        // repeats until nothing changes. The water mask is then rebuilt from what
+        // remains, so the map and everything else agree with what is drawn.
+        private void KeepContainedWater(float[,] heightmap, bool[,] water, int res, List<RiverPath> rivers, List<Lake> lakes)
+        {
+            float cell = _settings.worldSize / (res - 1);
+            RaiseRims(heightmap, res, cell, rivers, lakes);
+            for (int pass = 0; pass < 40; pass++)
+                if (!ContainWaterOnce(heightmap, res, cell, rivers, lakes)) break;
+
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                    water[y, x] = false;
+            foreach (var river in rivers)
+                for (int i = 0; i < river.Points.Count; i++)
+                    MarkWater(water, res, cell, river.Points[i], river.HalfWidths[i]);
+            foreach (var lake in lakes)
+                MarkWater(water, res, cell, lake.Center, lake.Radius);
+        }
+
+        private const int MinRiverRun = 8;
+        private const float MaxRiverCut = 3f; // metres the ground over a river's course may stand above its surface
+        private const float MinWaterDepth = 0.7f; // metres of water left over the bed after lowering a surface
+        // Metres the ground under a surface's edge stands above it. The fine terrain never smooths ground near
+        // water below this grid's, so the edge stays tucked under on the drawn ground too.
+        public const float BankClearance = 0.1f;
+        // An edge may lie over other water up to this far below it: a small step, like a riffle where streams meet.
+        public const float WaterStep = 0.3f;
+        public const float CoverInset = 0.5f;
+
+        // Banks are built before the channels are cut, and one water's hollow can cut into another's bank; a
+        // river's ends and smoothed bends also reach past the banks built for its grid steps. So once all water is
+        // in place, every surface gets a low rim of ground just past its drawn edge, easing down outside it. Cells
+        // in or beside any water's channel are left alone, so no channel is filled.
+        private void RaiseRims(float[,] heightmap, int res, float cell, List<RiverPath> rivers, List<Lake> lakes)
+        {
+            var s = _settings;
+            float bankRun = (s.waterDepth + RimHeight) / Mathf.Max(0.05f, s.riverBankSlope); // channel edge to bank top
+            var channel = new bool[res, res];
+            foreach (var river in rivers)
+                for (int i = 0; i < river.Points.Count; i++)
+                    MarkWater(channel, res, cell, river.Points[i], river.HalfWidths[i] + bankRun);
+            foreach (var lake in lakes)
+                MarkWater(channel, res, cell, lake.Center, lake.Radius + bankRun);
+
+            var rim = new float[res, res];
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                    rim[y, x] = float.MinValue;
+            foreach (var river in rivers)
+                for (int i = 0; i < river.Points.Count; i++)
+                    Rim(rim, res, cell, river.Points[i], s.RiverSurfaceHalfWidth(river.HalfWidths[i]));
+            foreach (var lake in lakes)
+                Rim(rim, res, cell, lake.Center, s.LakeSurfaceRadius(lake.Radius));
+
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                    if (!channel[y, x] && rim[y, x] > heightmap[y, x]) heightmap[y, x] = rim[y, x];
+        }
+
+        private const float RimHeight = 0.4f; // metres a rim stands above its water
+
+        private void Rim(float[,] rim, int res, float cell, Vector3 centre, float edge)
+        {
+            var s = _settings;
+            float top = (centre.y + RimHeight) / s.maxHeight, fall = s.riverBankSlope / s.maxHeight;
+            float flat = edge + cell; // level out one cell past the edge, so the edge's corners all stand on it
+            float reach = flat + RimHeight * 4f / Mathf.Max(0.05f, s.riverBankSlope);
+            int cx = Mathf.RoundToInt(centre.x / cell), cz = Mathf.RoundToInt(centre.z / cell), r = Mathf.CeilToInt(reach / cell);
+            for (int z = Mathf.Max(0, cz - r); z <= Mathf.Min(res - 1, cz + r); z++)
+                for (int x = Mathf.Max(0, cx - r); x <= Mathf.Min(res - 1, cx + r); x++)
+                {
+                    float dx = x * cell - centre.x, dz = z * cell - centre.z;
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (d > reach) continue;
+                    float target = top - Mathf.Max(0f, d - flat) * fall;
+                    if (target > rim[z, x]) rim[z, x] = target;
+                }
+        }
+
+        private bool ContainWaterOnce(float[,] heightmap, int res, float cell, List<RiverPath> rivers, List<Lake> lakes)
+        {
+            var s = _settings;
+            float maxDrop = s.waterDepth - MinWaterDepth;
+            var oldRivers = rivers.ToArray();
+            var oldLakes  = lakes.ToArray();
+            var rim = new List<Vector3>();
+            bool changed = false;
+
+            var kept = new List<RiverPath>();
+            foreach (var river in oldRivers)
+            {
+                int n = river.Points.Count;
+                RiverPath part = null;
+                float y = float.MaxValue;
+                for (int i = 0; i <= n; i++)
+                {
+                    bool ok = false;
+                    if (i < n)
+                    {
+                        float original = river.Points[i].y;
+                        WaterShape.RiverRim(s, river, i, rim);
+                        y = Mathf.Min(y, Mathf.Min(original, Ceiling(heightmap, res, cell, rim, original, oldRivers, oldLakes)));
+                        ok = original - y <= maxDrop;
+                        if (original - y > 1e-4f) changed = true;
+                    }
+                    if (ok)
+                    {
+                        part ??= new RiverPath();
+                        var p = river.Points[i];
+                        part.Points.Add(new Vector3(p.x, y, p.z));
+                        part.HalfWidths.Add(river.HalfWidths[i]);
+                        continue;
+                    }
+                    if (i < n) changed = true;
+                    if (part != null && part.Points.Count >= MinRiverRun) kept.Add(part);
+                    else if (part != null) changed = true;
+                    part = null;
+                    y = float.MaxValue;
+                }
+            }
+            rivers.Clear();
+            rivers.AddRange(kept);
+
+            for (int l = lakes.Count - 1; l >= 0; l--)
+            {
+                var lake = lakes[l];
+                WaterShape.LakeRim(s, lake, rim);
+                float surface = Mathf.Min(lake.Center.y, Ceiling(heightmap, res, cell, rim, lake.Center.y, oldRivers, oldLakes));
+                if (lake.Center.y - surface > maxDrop) { lakes.RemoveAt(l); changed = true; continue; }
+                if (lake.Center.y - surface > 1e-4f) changed = true;
+                lake.Center.y = surface;
+                lakes[l] = lake;
+            }
+            return changed;
+        }
+
+        // Highest a surface at height y may stand so that none of its rim points hang: each must be under ground
+        // or over other water no more than a small step down.
+        private float Ceiling(float[,] h, int res, float cell, List<Vector3> rim, float y,
+                              IReadOnlyList<RiverPath> rivers, IReadOnlyList<Lake> lakes)
+        {
+            float ceiling = float.MaxValue;
+            foreach (var q in rim)
+            {
+                float ground = GroundAt(h, res, cell, q);
+                if (WaterShape.EdgeTucked(_settings, ground, y, BankClearance, WaterStep)) continue;
+                float cover = WaterShape.SurfaceOver(_settings, rivers, lakes, q, CoverInset);
+                if (cover >= y - WaterStep) continue;
+                // Low enough to sit inside the bank, or to step down onto the water there.
+                ceiling = Mathf.Min(ceiling, Mathf.Max(ground - BankClearance, cover + WaterStep));
+            }
+            return ceiling;
+        }
+
+        // Ground height in metres at a world point, between grid points.
+        private float GroundAt(float[,] h, int res, float cell, Vector3 p)
+        {
+            float gx = Mathf.Clamp(p.x / cell, 0f, res - 1.001f), gz = Mathf.Clamp(p.z / cell, 0f, res - 1.001f);
+            int x0 = (int)gx, z0 = (int)gz;
+            float tx = gx - x0, tz = gz - z0;
+            float v = Mathf.Lerp(Mathf.Lerp(h[z0, x0], h[z0, x0 + 1], tx), Mathf.Lerp(h[z0 + 1, x0], h[z0 + 1, x0 + 1], tx), tz);
+            return v * _settings.maxHeight;
+        }
+
+        private static void MarkWater(bool[,] water, int res, float cell, Vector3 centre, float radius)
+        {
+            int cx = Mathf.RoundToInt(centre.x / cell), cz = Mathf.RoundToInt(centre.z / cell);
+            int r = Mathf.CeilToInt(radius / cell);
+            for (int z = Mathf.Max(0, cz - r); z <= Mathf.Min(res - 1, cz + r); z++)
+                for (int x = Mathf.Max(0, cx - r); x <= Mathf.Min(res - 1, cx + r); x++)
+                {
+                    float dx = (x - centre.x / cell) * cell, dz = (z - centre.z / cell) * cell;
+                    if (dx * dx + dz * dz <= radius * radius) water[z, x] = true;
                 }
         }
 
@@ -458,9 +648,12 @@ namespace ProjectFossil.Generation
         }
 
         // Lakes sit in low, inland ground away from rivers.
-        private bool TryPickLake(float[,] h, bool[,] water, int res, out Vector2Int centre)
+        private bool TryPickLake(float[,] h, bool[,] water, int res, float cell, out Vector2Int centre)
         {
             float mid = (res - 1) * 0.5f;
+            // Keep clear of rivers: a lake's hollow cut into a river's bank left the river hanging over it.
+            var s = _settings;
+            int clear = Mathf.CeilToInt((s.lakeRadius.y + 2f * (s.waterDepth + 0.4f) / Mathf.Max(0.05f, s.riverBankSlope) + s.riverWidth) / cell);
             for (int attempt = 0; attempt < 300; attempt++)
             {
                 int x = _rng.Next(res), y = _rng.Next(res);
@@ -469,10 +662,19 @@ namespace ProjectFossil.Generation
                 var c = new Vector2Int(x, y);
                 if (Radial(c, mid) > mid * 0.65f) continue;
                 if (MaxAround(h, res, c, 8) - v > 0.05f) continue; // needs fairly flat ground, not a hillside
+                if (AnyWaterAround(water, res, c, clear)) continue;
                 centre = c;
                 return true;
             }
             centre = default;
+            return false;
+        }
+
+        private static bool AnyWaterAround(bool[,] water, int res, Vector2Int c, int r)
+        {
+            for (int y = Mathf.Max(0, c.y - r); y <= Mathf.Min(res - 1, c.y + r); y++)
+                for (int x = Mathf.Max(0, c.x - r); x <= Mathf.Min(res - 1, c.x + r); x++)
+                    if (water[y, x] && (x - c.x) * (x - c.x) + (y - c.y) * (y - c.y) <= r * r) return true;
             return false;
         }
 

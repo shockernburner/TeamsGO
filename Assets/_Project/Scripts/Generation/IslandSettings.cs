@@ -53,6 +53,12 @@ namespace ProjectFossil.Generation
         public Vector2 lakeRadius = new Vector2(16f, 30f); // metres
         [Tooltip("Water depth in rivers and lakes, metres")]
         public float waterDepth = 2.2f;
+        // How far a drawn water surface reaches from its middle: out past where the bank rises above it, so its
+        // edge tucks under the ground. The generator keeps the banks that high; the decorator draws this wide.
+        public float RiverSurfaceHalfWidth(float channelHalfWidth) =>
+            channelHalfWidth + (waterDepth + 0.4f) / Mathf.Max(0.05f, riverBankSlope) + 1f;
+        public float LakeSurfaceRadius(float lakeRadius) => RiverSurfaceHalfWidth(lakeRadius);
+
         [Tooltip("How much wetter the ground is near rivers and lakes (feeds swamps)")]
         [Range(0f, 1f)] public float riverMoisture = 0.3f;
 

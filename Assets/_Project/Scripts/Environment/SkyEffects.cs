@@ -37,6 +37,12 @@ namespace ProjectFossil.Environment
 
         private void SetUpClouds(Conditions c, Color tint)
         {
+            // In fog the sky is a grey wash: clouds drawn over it showed as dark brown blobs.
+            if (c.Weather == Weather.Fog)
+            {
+                if (_clouds != null) _clouds.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                return;
+            }
             int count = c.Weather switch
             {
                 Weather.Clear => 22, Weather.Cloudy => 90, Weather.Rain => 120, Weather.Storm => 150, _ => 45,
