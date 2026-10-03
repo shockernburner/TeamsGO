@@ -9,6 +9,7 @@
         "ProjectFossil.Match",
         "ProjectFossil.Director",
         "ProjectFossil.Economy",
+        "ProjectFossil.Net",
         "Unity.Pipeline.Attributes"
     ],
     "includePlatforms": [

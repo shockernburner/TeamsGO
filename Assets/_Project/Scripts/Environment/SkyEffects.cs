@@ -46,7 +46,7 @@ namespace ProjectFossil.Environment
             if (_clouds != null) _clouds.transform.position = new Vector3(p.x, CloudHeight, p.z);
             if (_starRoot != null) _starRoot.position = p;
             if (_rain != null) _rain.transform.position = p + Vector3.up * RainHeight + _wind * 3f;
-            if (_boughtRain != null) _boughtRain.transform.position = p; // the pack's rain falls round its own origin
+            if (_boughtRain != null) _boughtRain.transform.position = p + _wind * 3f; // centred over the camera, upwind
         }
 
         // ── Clouds ─────────────────────────────────────────────────────────────
@@ -182,6 +182,15 @@ namespace ProjectFossil.Environment
                 if (_rain != null) _rain.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 _boughtRain = Instantiate(bought);
                 _boughtRain.name = $"Rain (pack: {bought.name})";
+                // Lean the falling drops with the wind, as the simple rain does.
+                float lean = c.Weather == Weather.Storm ? 5f : 2f;
+                foreach (var ps in _boughtRain.GetComponentsInChildren<ParticleSystem>())
+                {
+                    var v = ps.velocityOverLifetime;
+                    if (!v.enabled || v.space != ParticleSystemSimulationSpace.World) continue;
+                    v.x = new ParticleSystem.MinMaxCurve(_wind.x * lean);
+                    v.z = new ParticleSystem.MinMaxCurve(_wind.z * lean);
+                }
                 return;
             }
             if (_rain == null)
@@ -190,6 +199,16 @@ namespace ProjectFossil.Environment
                 if (dust == null) return;
                 var mat = new Material(dust) { name = "Rain" };
                 mat.SetTexture("_BaseMap", StreakTexture());
+                // Transparent, alpha-blended: the base material saves no properties, and URP's default (opaque)
+                // drew the streaks as dark specks.
+                mat.SetFloat("_Surface", 1f);
+                mat.SetFloat("_Blend", 0f);
+                mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mat.SetFloat("_ZWrite", 0f);
+                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                mat.SetOverrideTag("RenderType", "Transparent");
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
                 _rain = MakeSystem("Rain", mat);
                 var r = _rain.GetComponent<ParticleSystemRenderer>();
                 r.renderMode    = ParticleSystemRenderMode.Stretch;
