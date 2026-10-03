@@ -2,6 +2,9 @@ using UnityEngine;
 
 namespace ProjectFossil.Core
 {
+    // Off is the mic-free mode: no voice is sent and the dinosaurs never hear it (footsteps still count).
+    public enum VoiceMode { Off, OpenMic, PushToTalk }
+
     // The player's own settings: graphics, sound, mouse and camera. Saved in PlayerPrefs, applied at start and on
     // every change. Gameplay code reads the values here (sensitivity, invert, field of view) instead of its own.
     public static class GameSettings
@@ -16,6 +19,8 @@ namespace ProjectFossil.Core
         public static bool  InvertY      { get; private set; }
         public static float FieldOfView  { get; private set; } // third-person camera, degrees
         public static bool  ShowFps      { get; private set; }
+        public static VoiceMode Voice    { get; private set; } = VoiceMode.OpenMic;
+        public static float VoiceVolume  { get; private set; } = 1f; // teammates' voices, 0..1
 
         public const float MinFov = 50f, MaxFov = 90f, DefaultFov = 60f;
         public const float MinSensitivity = 0.25f, MaxSensitivity = 3f;
@@ -41,6 +46,8 @@ namespace ProjectFossil.Core
             InvertY      = PlayerPrefs.GetInt(Prefix + "InvertY", 0) == 1;
             FieldOfView  = Mathf.Clamp(PlayerPrefs.GetFloat(Prefix + "Fov", DefaultFov), MinFov, MaxFov);
             ShowFps      = PlayerPrefs.GetInt(Prefix + "ShowFps", 0) == 1;
+            Voice        = (VoiceMode)Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "Voice", (int)VoiceMode.OpenMic), 0, 2);
+            VoiceVolume  = Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix + "VoiceVolume", 1f));
             Apply();
         }
 
@@ -64,6 +71,15 @@ namespace ProjectFossil.Core
             AudioListener.volume = MasterVolume;
             if (qualityChanged) QualitySettings.SetQualityLevel(Quality, true);
             if (screenChanged) ApplyScreen();
+        }
+
+        public static void SetVoice(VoiceMode mode, float volume)
+        {
+            Load();
+            Voice = mode; VoiceVolume = Mathf.Clamp01(volume);
+            PlayerPrefs.SetInt(Prefix + "Voice", (int)Voice);
+            PlayerPrefs.SetFloat(Prefix + "VoiceVolume", VoiceVolume);
+            PlayerPrefs.Save();
         }
 
         private static void Apply()

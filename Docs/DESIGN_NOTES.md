@@ -643,3 +643,14 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   invite or the friends list's "Join game", even with the game closed (+connect_lobby).
 - Product name "TETHER: Primal", company "Vantward Games" (the legal entity on Steamworks is Vantward Solutions
   Pte Ltd).
+- Voice (`Net/VoiceChat`): Steam records the microphone; every slice's loudness (RMS in dB, never the words)
+  sets a level: whisper (up to -30 dB, heard by dinosaurs within 3 m), talking (-30 to -20, 12 m), raised voice
+  (-20 to -12, 25 m), shout (above -12, 45 m); under -40 is ignored as room noise. Rain and storms halve the
+  ranges. The level becomes a noise event where the speaker stands, like a footstep: the host makes it for
+  everyone (dinosaurs live there), a solo player for themselves. Hunters walk over to investigate, skittish
+  animals flee. Teammates hear each other from their bodies in 3D, fading out by 35 m. Settings: Open mic, Push
+  to talk (V), Off (dinosaurs can't hear you), voice volume. While speaking, the HUD says how far you're heard.
+- A Steam lesson: Steam closes a game whose main thread stalls ("stalled cross-thread pipe"). An unbounded retry
+  on "buffer too small" did that; voice decompression now uses one 2-second buffer and at most one retry.
+- Tested on this Mac: recording stays stable in a match, a whisper 25 m from Ironjaw is ignored and a shout
+  brings it to within 7 m of the voice. Two-player voice playback still needs a second Steam account to test.
