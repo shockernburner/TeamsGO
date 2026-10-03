@@ -607,3 +607,17 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   the packs really are set up again.
 - The start menu's stand-in AudioListener exists from the first frame and steps aside the moment the player
   spawns: no more "no audio listeners" or "2 audio listeners" lines.
+
+## 2026-10-03 — The rain pack, converted to URP
+
+- The Rain System VFX pack draws with a legacy particle shader (pink under URP) and names every effect "Particle
+  System", so the setup never used it. It now picks emitters by what they do: a wide box emitting steadily is the
+  falling rain; an emitter that collides with the world and spawns a sub-emitter gives drops that splash on the
+  ground (in the pack it is a lightning strike, so its jagged trails and noise are switched off).
+- Copies of those, retuned, become `Art/Bought/Rain/Rain_Steady` and `Rain_Storm` (git-ignored, like the pack):
+  URP Particles/Unlit, transparent, with a generated drop streak (the pack's soft dot all but vanished when
+  stretched), drops over a 40 m square above the camera falling in world space, splashes within 14 m. The game
+  centres them on the camera and leans the drops with the wind. Storm is denser and darker than steady rain.
+- The project's base particle material saves no properties, so new materials made from it were opaque and drew
+  rain as dark specks. The pack rain and the simple fallback streaks are both set to transparent now.
+- Checked in Play mode in Rain and Storm: no pink, follows the camera, reads as slanted soft rain with splashes.

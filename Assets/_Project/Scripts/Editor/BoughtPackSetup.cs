@@ -799,40 +799,218 @@ namespace ProjectFossil.Editor
             float Longest(Vector3 v) => Mathf.Max(v.x, Mathf.Max(v.y, v.z));
         }
 
-        // Rain: the pack's falling-rain effects, by name. Splashes, ripples, drops on glass and lightning are other
-        // effects. An effect whose shaders don't draw under URP would show magenta, so it is skipped.
+        // Rain. The pack's effects are named only "Particle System" and draw with a legacy shader URP shows pink, so
+        // they are picked by what their emitters do: a wide box emitting steadily is the falling rain, and an emitter
+        // that collides with the world and spawns a sub-emitter gives drops that splash on the ground (in the pack it
+        // is a lightning strike; its trails and noise are switched off). Copies of both,
+        // retuned to read as rain round the player and drawn with a URP particle material, become our own two
+        // prefabs (steady rain and storm) under Art/Bought/Rain. The pack's files are left as they are.
+        private const string RainOut = Out + "/Rain";
+
         private static void SetUpRain(BoughtArt art, string dir)
         {
             Log.AppendLine();
             art.rainPackChecked = dir;
-            string[] notRain = { "splash", "ripple", "drop", "window", "glass", "screen", "puddle", "lightning", "thunder", "mist", "fog", "cloud", "demo" };
-            var candidates = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
+            var prefabs = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
                 .Select(p => p.Replace('\\', '/'))
-                .Where(p => Path.GetFileNameWithoutExtension(p).ToLowerInvariant().Contains("rain"))
-                .Where(p => !notRain.Any(w => Path.GetFileNameWithoutExtension(p).ToLowerInvariant().Contains(w)))
                 .Select(p => (path: p, g: AssetDatabase.LoadAssetAtPath<GameObject>(p)))
-                .Where(x => x.g != null && x.g.GetComponentInChildren<ParticleSystem>(true) != null)
+                .Where(x => x.g != null && x.g.GetComponent<ParticleSystem>() != null)
                 .ToList();
-            var drawable = candidates.Where(x => x.g.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
-                                                   .All(m => m == null || IsUrp(m.shader) || m.shader.name.Contains("Particles")))
-                                     .ToList();
-            foreach (var x in candidates.Except(drawable)) Log.AppendLine($"  Rain: skipped {x.path} (shader not for URP)");
-            if (drawable.Count == 0)
+
+            // The curtain: a box at least 10 m across, emitting steadily, not colliding. The one nearest 20 m wins
+            // (the pack's demo copy is 100 m across).
+            float BoxArea(ParticleSystem ps) { var sh = ps.shape; return sh.shapeType == ParticleSystemShapeType.Box ? sh.scale.x * sh.scale.z : 0f; }
+            var curtain = prefabs.Select(x => (x.path, x.g, ps: x.g.GetComponent<ParticleSystem>()))
+                .Where(x => BoxArea(x.ps) >= 100f && x.ps.emission.rateOverTime.constantMax >= 20f && !x.ps.collision.enabled)
+                .OrderBy(x => Mathf.Abs(BoxArea(x.ps) - 400f)).FirstOrDefault();
+            // The splashing drops: collide with the world, splash through a sub-emitter, emit on their own.
+            var splash = prefabs.Select(x => (x.path, x.g, ps: x.g.GetComponent<ParticleSystem>()))
+                .Where(x => x.ps.collision.enabled && x.ps.subEmitters.enabled && x.ps.subEmitters.subEmittersCount > 0 &&
+                            x.ps.emission.rateOverTime.constantMax > 0f && x.ps.main.startSpeed.constantMax < 500f)
+                .OrderByDescending(x => x.ps.emission.rateOverTime.constantMax).FirstOrDefault();
+
+            if (curtain.g == null)
             {
                 art.rain = art.heavyRain = null;
-                Log.AppendLine("Rain: no usable falling-rain prefab; keeping the simple rain.");
+                Log.AppendLine("Rain: no emitter in the pack looks like falling rain; keeping the simple rain.");
                 return;
             }
-            bool Heavy(string p) { var n = Path.GetFileNameWithoutExtension(p).ToLowerInvariant(); return n.Contains("heavy") || n.Contains("storm") || n.Contains("strong"); }
-            bool Light(string p) { var n = Path.GetFileNameWithoutExtension(p).ToLowerInvariant(); return n.Contains("light") || n.Contains("drizzle") || n.Contains("soft"); }
-            var steady = drawable.FirstOrDefault(x => !Heavy(x.path) && !Light(x.path));
-            if (steady.g == null) steady = drawable.FirstOrDefault(x => !Heavy(x.path));
-            if (steady.g == null) steady = drawable[0];
-            var heavy = drawable.FirstOrDefault(x => Heavy(x.path));
-            art.rain      = steady.g;
-            art.heavyRain = heavy.g != null ? heavy.g : steady.g;
-            Log.AppendLine($"Rain <- {steady.path}");
-            Log.AppendLine($"Heavy rain <- {(heavy.g != null ? heavy.path : steady.path)}");
+            Log.AppendLine($"Rain: falling drops from {curtain.path}");
+            Log.AppendLine(splash.g != null ? $"Rain: ground splashes from {splash.path}" : "Rain: no splashing emitter found");
+
+            var mat = RainMaterial(curtain.ps.GetComponent<ParticleSystemRenderer>().sharedMaterial);
+            if (mat == null)
+            {
+                art.rain = art.heavyRain = null;
+                Log.AppendLine("Rain: no URP particle material to draw with (Resources/Shaders/RotorDust); keeping the simple rain.");
+                return;
+            }
+            art.rain      = BuildRain("Rain_Steady", curtain.g, splash.g, mat, storm: false);
+            art.heavyRain = BuildRain("Rain_Storm",  curtain.g, splash.g, mat, storm: true);
+            Log.AppendLine($"Rain <- {AssetDatabase.GetAssetPath(art.rain)}");
+            Log.AppendLine($"Heavy rain <- {AssetDatabase.GetAssetPath(art.heavyRain)}");
+        }
+
+        // URP particle material (the project's own, so it survives builds) with a drop streak. The pack draws with
+        // Unity's default soft dot, whose alpha sits in a tiny centre: stretched along the fall it all but vanished.
+        private static Material RainMaterial(Material packMaterial)
+        {
+            var baseMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Resources/Shaders/RotorDust.mat");
+            if (baseMat == null) return null;
+            EnsureFolder(RainOut);
+            string path = RainOut + "/RainDrop.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) { mat = new Material(baseMat); AssetDatabase.CreateAsset(mat, path); }
+            else mat.CopyPropertiesFromMaterial(baseMat);
+            mat.shader = baseMat.shader;
+            var tex = StreakTexture();
+            mat.SetTexture("_BaseMap", tex != null ? tex : packMaterial != null ? packMaterial.mainTexture : null);
+            mat.SetColor("_BaseColor", Color.white);
+            // Transparent, alpha-blended. The base material saves no properties, so it would be URP's default:
+            // opaque, which ignores the drop's soft alpha and draws each one as a dark speck.
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        // A raindrop seen falling: soft across, a bright head and a long fading tail. Saved as a PNG beside the rain.
+        private static Texture2D StreakTexture()
+        {
+            string path = RainOut + "/RainStreak.png";
+            const int w = 16, h = 64;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float u = (x + 0.5f) / w * 2f - 1f, v = (y + 0.5f) / h;
+                float across = Mathf.Exp(-u * u * 6f);
+                float along  = Mathf.SmoothStep(0f, 1f, v / 0.25f) * Mathf.SmoothStep(0f, 1f, (1f - v) / 0.75f);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, across * along));
+            }
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path);
+            if (AssetImporter.GetAtPath(path) is TextureImporter ti)
+            {
+                ti.alphaIsTransparency = true;
+                ti.wrapMode = TextureWrapMode.Clamp;
+                ti.sRGBTexture = true;
+                ti.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        private static GameObject BuildRain(string name, GameObject curtain, GameObject splash, Material mat, bool storm)
+        {
+            var root = new GameObject(name);
+            try
+            {
+                // Falling drops: soft streaks over a 40 m square 22 m above the camera, falling at rain speed in world
+                // space (they don't slide along with a running player). See-through, so it reads as rain, not lines.
+                var drops = Object.Instantiate(curtain, root.transform);
+                drops.name = "Drops";
+                drops.transform.localPosition = Vector3.zero;
+                drops.transform.localRotation = Quaternion.identity;
+                var ps = drops.GetComponent<ParticleSystem>();
+                var main = ps.main;
+                main.loop = true; main.playOnAwake = true; main.prewarm = true;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.startSpeed    = 0f;
+                main.startLifetime = 1.7f;
+                main.startSize     = storm ? new ParticleSystem.MinMaxCurve(0.05f, 0.08f) : new ParticleSystem.MinMaxCurve(0.045f, 0.075f);
+                main.startColor    = storm ? new Color(0.8f, 0.84f, 0.92f, 0.55f) : new Color(0.86f, 0.89f, 0.96f, 0.52f);
+                main.gravityModifier = 0f;
+                main.maxParticles  = storm ? 7000 : 4500;
+                var emission = ps.emission;
+                emission.rateOverTime = storm ? 3400f : 2200f;
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Box;
+                shape.position  = new Vector3(0f, 22f, 0f);
+                shape.rotation  = Vector3.zero;
+                shape.scale     = new Vector3(40f, 1f, 40f);
+                var vel = ps.velocityOverLifetime;
+                vel.enabled = true;
+                vel.space = ParticleSystemSimulationSpace.World;
+                vel.x = new ParticleSystem.MinMaxCurve(0f);
+                vel.y = new ParticleSystem.MinMaxCurve(storm ? -17f : -14f);
+                vel.z = new ParticleSystem.MinMaxCurve(0f);
+                DrawWith(ps, mat, stretch: 0.04f, maxSize: 0.01f);
+
+                // Splashes: fast drops near the player that hit the ground and spray a few droplets.
+                if (splash != null)
+                {
+                    var s = Object.Instantiate(splash, root.transform);
+                    s.name = "Splashes";
+                    s.transform.localPosition = new Vector3(0f, 14f, 0f);
+                    s.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // emitter points straight down
+                    var sp = s.GetComponent<ParticleSystem>();
+                    var sm = sp.main;
+                    sm.loop = true; sm.playOnAwake = true;
+                    sm.simulationSpace = ParticleSystemSimulationSpace.World;
+                    sm.startSpeed    = 45f;
+                    sm.startLifetime = 1f;
+                    sm.startSize     = 0.03f;
+                    sm.startColor    = new Color(0.85f, 0.88f, 0.95f, 0.35f);
+                    var se = sp.emission;
+                    se.rateOverTime = storm ? 140f : 70f;
+                    // In the pack this emitter is a lightning strike: jagged noisy trails to the ground. A raindrop
+                    // falls straight and leaves no trail.
+                    var trails = sp.trails; trails.enabled = false;
+                    var noise  = sp.noise;  noise.enabled = false;
+                    // A flat cone fires along its axis (straight down here); a circle would fire outward, sideways.
+                    var ss = sp.shape;
+                    ss.shapeType = ParticleSystemShapeType.Cone;
+                    ss.angle = 0f;
+                    ss.radius = 14f;
+                    ss.arc = 360f;
+                    ss.rotation = Vector3.zero;
+                    var col = sp.collision;
+                    col.enabled = true;
+                    col.type = ParticleSystemCollisionType.World;
+                    col.mode = ParticleSystemCollisionMode.Collision3D;
+                    col.lifetimeLoss = 1f; // the drop ends where it lands; the splash takes over
+                    col.quality = ParticleSystemCollisionQuality.Medium;
+                    col.sendCollisionMessages = false;
+                    DrawWith(sp, mat, stretch: 0.02f, maxSize: 0.006f);
+                    foreach (var child in s.GetComponentsInChildren<ParticleSystem>(true))
+                    {
+                        if (child == sp) continue;
+                        var ct = child.trails; ct.enabled = false;
+                        var cn = child.noise;  cn.enabled = false;
+                        var cm = child.main;
+                        cm.simulationSpace = ParticleSystemSimulationSpace.World;
+                        cm.startSize  = new ParticleSystem.MinMaxCurve(0.03f, 0.06f);
+                        cm.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 3f);
+                        cm.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.45f);
+                        cm.gravityModifier = 1f;
+                        cm.startColor = new Color(0.88f, 0.9f, 0.96f, 0.45f);
+                        DrawWith(child, mat, stretch: 0.05f, maxSize: 0.006f);
+                    }
+                }
+
+                EnsureFolder(RainOut);
+                return PrefabUtility.SaveAsPrefabAsset(root, $"{RainOut}/{name}.prefab");
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        private static void DrawWith(ParticleSystem ps, Material mat, float stretch, float maxSize)
+        {
+            var r = ps.GetComponent<ParticleSystemRenderer>();
+            r.sharedMaterial = mat;
+            r.renderMode     = ParticleSystemRenderMode.Stretch;
+            r.velocityScale  = stretch;
+            r.lengthScale    = 1f;
+            r.maxParticleSize = maxSize; // a drop right by the lens stays a drop, not a white bar
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
         }
 
         // What a pack holds (prefabs, their particle systems and shaders), so it can be wired by name.
