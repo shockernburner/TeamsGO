@@ -9,6 +9,8 @@ using FishNet.Managing.Object;
 using FishNet.Object;
 using FishNet.Transporting;
 using FishNet.Transporting.Tugboat;
+using FishNet.Transporting.Multipass;
+using Steamworks;
 using ProjectFossil.Core;
 using ProjectFossil.Dinosaurs;
 using ProjectFossil.Match;
@@ -52,6 +54,9 @@ namespace ProjectFossil.Net
         private MatchBootstrap _boot;
         private GameObject     _soloDinosaur;
         private NetworkManager _net;
+        private Multipass _multipass;                      // LAN and Steam side by side (only when Steam runs)
+        private FishySteamworks.FishySteamworks _steamNet;
+        private CSteamID _steamHost = CSteamID.Nil;        // the friend we joined through Steam
         private PrefabObjects  _prefabs;
         private NetworkObject  _avatarPrefab, _dinosaurPrefab;
         private Mode   _mode = Mode.Menu;
@@ -86,6 +91,7 @@ namespace ProjectFossil.Net
             _soloDinosaur = _boot != null ? _boot.dinosaurPrefab : null;
             _address = PlayerPrefs.GetString(AddressKey, "127.0.0.1");
             PlayerName = CleanName(PlayerPrefs.GetString(NameKey, ""));
+            if (string.IsNullOrEmpty(PlayerName) && SteamService.Ready) PlayerName = CleanName(SteamService.PersonaName);
             if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
             WorldConditions.ChosenTime    = (DayTime)Mathf.Clamp(PlayerPrefs.GetInt(TimeKey, 0), 0, (int)DayTime.Night);
             WorldConditions.ChosenWeather = (Weather)Mathf.Clamp(PlayerPrefs.GetInt(WeatherKey, 0), 0, (int)Weather.Fog);
@@ -100,6 +106,7 @@ namespace ProjectFossil.Net
         // From the in-match menu or the results: drop the island and the connection, back to the start menu.
         private void LeaveMatch()
         {
+            SteamService.LeaveLobby();
             bool online = IsOnline;
             BackToMenu(null); // first, so the dropped connection doesn't read as "lost the host"
             if (online) StopNetwork();
@@ -114,6 +121,8 @@ namespace ProjectFossil.Net
             DinosaurAI.Damaged += OnDinosaurDamaged;
             DinosaurAI.Killed  += OnDinosaurKilled;
             if (_boot != null) _boot.Generated += OnGenerated;
+            SteamService.LobbyCreated += OnSteamLobbyCreated;
+            SteamService.JoinHost     += JoinSteam;
         }
 
         private void OnDisable()
@@ -122,6 +131,8 @@ namespace ProjectFossil.Net
             DinosaurAI.Damaged -= OnDinosaurDamaged;
             DinosaurAI.Killed  -= OnDinosaurKilled;
             if (_boot != null) _boot.Generated -= OnGenerated;
+            SteamService.LobbyCreated -= OnSteamLobbyCreated;
+            SteamService.JoinHost     -= JoinSteam;
         }
 
         private void OnDestroy()
@@ -178,6 +189,41 @@ namespace ProjectFossil.Net
             // couldn't be shared.
         }
 
+        // A friend's Steam lobby was entered (from an invite or "Join game"): connect to its host over Steam.
+        private void JoinSteam(CSteamID host)
+        {
+            if (_mode == Mode.Solo) LeaveMatch();           // invited mid-solo-match: drop it and go
+            else if (_mode != Mode.Menu) return;              // already in a team
+            SaveName();
+            if (!EnsureNetwork() || _steamNet == null || _multipass == null)
+            {
+                _status = "Couldn't join over Steam.";
+                return;
+            }
+            Challenge.Current = ChallengeLevel.Hard;
+            NetRole.IsFollower = true;
+            _boot.CanRestart = () => false;
+            _boot.RestartNote = "Waiting for the host to start the next island...";
+            _steamHost = host;
+            _address = SteamFriends.GetFriendPersonaName(host);
+            _mode = Mode.Joining;
+            _status = $"Joining {_address} over Steam...";
+            _clientLoaded = false;
+            _readySeed = -1;
+            _multipass.SetClientTransport(_steamNet);
+            _steamNet.SetClientAddress(host.m_SteamID.ToString());
+            if (!_net.ClientManager.StartConnection())
+            {
+                _status = "Couldn't start connecting over Steam.";
+                BackToMenu(_status);
+            }
+        }
+
+        private void OnSteamLobbyCreated()
+        {
+            if (_mode == Mode.Hosting) Match?.Announce("Steam lobby ready: press Esc and Invite friends, or Shift+Tab.");
+        }
+
         private void Join()
         {
             SaveName();
@@ -192,6 +238,7 @@ namespace ProjectFossil.Net
             _status = $"Connecting to {_address}...";
             _clientLoaded = false;
             _readySeed = -1;
+            if (_multipass != null) _multipass.SetClientTransport<Tugboat>();
             if (!_net.ClientManager.StartConnection(_address, Port))
             {
                 _status = "Couldn't start connecting.";
@@ -240,7 +287,33 @@ namespace ProjectFossil.Net
             var tugboat = go.AddComponent<Tugboat>();
             tugboat.SetPort(Port);
             tugboat.SetMaximumClients(MaxTeam);
+            Transport transport = tugboat;
+            // With Steam running the host also listens on Steam (peer to peer through Valve's relay, no ports to
+            // open), and friends join from an invite. LAN keeps working beside it.
+            if (SteamService.Ready)
+            {
+                // Its settings live in private fields until it starts (its setters need a running server).
+                const System.Reflection.BindingFlags priv = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                _steamNet = go.AddComponent<FishySteamworks.FishySteamworks>();
+                typeof(FishySteamworks.FishySteamworks).GetField("_peerToPeer", priv)?.SetValue(_steamNet, true);
+                typeof(FishySteamworks.FishySteamworks).GetField("_maximumClients", priv)?.SetValue(_steamNet, (ushort)MaxTeam);
+                _multipass = go.AddComponent<Multipass>();
+                var list = typeof(Multipass)
+                    .GetField("_transports", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    ?.GetValue(_multipass) as List<Transport>;
+                if (list != null) { list.Add(tugboat); list.Add(_steamNet); transport = _multipass; }
+            }
+            // In the Editor, FishNet checks the prefab list the instant the component is added (before the next line
+            // can give it one) and logs an error; that check never runs in a build, so it is muted for this one call.
+            bool logs = Debug.unityLogger.logEnabled;
+            Debug.unityLogger.logEnabled = false;
             _net = go.AddComponent<NetworkManager>();
+            Debug.unityLogger.logEnabled = logs;
+            // The NetworkManager comes first: a TransportManager added before it drags in a second, empty one.
+            var transports = go.GetComponent<FishNet.Managing.Transporting.TransportManager>();
+            if (transports == null) transports = go.AddComponent<FishNet.Managing.Transporting.TransportManager>();
+            transports.Transport = transport;
+            if (_multipass != null) _multipass.SetClientTransport<Tugboat>(); // the host's own player joins over LAN
             _net.SpawnablePrefabs = _prefabs;
             go.SetActive(true);
 
@@ -284,6 +357,7 @@ namespace ProjectFossil.Net
             {
                 _mode = Mode.Hosting;
                 _status = null;
+                if (SteamService.Ready) SteamService.HostLobby(MaxTeam); // so Steam friends can be invited
                 _net.ClientManager.StartConnection("localhost", Port); // the host plays too
                 _boot.StartSolo(); // random island; OnGenerated shares it
             }
@@ -677,7 +751,9 @@ namespace ProjectFossil.Net
             GUI.enabled = true;
 
             GUILayout.Space(8);
-            GUILayout.Label("Same computer: 127.0.0.1. Same Wi-Fi: the address the host sees at the top of their screen.", _label);
+            GUILayout.Label(SteamService.Ready
+                ? "Steam friends join from your invite, or from \"Join game\" in the Steam friends list. Same Wi-Fi: type the host's address above."
+                : "Same computer: 127.0.0.1. Same Wi-Fi: the address the host sees at the top of their screen. (Start Steam to play with friends online.)", _label);
             if (!string.IsNullOrEmpty(_status))
             {
                 GUILayout.Space(6);
@@ -736,9 +812,13 @@ namespace ProjectFossil.Net
         {
             int team = _mode == Mode.Hosting ? _avatars.Count : NetAvatar.All.Count;
             string text = _mode == Mode.Hosting
-                ? $"{PlayerName}  |  hosting at {_lanAddress ?? "?"}  |  team of {Mathf.Max(1, team)}"
+                ? $"{PlayerName}  |  hosting{(SteamService.InLobby ? " on Steam" : "")} at {_lanAddress ?? "?"}  |  team of {Mathf.Max(1, team)}"
                 : $"{PlayerName}  |  co-op with {_address}  |  team of {Mathf.Max(1, team)}";
             GUI.Label(new Rect(Screen.width * 0.5f - 200, 4, 400, 22), text, _hud);
+            // The Steam invite, whenever the mouse is free (the Esc menu, the shop, the results).
+            if (_mode == Mode.Hosting && SteamService.InLobby && Cursor.visible &&
+                GUI.Button(new Rect(Screen.width * 0.5f - 80, 28, 160, 26), "Invite Steam friends"))
+                SteamService.InviteFriends();
         }
 
         private void EnsureStyles()

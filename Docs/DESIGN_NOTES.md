@@ -634,3 +634,12 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   stay natural, keeps the outer band sea; `Island_NeverReachesTheMapEdge` checks 13 seeds.
 - Dinosaurs within 4 m of the player block the camera, so a bite from behind no longer puts the camera inside
   the animal.
+- Steam (`Net/SteamService`): started once before the first scene, callbacks pumped every frame. Uses the
+  player's Steam name. App ID 480 (Valve's test app) until TETHER: Primal has its own; `steam_appid.txt` in the
+  project root lets the Editor talk to Steam. Without Steam the game runs with LAN co-op only.
+- Hosting with Steam running: the server listens on LAN (Tugboat) and on Steam (FishySteamworks, peer to peer
+  through Valve's relay, no ports to open) at once through FishNet's Multipass, and a friends-only Steam lobby is
+  made. "Invite Steam friends" shows whenever the mouse is free (Esc menu, shop, results). A friend joins from the
+  invite or the friends list's "Join game", even with the game closed (+connect_lobby).
+- Product name "TETHER: Primal", company "Vantward Games" (the legal entity on Steamworks is Vantward Solutions
+  Pte Ltd).

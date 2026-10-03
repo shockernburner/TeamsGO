@@ -3,6 +3,8 @@
     "rootNamespace": "ProjectFossil.Net",
     "references": [
         "FishNet.Runtime",
+        "FishySteamworks",
+        "com.rlabrecque.steamworks.net",
         "ProjectFossil.Core",
         "ProjectFossil.Dinosaurs",
         "ProjectFossil.Player",
