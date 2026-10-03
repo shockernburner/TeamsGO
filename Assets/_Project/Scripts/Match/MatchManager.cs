@@ -124,22 +124,25 @@ namespace ProjectFossil.Match
             SpawnPointsOfInterest(island, islandRoot);
 
             Director  = new ThreatDirector(content.threatCatalog.threats);
+            var challenge = Challenge.Current;
+            Stats.Challenge = challenge;
             _executor = new ThreatExecutor(defaultDinosaurPrefab, islandRoot)
             {
-                HealthMultiplier = SurvivorRank.DinosaurHealth(level),
-                DamageMultiplier = SurvivorRank.DinosaurDamage(level),
+                HealthMultiplier = SurvivorRank.DinosaurHealth(level) * Challenge.DinosaurHealth(challenge),
+                DamageMultiplier = SurvivorRank.DinosaurDamage(level) * Challenge.DinosaurDamage(challenge),
             };
             Director.OnThreatTriggered += OnThreatTriggered;
 
-            float baseline = SurvivorRank.DirectorBaseline(level);
+            float baseline = SurvivorRank.DirectorBaseline(level) * Challenge.Director(challenge);
             Difficulty = new AdaptiveDifficulty(content.directorSettings, baseline);
             var aiBuyer = new ThreatBuyer("ai-director", DirectorTeam, true, new CurrencySystem());
             // Offset the seed so director choices don't mirror island layout choices.
             Brain = new AIDirectorBrain(Director, content.directorSettings, aiBuyer,
                                         new RNGService(unchecked(island.Seed * 31 + 7)),
-                                        content.matchRules.matchDuration, baseline);
+                                        content.matchRules.matchDuration, baseline,
+                                        Challenge.ExtraGrace(challenge));
 
-            if (!IsFollower) SpawnWildlife(island, defaultDinosaurPrefab, islandRoot, level);
+            if (!IsFollower) SpawnWildlife(island, defaultDinosaurPrefab, islandRoot, level, challenge);
 
             DinosaurAI.Killed  += OnDinosaurKilled;
             DinosaurAI.Damaged += OnDinosaurDamaged;
@@ -148,8 +151,9 @@ namespace ProjectFossil.Match
             ScentTrail.Active = _scent = IsFollower ? null : new ScentTrail();
             _lastScentWarning = float.NegativeInfinity;
 
-            Announce(level > 0 ? $"Survivor rank {level}: the island fights harder. Survive, scavenge, extract."
-                               : "Survive. Scavenge caches for coins. Extraction opens later.");
+            string opening = level > 0 ? $"Survivor rank {level}: the island fights harder. Survive, scavenge, extract."
+                                       : "Survive. Scavenge caches for coins. Extraction opens later.";
+            Announce(challenge == ChallengeLevel.Hard ? opening : $"{Challenge.Label(challenge)}. {opening}");
         }
 
         private void BindPlayer(GameObject player)
@@ -242,14 +246,14 @@ namespace ProjectFossil.Match
         }
 
         // Animals from the wildlife table. Without one, the bootstrap has already placed the default prefab's species.
-        private void SpawnWildlife(IslandData island, GameObject prefab, Transform parent, int level)
+        private void SpawnWildlife(IslandData island, GameObject prefab, Transform parent, int level, ChallengeLevel challenge)
         {
             _wildlife = null;
             if (Content.wildlife == null || prefab == null) return;
             _wildlife = new WildlifeSpawner(Content.wildlife, prefab, parent, island,
-                                            SurvivorRank.WildlifeCount(level),
-                                            SurvivorRank.DinosaurHealth(level),
-                                            SurvivorRank.DinosaurDamage(level));
+                                            SurvivorRank.WildlifeCount(level) * Challenge.Wildlife(challenge),
+                                            SurvivorRank.DinosaurHealth(level) * Challenge.DinosaurHealth(challenge),
+                                            SurvivorRank.DinosaurDamage(level) * Challenge.DinosaurDamage(challenge));
             _wildlife.SpawnInitial();
         }
 
@@ -299,7 +303,8 @@ namespace ProjectFossil.Match
                 return;
             }
 
-            if (!_stalkerSent && State.Elapsed >= Content.matchRules.stalkerAt) ReleaseStalker();
+            if (!_stalkerSent && State.Elapsed >= Content.matchRules.stalkerAt * Challenge.StalkerDelay(Stats.Challenge))
+                ReleaseStalker();
             if (!IsFinalStand && State.IsExtracting) BeginFinalStand();
 
             RescueIfFallenThroughWorld();
@@ -693,6 +698,13 @@ namespace ProjectFossil.Match
             IsFinalStand = false;
             RescuedBy    = null;
             State = null;
+        }
+
+        // Walking out of a match to the start menu: it stops here, with no result and no rank change.
+        public void Abandon()
+        {
+            Cleanup();
+            _wildlife = null;
         }
 
         private void OnDestroy() => Cleanup();

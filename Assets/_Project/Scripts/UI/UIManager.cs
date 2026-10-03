@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using ProjectFossil.Core;
 using ProjectFossil.Dinosaurs;
 using ProjectFossil.Economy;
@@ -29,6 +30,9 @@ namespace ProjectFossil.UI
 
         private readonly MiniMap _miniMap = new MiniMap();
         private bool _shopOpen;
+        private bool _menuOpen;     // the Esc menu
+        private bool _paused;       // ...and whether it stopped the game (solo only)
+        private bool _confirmLeave;
         private string _shopMessage;
         private Vector2 _shopScroll;
 
@@ -97,6 +101,7 @@ namespace ProjectFossil.UI
 
             if (_match != _bootstrap.Match)
             {
+                SetMenu(false);
                 if (_match != null)
                 {
                     _match.Announced  -= Push;
@@ -111,6 +116,8 @@ namespace ProjectFossil.UI
             }
 
             if (_match != null && _match.Player != _boundPlayer) BindPlayer(_match.Player);
+            if (_match == null || _match.State == null) SetMenu(false);
+            else if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) SetMenu(!_menuOpen);
 
             _messages.RemoveAll(m => m.until < Time.unscaledTime);
             if (_damageFlash > 0f) _damageFlash = Mathf.Max(0f, _damageFlash - Time.deltaTime / damageFlashSeconds);
@@ -150,6 +157,7 @@ namespace ProjectFossil.UI
 
         private void OnDestroy()
         {
+            SetMenu(false);
             if (_match != null)
             {
                 _match.Announced  -= Push;
@@ -195,10 +203,65 @@ namespace ProjectFossil.UI
 
         private void ToggleShop()
         {
-            if (_match == null || !_match.IsRunning) return;
+            if (_match == null || !_match.IsRunning || _menuOpen) return;
             _shopOpen    = !_shopOpen;
             _shopMessage = null;
             SetPlayerBlocked(_shopOpen);
+        }
+
+        // Esc: resume or leave, at any point in a match. Solo, the island stops while it's open; in co-op it can't,
+        // since the team plays on.
+        private void SetMenu(bool open)
+        {
+            if (open == _menuOpen) return;
+            _menuOpen     = open;
+            _confirmLeave = false;
+            if (open && _shopOpen) { _shopOpen = false; _shopMessage = null; }
+
+            bool pause = open && _bootstrap != null && _bootstrap.AllowsPause;
+            if (pause != _paused)
+            {
+                _paused = pause;
+                Time.timeScale     = pause ? 0f : 1f;
+                AudioListener.pause = pause;
+            }
+            if (_match != null && _match.IsRunning) SetPlayerBlocked(open);
+        }
+
+        private void DrawMenu()
+        {
+            GUI.color = new Color(0f, 0f, 0f, 0.5f);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var area = new Rect(Screen.width * 0.5f - 160, Screen.height * 0.5f - 120, 320, 240);
+            GUILayout.BeginArea(area, _box);
+            GUILayout.Label(_paused ? "PAUSED" : "MENU", _big);
+            GUILayout.Label(_paused ? "The island waits for you." : "Co-op can't pause: the island keeps going for your team.", _small);
+            GUILayout.Space(10);
+            if (GUILayout.Button("Resume  [Esc]", GUILayout.Height(40))) SetMenu(false);
+            GUILayout.Space(8);
+            if (!_confirmLeave)
+            {
+                if (GUILayout.Button("Leave match", GUILayout.Height(34))) _confirmLeave = true;
+            }
+            else
+            {
+                GUILayout.Label("Leave? This match won't count.", _small);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Leave", GUILayout.Height(34))) LeaveMatch();
+                if (GUILayout.Button("Stay", GUILayout.Height(34))) _confirmLeave = false;
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndArea();
+        }
+
+        private void LeaveMatch()
+        {
+            SetMenu(false);
+            if (_bootstrap == null) return;
+            if (_bootstrap.LeaveRequested != null) _bootstrap.LeaveRequested();
+            else _bootstrap.Restart(true); // no start menu in this scene: a fresh island instead
         }
 
         private void SetPlayerBlocked(bool blocked)
@@ -241,6 +304,7 @@ namespace ProjectFossil.UI
             }
 
             DrawMessages();
+            if (_menuOpen) DrawMenu();
         }
 
         private void DrawHud()
@@ -282,7 +346,7 @@ namespace ProjectFossil.UI
             if (state.Elapsed < controlHintSeconds || _shopOpen)
             {
                 const string hints = "[Shift] Run on/off  [C] Crouch  [Space] Jump/stand  " +
-                                     "[LMB/F] Attack  [E] Interact  [Q] Heal  [Tab] Shop";
+                                     "[LMB/F] Attack  [E] Interact  [Q] Heal  [Tab] Shop  [Esc] Menu";
                 GUI.Label(new Rect(0, Screen.height - 110, Screen.width, 22), hints, _hint);
             }
 
@@ -367,7 +431,8 @@ namespace ProjectFossil.UI
                             (stats.MatesAboard > 0 ? $"  (with {stats.MatesAboard} teammate{(stats.MatesAboard > 1 ? "s" : "")} aboard)" : ""));
             GUILayout.Space(6);
             GUILayout.Label(RankLine(stats));
-            GUILayout.Label($"Coins earned: {stats.CoinsEarned}    Island seed: {stats.Seed}");
+            GUILayout.Label($"Coins earned: {stats.CoinsEarned}    Island seed: {stats.Seed}" +
+                            (stats.Challenge != ChallengeLevel.Hard ? $"    {Challenge.Label(stats.Challenge)}" : ""));
             GUILayout.Space(12);
             if (_bootstrap != null && !_bootstrap.AllowsRestart)
             {
@@ -381,6 +446,11 @@ namespace ProjectFossil.UI
                     _bootstrap.Restart(true);
                 if (GUILayout.Button("Replay same island", GUILayout.Height(28)) && _bootstrap != null)
                     _bootstrap.Restart(false);
+            }
+            if (_bootstrap != null && _bootstrap.LeaveRequested != null)
+            {
+                GUILayout.Space(4);
+                if (GUILayout.Button("Main menu", GUILayout.Height(28))) LeaveMatch();
             }
             GUILayout.EndArea();
         }

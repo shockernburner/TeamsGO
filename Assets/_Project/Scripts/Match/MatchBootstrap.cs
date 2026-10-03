@@ -48,6 +48,26 @@ namespace ProjectFossil.Match
 
         public bool AllowsRestart => CanRestart == null || CanRestart();
 
+        // Set by the start menu. Whether the in-match menu may pause the game (solo only: in co-op the island
+        // keeps going for everyone), and what "Leave match" does (back to the start menu).
+        public System.Func<bool> CanPause;
+        public System.Action LeaveRequested;
+        public bool AllowsPause => CanPause == null || CanPause();
+
+        // Takes the current island down: player, terrain with everything on it, and the match.
+        public void Leave()
+        {
+            if (Match != null) Match.Abandon();
+            if (_player != null)
+            {
+                _player.SetActive(false);
+                Destroy(_player);
+                _player = null;
+            }
+            IslandTerrainBuilder.DestroyExisting();
+            IslandWorld.SetCurrent(null);
+        }
+
         private void Start()
         {
             if (holdStart) return;

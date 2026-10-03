@@ -560,3 +560,12 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   fix it. A second pass now raises dry ground below such a step until it is climbable. `unity cmd
   fossil_slope_check --seeds 0,1,2` reports the steepest step per seed with the game's own settings: before, seed
   3 had 80 walls and seed 4 had 8; after, seeds 0-11 top out at 44 degrees. All 123 EditMode tests pass.
+
+## 2026-10-03 — Solo difficulty and the Esc menu
+
+- "Play solo" now asks Easy, Medium or Hard (`Match/Challenge`). Hard is the game as tuned, and co-op always
+  plays Hard. Easy and Medium scale the director's intensity, its quiet start (+90 s / +40 s), dinosaur damage and
+  health, wildlife count and when Ironjaw comes out, on top of the Survivor Rank.
+- Esc opens a menu at any point in a match: Resume, or Leave match (confirmed) back to the start menu. Solo, the
+  island pauses while it's open; co-op can't pause, so it just blocks your input. The results screen also has
+  "Main menu". Leaving takes the island down and drops the connection; the match doesn't count.

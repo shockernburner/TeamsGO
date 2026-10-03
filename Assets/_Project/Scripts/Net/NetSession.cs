@@ -64,6 +64,7 @@ namespace ProjectFossil.Net
         private bool _clientLoaded;
         private bool _hooked;            // subscribed to the MatchManager's team events
         private bool _warnedPrefab;
+        private bool _pickingChallenge;  // "Play solo" pressed: asking Easy, Medium or Hard
 
         private readonly Dictionary<int, NetAvatar> _avatars = new Dictionary<int, NetAvatar>(); // host: by client id
 
@@ -89,6 +90,22 @@ namespace ProjectFossil.Net
             WorldConditions.ChosenTime    = (DayTime)Mathf.Clamp(PlayerPrefs.GetInt(TimeKey, 0), 0, (int)DayTime.Night);
             WorldConditions.ChosenWeather = (Weather)Mathf.Clamp(PlayerPrefs.GetInt(WeatherKey, 0), 0, (int)Weather.Fog);
             NetRole.IsFollower = false;
+            if (_boot != null)
+            {
+                _boot.CanPause       = () => _mode == Mode.Solo;
+                _boot.LeaveRequested = LeaveMatch;
+            }
+        }
+
+        // From the in-match menu or the results: drop the island and the connection, back to the start menu.
+        private void LeaveMatch()
+        {
+            bool online = IsOnline;
+            BackToMenu(null); // first, so the dropped connection doesn't read as "lost the host"
+            if (online) StopNetwork();
+            _avatars.Clear();
+            _flares.Clear();
+            _boot.Leave();
         }
 
         private void OnEnable()
@@ -116,8 +133,10 @@ namespace ProjectFossil.Net
 
         // ── Menu choices ───────────────────────────────────────────────────────
 
-        private void PlaySolo()
+        private void PlaySolo(ChallengeLevel level)
         {
+            _pickingChallenge = false;
+            Challenge.Current = level;
             SaveName();
             WorldConditions.ClearOverride();
             StopNetwork();
@@ -136,6 +155,7 @@ namespace ProjectFossil.Net
             SaveName();
             WorldConditions.ClearOverride();
             if (!EnsureNetwork()) return;
+            Challenge.Current = ChallengeLevel.Hard; // co-op plays the island as tuned
             NetRole.IsFollower = false;
             _boot.dinosaurPrefab = _dinosaurPrefab.gameObject;
             _boot.CanRestart = null;
@@ -158,6 +178,7 @@ namespace ProjectFossil.Net
         {
             SaveName();
             if (!EnsureNetwork()) return;
+            Challenge.Current = ChallengeLevel.Hard;
             _address = string.IsNullOrWhiteSpace(_address) ? "127.0.0.1" : _address.Trim();
             PlayerPrefs.SetString(AddressKey, _address);
             NetRole.IsFollower = true; // animals that arrive from now on are the host's
@@ -627,7 +648,14 @@ namespace ProjectFossil.Net
             GUILayout.EndHorizontal();
             DrawConditionsChoice();
             GUILayout.Space(8);
-            if (GUILayout.Button("Play solo", _button, GUILayout.Height(40))) PlaySolo();
+            if (_pickingChallenge)
+            {
+                DrawChallengeChoice();
+                GUI.enabled = true;
+                GUILayout.EndArea();
+                return;
+            }
+            if (GUILayout.Button("Play solo", _button, GUILayout.Height(40))) _pickingChallenge = true;
             GUILayout.Space(6);
             if (GUILayout.Button("Host a co-op game", _button, GUILayout.Height(40))) Host();
             GUILayout.Space(10);
@@ -651,6 +679,20 @@ namespace ProjectFossil.Net
                 BackToMenu(null);
             }
             GUILayout.EndArea();
+        }
+
+        // Solo only: how hard the island fights. Co-op always plays it as tuned (Hard).
+        private void DrawChallengeChoice()
+        {
+            GUILayout.Label("How hard?", _label);
+            foreach (ChallengeLevel level in new[] { ChallengeLevel.Easy, ChallengeLevel.Medium, ChallengeLevel.Hard })
+            {
+                if (GUILayout.Button(Challenge.Label(level), _button, GUILayout.Height(38))) PlaySolo(level);
+                GUILayout.Label(Challenge.Describe(level), _label);
+                GUILayout.Space(2);
+            }
+            GUILayout.Space(4);
+            if (GUILayout.Button("Back", GUILayout.Height(26))) _pickingChallenge = false;
         }
 
         // Time of day and weather for the islands this player starts (solo or hosting). Joiners get the host's.

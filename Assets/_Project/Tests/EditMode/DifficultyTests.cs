@@ -221,5 +221,40 @@ namespace ProjectFossil.Tests.EditMode
             Assert.Greater(t.TargetAlive(20, 300f, 1f), 20);
             Assert.AreEqual(30, t.TargetAlive(20, 100000f, 1f));
         }
+    
+        // Solo levels: Hard is the game as tuned (what co-op plays); each easier level is gentler on every knob.
+        [Test]
+        public void Challenge_HardIsAsTuned_AndEasierLevelsAreGentler()
+        {
+            var hard = ChallengeLevel.Hard;
+            Assert.AreEqual(1f, Challenge.Director(hard));
+            Assert.AreEqual(0f, Challenge.ExtraGrace(hard));
+            Assert.AreEqual(1f, Challenge.DinosaurDamage(hard));
+            Assert.AreEqual(1f, Challenge.DinosaurHealth(hard));
+            Assert.AreEqual(1f, Challenge.Wildlife(hard));
+            Assert.AreEqual(1f, Challenge.StalkerDelay(hard));
+
+            ChallengeLevel[] easierFirst = { ChallengeLevel.Easy, ChallengeLevel.Medium, ChallengeLevel.Hard };
+            for (int i = 1; i < easierFirst.Length; i++)
+            {
+                ChallengeLevel a = easierFirst[i - 1], b = easierFirst[i];
+                Assert.Less(Challenge.Director(a), Challenge.Director(b));
+                Assert.Greater(Challenge.ExtraGrace(a), Challenge.ExtraGrace(b));
+                Assert.Less(Challenge.DinosaurDamage(a), Challenge.DinosaurDamage(b));
+                Assert.Less(Challenge.DinosaurHealth(a), Challenge.DinosaurHealth(b));
+                Assert.Less(Challenge.Wildlife(a), Challenge.Wildlife(b));
+                Assert.Greater(Challenge.StalkerDelay(a), Challenge.StalkerDelay(b));
+            }
+        }
+
+        [Test]
+        public void Challenge_EasyStartsTheDirectorLater()
+        {
+            var settings = ScriptableObject.CreateInstance<DirectorSettings>();
+            float hardFirst = settings.gracePeriod;
+            float easyBaseline = Challenge.Director(ChallengeLevel.Easy);
+            float easyFirst = settings.gracePeriod / Mathf.Max(0.5f, easyBaseline) + Challenge.ExtraGrace(ChallengeLevel.Easy);
+            Assert.Greater(easyFirst, hardFirst + 60f);
+        }
     }
 }

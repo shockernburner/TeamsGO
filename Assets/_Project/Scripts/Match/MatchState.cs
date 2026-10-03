@@ -113,6 +113,7 @@ namespace ProjectFossil.Match
     public class MatchStats
     {
         public int         Seed;
+        public ChallengeLevel Challenge = ChallengeLevel.Hard;
         public MatchResult Result;
         public float       TimeSurvived;
         public int         CoinsEarned;
