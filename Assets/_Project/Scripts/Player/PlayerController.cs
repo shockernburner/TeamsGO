@@ -252,9 +252,11 @@ namespace ProjectFossil.Player
 
         private void HandleLook()
         {
-            transform.Rotate(Vector3.up, _lookInput.x * mouseSensitivity, Space.World);
+            float sens = mouseSensitivity * GameSettings.Sensitivity;   // the player's setting on top of the tuning
+            float lookY = GameSettings.InvertY ? -_lookInput.y : _lookInput.y;
+            transform.Rotate(Vector3.up, _lookInput.x * sens, Space.World);
 
-            _pitch = Mathf.Clamp(_pitch - _lookInput.y * mouseSensitivity, verticalClampMin, verticalClampMax);
+            _pitch = Mathf.Clamp(_pitch - lookY * sens, verticalClampMin, verticalClampMax);
             if (cameraTarget != null)
                 cameraTarget.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
         }

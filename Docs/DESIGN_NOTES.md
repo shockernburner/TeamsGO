@@ -621,3 +621,16 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - The project's base particle material saves no properties, so new materials made from it were opaque and drew
   rain as dark specks. The pack rain and the simple fallback streaks are both set to transparent now.
 - Checked in Play mode in Rain and Storm: no pink, follows the camera, reads as slanted soft rain with splashes.
+
+## 2026-10-03 — TETHER: Primal, phase 1 begins
+
+- Name decided: the franchise is **TETHER**, this game **TETHER: Primal** (plan: the "road to launch" doc). The start
+  menu shows the new title and the tagline "Survive together. Quietly." Code namespaces stay ProjectFossil.
+- Settings (start menu and Esc menu): graphics quality, resolution and full screen (built game only), volume,
+  mouse sensitivity, invert Y, field of view, show FPS. Saved in PlayerPrefs (`GameSettings`), applied live;
+  `SettingsPanel` draws the same page in both menus. Quit on the start menu in a built game.
+- The map edge is always sea: the coast warp could push a headland off the 1000 m terrain, where it stopped in a
+  sheer cut over nothing (seed 151223964, from a play test video). A border falloff, wobbled by noise so coasts
+  stay natural, keeps the outer band sea; `Island_NeverReachesTheMapEdge` checks 13 seeds.
+- Dinosaurs within 4 m of the player block the camera, so a bite from behind no longer puts the camera inside
+  the animal.

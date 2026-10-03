@@ -68,7 +68,7 @@ namespace ProjectFossil.Net
 
         private readonly Dictionary<int, NetAvatar> _avatars = new Dictionary<int, NetAvatar>(); // host: by client id
 
-        private GUIStyle _title, _button, _label, _field, _hud;
+        private GUIStyle _title, _tagline, _button, _label, _field, _hud;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
@@ -639,10 +639,16 @@ namespace ProjectFossil.Net
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 235, 400, 470);
+            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 250, 400, 500);
+            if (_showSettings)
+            {
+                if (SettingsPanel.Draw(area)) _showSettings = false;
+                return;
+            }
             GUILayout.BeginArea(area, GUI.skin.box);
-            GUILayout.Label("PROJECT FOSSIL", _title);
-            GUILayout.Space(10);
+            GUILayout.Label(GameTitle, _title);
+            GUILayout.Label("Survive together. Quietly.", _tagline);
+            GUILayout.Space(6);
 
             bool busy = _mode != Mode.Menu;
             GUI.enabled = !busy;
@@ -682,8 +688,16 @@ namespace ProjectFossil.Net
                 StopNetwork();
                 BackToMenu(null);
             }
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Settings", GUILayout.Height(28))) _showSettings = true;
+            if (!Application.isEditor && GUILayout.Button("Quit", GUILayout.Height(28))) Application.Quit();
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
+
+        public const string GameTitle = "TETHER: PRIMAL";
+        private bool _showSettings;
 
         // Solo only: how hard the island fights. Co-op always plays it as tuned (Hard).
         private void DrawChallengeChoice()
@@ -736,6 +750,8 @@ namespace ProjectFossil.Net
             _field  = new GUIStyle(GUI.skin.textField) { fontSize = 16, alignment = TextAnchor.MiddleLeft };
             _hud    = new GUIStyle(GUI.skin.label)  { fontSize = 12, alignment = TextAnchor.MiddleCenter };
             _title.normal.textColor = new Color(1f, 0.85f, 0.45f);
+            _tagline = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Italic, alignment = TextAnchor.MiddleCenter };
+            _tagline.normal.textColor = new Color(1f, 1f, 1f, 0.7f);
         }
 
         // This computer's address on the local network, for a friend on the same Wi-Fi to type in.
