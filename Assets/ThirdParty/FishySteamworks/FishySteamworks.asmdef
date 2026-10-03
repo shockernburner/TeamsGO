@@ -1,15 +1,8 @@
 {
-    "name": "ProjectFossil.Net",
-    "rootNamespace": "ProjectFossil.Net",
+    "name": "FishySteamworks",
     "references": [
         "FishNet.Runtime",
-        "FishySteamworks",
-        "com.rlabrecque.steamworks.net",
-        "ProjectFossil.Core",
-        "ProjectFossil.Dinosaurs",
-        "ProjectFossil.Player",
-        "ProjectFossil.Match",
-        "ProjectFossil.Economy"
+        "com.rlabrecque.steamworks.net"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

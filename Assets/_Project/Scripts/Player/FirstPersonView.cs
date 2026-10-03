@@ -29,7 +29,7 @@ namespace ProjectFossil.Player
         private PlayerVisual     _visual;
         private Vector3          _thirdLocal;
         private Quaternion       _thirdRot;
-        private float            _thirdNear, _thirdFov;
+        private float            _thirdNear;
         private bool             _wanted = true;
 
         // Viewmodel
@@ -54,7 +54,6 @@ namespace ProjectFossil.Player
             _thirdLocal = cam.transform.localPosition;
             _thirdRot   = cam.transform.localRotation;
             _thirdNear  = cam.nearClipPlane;
-            _thirdFov   = cam.fieldOfView;
             _wanted = PlayerPrefs.GetInt(PrefKey, 1) == 1;
         }
 
@@ -99,6 +98,9 @@ namespace ProjectFossil.Player
             bool alive = _controller == null || _controller.Health == null || _controller.Health.IsAlive;
             bool fp = _wanted && alive && _controller != null && _controller.enabled;
             if (fp != IsFirstPerson || (_visual != null && !_visualApplied)) Apply(fp);
+            // The settings' field of view, followed live (first person keeps its wider view, moved by the same amount).
+            float wantFov = IsFirstPerson ? FirstPersonFov : GameSettings.FieldOfView;
+            if (!Mathf.Approximately(_cam.fieldOfView, wantFov)) _cam.fieldOfView = wantFov;
             if (!IsFirstPerson) return;
 
             _cam.transform.localPosition = eyeOffset;
@@ -109,6 +111,8 @@ namespace ProjectFossil.Player
 
         private bool _visualApplied;
 
+        private float FirstPersonFov => fieldOfView + (GameSettings.FieldOfView - GameSettings.DefaultFov);
+
         private void Apply(bool fp)
         {
             IsFirstPerson = fp;
@@ -118,7 +122,7 @@ namespace ProjectFossil.Player
             if (_cam != null)
             {
                 _cam.nearClipPlane = fp ? nearClip : _thirdNear;
-                _cam.fieldOfView   = fp ? fieldOfView : _thirdFov;
+                _cam.fieldOfView   = fp ? FirstPersonFov : GameSettings.FieldOfView;
                 if (!fp)
                 {
                     _cam.transform.localPosition = _thirdLocal;
@@ -394,10 +398,11 @@ namespace ProjectFossil.Player
             DrawDot();
         }
 
-        // Development builds and the Editor: frames per second, top right, to spot slowdowns in playtests.
+        // Frames per second, bottom right: always in the Editor and development builds, in a release build when the
+        // player turns on Show FPS in the settings.
         private void DrawFrameRate()
         {
-            if (!Application.isEditor && !Debug.isDebugBuild) return;
+            if (!Application.isEditor && !Debug.isDebugBuild && !GameSettings.ShowFps) return;
             GUI.color = _fps >= 45f ? new Color(0.6f, 1f, 0.6f, 0.8f) : _fps >= 25f ? new Color(1f, 0.9f, 0.4f, 0.9f) : new Color(1f, 0.4f, 0.35f, 0.95f);
             GUI.Label(new Rect(Screen.width - 70f, Screen.height - 24f, 66f, 20f), $"{Mathf.RoundToInt(_fps)} fps");
             GUI.color = Color.white;

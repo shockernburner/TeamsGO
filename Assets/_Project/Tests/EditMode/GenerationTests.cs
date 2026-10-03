@@ -393,6 +393,30 @@ namespace ProjectFossil.Tests.EditMode
 
         // No walls: on the game's island every step between two dry vertices is one feet and the NavMesh can
         // climb (a survivor got stuck between sheer faces beside a stream, with dinosaurs waiting above and below).
+        // A headland once ran off the map's edge in a sheer cut over nothing (seed 151223964): a survivor swam out
+        // past it and a dinosaur stood on the water beside them. The outer band of the map is always sea.
+        [Test]
+        public void Island_NeverReachesTheMapEdge()
+        {
+            var s = MakeSettings(257);
+            s.worldSize = 1000f;
+            s.maxHeight = 150f;
+            s.noiseScale = 0.0045f;
+            foreach (int seed in new[] { 151223964, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 })
+            {
+                var data = new IslandGenerator(seed, s).Generate();
+                int n = data.Resolution, band = Mathf.CeilToInt(n * 0.05f);
+                float worst = 0f;
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        if (x >= band && y >= band && x < n - band && y < n - band) continue;
+                        worst = Mathf.Max(worst, data.Heightmap[y, x]);
+                    }
+                Assert.Less(worst, s.seaLevel, $"Seed {seed}: land {worst * s.maxHeight:F1} m high within 5% of the map edge");
+            }
+        }
+
         [Test]
         public void WaterField_GroundIsClimbable_OnTheGamesIsland()
         {

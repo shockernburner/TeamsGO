@@ -33,6 +33,7 @@ namespace ProjectFossil.UI
         private bool _menuOpen;     // the Esc menu
         private bool _paused;       // ...and whether it stopped the game (solo only)
         private bool _confirmLeave;
+        private bool _showSettings; // the Esc menu's settings page
         private string _shopMessage;
         private Vector2 _shopScroll;
 
@@ -216,6 +217,7 @@ namespace ProjectFossil.UI
             if (open == _menuOpen) return;
             _menuOpen     = open;
             _confirmLeave = false;
+            _showSettings = false;
             if (open && _shopOpen) { _shopOpen = false; _shopMessage = null; }
 
             bool pause = open && _bootstrap != null && _bootstrap.AllowsPause;
@@ -234,13 +236,21 @@ namespace ProjectFossil.UI
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var area = new Rect(Screen.width * 0.5f - 160, Screen.height * 0.5f - 120, 320, 240);
+            if (_showSettings)
+            {
+                var panel = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 230, 400, 460);
+                if (SettingsPanel.Draw(panel)) _showSettings = false;
+                return;
+            }
+            var area = new Rect(Screen.width * 0.5f - 160, Screen.height * 0.5f - 140, 320, 280);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(_paused ? "PAUSED" : "MENU", _big);
             GUILayout.Label(_paused ? "The island waits for you." : "Co-op can't pause: the island keeps going for your team.", _small);
             GUILayout.Space(10);
             if (GUILayout.Button("Resume  [Esc]", GUILayout.Height(40))) SetMenu(false);
-            GUILayout.Space(8);
+            GUILayout.Space(6);
+            if (GUILayout.Button("Settings", GUILayout.Height(30))) _showSettings = true;
+            GUILayout.Space(6);
             if (!_confirmLeave)
             {
                 if (GUILayout.Button("Leave match", GUILayout.Height(34))) _confirmLeave = true;
