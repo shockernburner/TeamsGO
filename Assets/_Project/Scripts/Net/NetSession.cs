@@ -47,6 +47,9 @@ namespace ProjectFossil.Net
         private enum Mode { Menu, Solo, StartingHost, Hosting, Joining, Joined }
 
         public MatchManager Match => _boot != null ? _boot.Match : null;
+        // Proximity voice and dinosaurs that hear it (lives beside this session, works in solo too).
+        public VoiceChat Voice => _voice != null ? _voice : (_voice = GetComponent<VoiceChat>() ?? gameObject.AddComponent<VoiceChat>());
+        private VoiceChat _voice;
         // What teammates see over this player's head and in team messages.
         public string PlayerName { get; private set; }
         public bool IsOnline => _mode == Mode.Hosting || _mode == Mode.Joined || _mode == Mode.StartingHost || _mode == Mode.Joining;
@@ -87,6 +90,7 @@ namespace ProjectFossil.Net
         private void Awake()
         {
             Instance = this;
+            _ = Voice;
             _boot = GetComponent<MatchBootstrap>();
             _soloDinosaur = _boot != null ? _boot.dinosaurPrefab : null;
             _address = PlayerPrefs.GetString(AddressKey, "127.0.0.1");
@@ -331,6 +335,7 @@ namespace ProjectFossil.Net
             _net.ClientManager.RegisterBroadcast<AnnounceMessage>(OnAnnounce);
             _net.ClientManager.RegisterBroadcast<LiftOffMessage>(OnLiftOff);
             _net.ClientManager.RegisterBroadcast<FlareMessage>(OnFlare);
+            Voice.Attach(_net);
             return true;
         }
 

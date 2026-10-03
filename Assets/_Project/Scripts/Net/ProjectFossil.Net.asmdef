@@ -3,6 +3,7 @@
     "rootNamespace": "ProjectFossil.Net",
     "references": [
         "FishNet.Runtime",
+        "Unity.InputSystem",
         "FishySteamworks",
         "com.rlabrecque.steamworks.net",
         "ProjectFossil.Core",
