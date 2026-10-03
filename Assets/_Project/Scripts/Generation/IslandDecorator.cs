@@ -475,6 +475,11 @@ namespace ProjectFossil.Generation
 
         // Sizes match the primitives they replace: trees ~7 m, rocks ~1.5 m across, plants ~1.2 m, at scale 1.
         private const float TreeHeight = 7f, RockWidth = 1.5f, PlantHeight = 1.2f;
+        // Rocks lower than this above the ground get no collider. The NavMesh climbs anything 0.75 m high, and on a
+        // slope it climbed onto taller boxes from the uphill side, so paths ran straight over stones and stumps that
+        // the survivor (who steps 0.3 m) walked into and stuck on. A stump's box also takes in its spreading roots,
+        // so it stands taller than it looks: up to hip height, walk over it.
+        private const float WalkOverHeight = 1.0f;
         // Low, spreading plants (banana leaves, big ferns) scaled up to plant height become leaves metres wide
         // that fill the screen when you crawl past. No plant gets wider than this at scale 1.
         private const float PlantMaxWidth = 1.8f;
@@ -494,6 +499,10 @@ namespace ProjectFossil.Generation
 
             var go = Object.Instantiate(prefab, root, false);
             go.name = prefab.name;
+            // Only the colliders added below count. Bought models bring their own: a banyan's was a 4.5 m wide,
+            // 15 m tall capsule round a much thinner trunk, and plants meant to be walk-through came with capsules,
+            // so the survivor stopped against nothing in open forest. Immediate: the NavMesh bakes this frame.
+            foreach (var c in go.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
             // A plant or tree made only of cards spins as you walk round it: leave it out.
             {
                 var group = go.GetComponentInChildren<LODGroup>();
@@ -536,13 +545,13 @@ namespace ProjectFossil.Generation
                 col.height = b.size.y * 0.5f;
                 col.center = new Vector3(0f, b.min.y + col.height * 0.5f, 0f);
             }
-            else if (inst.Kind == ScatterKind.Rock)
+            else if (inst.Kind == ScatterKind.Rock && b.size.y * s * 0.8f >= WalkOverHeight)
             {
                 var col = go.AddComponent<BoxCollider>();
                 col.center = b.center;
                 col.size   = b.size;
             }
-            else
+            else if (inst.Kind != ScatterKind.Rock)
             {
                 var renderers = go.GetComponentsInChildren<Renderer>();
                 foreach (var r in renderers)
@@ -593,6 +602,12 @@ namespace ProjectFossil.Generation
                     for (int i = levels.Length - 2; i >= 0; i--)
                         levels[i].screenRelativeTransitionHeight = Mathf.Max(levels[i].screenRelativeTransitionHeight,
                                                                              levels[i + 1].screenRelativeTransitionHeight + 0.001f);
+                    // Some bought trees ship levels above 1 (2.1, 1.5, ...: their near levels never show). SetLODs
+                    // clamps those to 1, finds two equal levels and refuses the lot, a thousand errors per island.
+                    levels[0].screenRelativeTransitionHeight = Mathf.Min(levels[0].screenRelativeTransitionHeight, 1f);
+                    for (int i = 1; i < levels.Length; i++)
+                        levels[i].screenRelativeTransitionHeight = Mathf.Min(levels[i].screenRelativeTransitionHeight,
+                                                                             levels[i - 1].screenRelativeTransitionHeight - 0.001f);
                     own.SetLODs(levels);
                 }
                 own.RecalculateBounds();

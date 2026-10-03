@@ -23,7 +23,7 @@ namespace ProjectFossil.Director
         private float _nextDecision;
 
         public AIDirectorBrain(ThreatDirector director, DirectorSettings settings, ThreatBuyer buyer,
-                               RNGService rng, float matchDuration, float baseline = 1f)
+                               RNGService rng, float matchDuration, float baseline = 1f, float extraGrace = 0f)
         {
             _director      = director;
             _settings      = settings;
@@ -32,7 +32,7 @@ namespace ProjectFossil.Director
             _matchDuration = matchDuration > 0f ? matchDuration : 1f;
             Intensity      = baseline;
             // Higher-ranked players get a shorter quiet start.
-            _nextDecision  = settings.gracePeriod / (baseline > 0.5f ? baseline : 0.5f);
+            _nextDecision  = settings.gracePeriod / (baseline > 0.5f ? baseline : 0.5f) + (extraGrace > 0f ? extraGrace : 0f);
 
             if (settings.startingBudget > 0) buyer.Wallet.Earn(settings.startingBudget);
         }

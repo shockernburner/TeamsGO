@@ -513,3 +513,78 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   are off under a photo. Without the download the drawn sky stays.
 - The Console now says at match start which sky and which rain are in use.
 - `Project Fossil > Co-op > Build for Windows` builds a Windows copy on the Mac for a friend's laptop.
+
+## 2026-10-02 — No more walls on mountains (10.57 PM recording)
+
+- The survivor got stuck halfway up a mountain with dinosaurs waiting above and below. Cause: the water pass cut
+  stream banks down to a gentle slope for 14 m and left the hillside beyond untouched, so a sheer step (up to 80
+  degrees) stood where they met. The ridge noise made a few more. Neither feet nor the NavMesh climb over 45
+  degrees, so the fold between two such faces was a trap.
+- Ground is now never steeper than about 45 degrees (`WaterField.MaxGroundGrade`): every step is eased back from
+  the lowest ground up, keeping each bed and the levee the water needs. A test checks it across seeds.
+- Ground steeper than the controller's slope limit now slides the survivor down instead of holding them.
+- A dinosaur that has had no path to its target for 10 s gives up, wanders off and leaves that survivor alone for
+  15 s, instead of camping at the foot of the slope.
+
+## 2026-10-03 — Island audit: a tester that walks every seed
+
+- `Project Fossil > Audit > Run Island Audit` (in Play mode), or from the terminal `unity cmd fossil_audit
+  --seeds 1,2,3`, then `unity cmd fossil_audit_status`. For each seed it generates the island, walks the survivor
+  from the spawn to every extraction along the NavMesh (scripted input through `PlayerController.ScriptedMove`),
+  notes where it gets stuck, checks every actor against IslandWorld ground and every dinosaur against deep water,
+  times the frames and saves pictures (top-down, four corners, behind the spawn, the player's eye, every arrival
+  and every stuck spot). Report and pictures go to `Logs/FossilAudit/<time>/` (not in git).
+  `unity cmd fossil_snapshot` saves the player's view and returns position, ground, water, health and nearby
+  dinosaurs, for play-testing from the terminal.
+- A long NavMesh path can come back partial only because the search ran out of nodes; the audit walks to its
+  end and plans again, and calls a spot unreachable only when the new plan gets no closer.
+- First run found dinosaurs grazing on the sea floor up to 7 m under the waves: only lakes and streams were
+  fenced off from the NavMesh. The sea now counts, and a block is fenced off when any of its vertices is deeper
+  than a dinosaur can wade (the centre alone let them wade chest-deep along every shore).
+- Dinosaurs on sharp ridges and rounded hills sank up to 3 m into the ground: the NavMesh the agent walks on is
+  simplified and runs under the real ground. The NavMesh now builds its height mesh, and the body is lifted onto
+  IslandWorld ground wherever the agent is still below it (`DinosaurFeedback.GroundLift`).
+- The survivor stopped against nothing in open forest. Bought models bring their own colliders (a banyan's is a
+  4.5 m wide, 15 m tall capsule round a much thinner trunk; plants meant to be walk-through came with capsules).
+  The decorator now strips them and adds only its own: a trunk capsule for trees, a box for rocks.
+- Rocks lower than 0.75 m get no collider: the NavMesh climbs anything that low, so paths ran straight over
+  knee-high stones and stumps the survivor (who steps 0.3 m) walked into.
+- Bought trees whose LOD heights are above 1 made `SetLODs` refuse the whole group, a thousand Console errors per
+  island, and those trees never got their far cut-off. The heights are clamped first.
+- Caches stand on IslandWorld ground (a ray from above could land them on a tree or rock) and sink into a slope
+  until the downhill corners touch, instead of hanging half in the air. The audit checks it.
+- After these, seeds 1-16 and a random seed: every extraction reached, no stuck spots, no dinosaur in deep water
+  or under the ground, no floating cache, no Console errors.
+- The new climbable-ground test failed on seed 3: an 82-degree step was left where a levee holding a lake up
+  (which may not be lowered) met hillside that had been cut down. Easing only lowered ground, so nothing could
+  fix it. A second pass now raises dry ground below such a step until it is climbable. `unity cmd
+  fossil_slope_check --seeds 0,1,2` reports the steepest step per seed with the game's own settings: before, seed
+  3 had 80 walls and seed 4 had 8; after, seeds 0-11 top out at 44 degrees. All 123 EditMode tests pass.
+
+## 2026-10-03 — Solo difficulty and the Esc menu
+
+- "Play solo" now asks Easy, Medium or Hard (`Match/Challenge`). Hard is the game as tuned, and co-op always
+  plays Hard. Easy and Medium scale the director's intensity, its quiet start (+90 s / +40 s), dinosaur damage and
+  health, wildlife count and when Ironjaw comes out, on top of the Survivor Rank.
+- Esc opens a menu at any point in a match: Resume, or Leave match (confirmed) back to the start menu. Solo, the
+  island pauses while it's open; co-op can't pause, so it just blocks your input. The results screen also has
+  "Main menu". Leaving takes the island down and drops the connection; the match doesn't count.
+- Tested in Play mode: each difficulty starts (Easy shows fewer animals), Esc pauses (match clock, audio and input
+  stop) and Esc resumes, Leave goes back to the start menu with the island, player and match gone, and a new solo
+  game starts after it.
+- On the start menu and after leaving there is no player camera, so Unity logged "no audio listeners" every
+  frame. `MatchBootstrap` now keeps a stand-in listener that is on only while there is no player.
+
+## 2026-10-03 — Real caches: a chest, and ruins
+
+- Caches were yellow placeholder boxes: their model definitions pointed at the Pirate Kit chests only after a
+  manual menu step, and those files' `.meta` were never committed, so the link could not survive in git.
+- Supply caches are now a closed chest and ruin stashes a small ruin, both from Quaternius' CC0 Ultimate Modular
+  Ruins Pack (the whole pack came from Poly Pizza as one GLB; Google Drive was over its download quota).
+  `Tools/glb2obj.py` converts the pieces used to OBJ, which Unity imports without a package. Files, `.meta`,
+  the `RuinStash` prefab and both model definitions are committed, so they work on every machine at once.
+- A ruin stash: the chest in front of a broken overgrown arch, a short column, a fallen wall and broken pots.
+  Stone pieces have box colliders. `GroundedParts` settles each piece onto the slope where the stash lands (on a
+  ridge the arch half sinks in, like an old ruin). `Project Fossil > Art > Build Cache Models` rebuilds the prefab.
+- A tree stump's box takes in its spreading roots, and on a slope the NavMesh climbed onto it from uphill: the
+  survivor stuck on one. Rocks and stumps under 1 m now have no collider (was 0.75 m).

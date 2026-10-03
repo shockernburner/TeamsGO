@@ -1,0 +1,13 @@
+newmtl Highlights
+Kd 0.5748 0.5800 0.5127
+Ks 0 0 0
+newmtl Main
+Kd 0.4353 0.4392 0.3882
+Ks 0 0 0
+newmtl Green
+Kd 0.3272 0.4267 0.2714
+Ks 0 0 0
+newmtl Leaf_Texture
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+map_Kd Leaf_Texture.png

@@ -1,0 +1,9 @@
+newmtl Metal
+Kd 0.3442 0.3531 0.3800
+Ks 0 0 0
+newmtl DarkWood
+Kd 0.3267 0.2671 0.1829
+Ks 0 0 0
+newmtl Wood
+Kd 0.4274 0.3565 0.2519
+Ks 0 0 0

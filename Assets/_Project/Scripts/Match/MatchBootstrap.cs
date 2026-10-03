@@ -48,10 +48,41 @@ namespace ProjectFossil.Match
 
         public bool AllowsRestart => CanRestart == null || CanRestart();
 
+        // Set by the start menu. Whether the in-match menu may pause the game (solo only: in co-op the island
+        // keeps going for everyone), and what "Leave match" does (back to the start menu).
+        public System.Func<bool> CanPause;
+        public System.Action LeaveRequested;
+        public bool AllowsPause => CanPause == null || CanPause();
+
+        // Takes the current island down: player, terrain with everything on it, and the match.
+        public void Leave()
+        {
+            if (Match != null) Match.Abandon();
+            if (_player != null)
+            {
+                _player.SetActive(false);
+                Destroy(_player);
+                _player = null;
+            }
+            IslandTerrainBuilder.DestroyExisting();
+            IslandWorld.SetCurrent(null);
+        }
+
         private void Start()
         {
             if (holdStart) return;
             StartSolo();
+        }
+
+        // On the start menu (and after leaving a match) there is no player and so no camera to hear with; Unity
+        // then complained every frame. This ear stands in until a player arrives, and steps aside for theirs.
+        private AudioListener _menuEar;
+
+        private void LateUpdate()
+        {
+            if (_menuEar == null) _menuEar = gameObject.AddComponent<AudioListener>();
+            bool needed = _player == null || !_player.activeInHierarchy;
+            if (_menuEar.enabled != needed) _menuEar.enabled = needed;
         }
 
         public void StartSolo()
@@ -145,11 +176,19 @@ namespace ProjectFossil.Match
                         bool deep = false; float bed = 0f, top = 0f;
                         if (bx < blocks)
                         {
-                            int cx = bx * block + block / 2, cz = bz * block + block / 2;
-                            float w = world.WaterAtVertex(cx, cz);
-                            bed  = world.GroundAtVertex(cx, cz);
-                            top  = w;
-                            deep = !float.IsNaN(w) && w - bed > DinosaurWadeDepth;
+                            // Deep if any vertex of the block is: the centre alone let dinosaurs wade chest-deep
+                            // along every shore. The sea counts too: without it the whole sea floor round the island
+                            // was walkable, and dinosaurs wandered off the beach to graze seven metres under the waves.
+                            bed = float.MaxValue; top = float.MinValue;
+                            for (int vz = bz * block; vz <= (bz + 1) * block; vz++)
+                            for (int vx = bx * block; vx <= (bx + 1) * block; vx++)
+                            {
+                                float w = world.WaterAtVertex(vx, vz);
+                                float g = world.GroundAtVertex(vx, vz);
+                                float s = float.IsNaN(w) ? world.SeaLevel : Mathf.Max(w, world.SeaLevel);
+                                bed = Mathf.Min(bed, g); top = Mathf.Max(top, s);
+                                if (s - g > DinosaurWadeDepth) deep = true;
+                            }
                         }
                         if (deep)
                         {
@@ -178,6 +217,9 @@ namespace ProjectFossil.Match
 
             surface.collectObjects = CollectObjects.All;
             surface.useGeometry    = NavMeshCollectGeometry.PhysicsColliders;
+            // Agents stand on the NavMesh, whose polygons are simplified and cut up to a metre under rounded hills;
+            // the height mesh follows the real ground, so dinosaurs no longer sink to the knees on slopes.
+            surface.buildHeightMesh = true;
             surface.BuildNavMesh();
         }
 

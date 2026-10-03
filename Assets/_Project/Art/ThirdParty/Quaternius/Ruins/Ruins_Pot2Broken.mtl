@@ -1,0 +1,6 @@
+newmtl Pot_Main
+Kd 0.6364 0.5337 0.3497
+Ks 0 0 0
+newmtl Pot_Detail
+Kd 0.6933 0.3491 0.2691
+Ks 0 0 0

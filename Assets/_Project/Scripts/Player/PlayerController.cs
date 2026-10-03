@@ -56,6 +56,10 @@ namespace ProjectFossil.Player
         public float swimDepth = 1.3f;
         public float swimSpeed = 2.2f;
 
+        [Header("Slopes")]
+        [Tooltip("Metres per second down ground too steep to stand on, so nobody sticks halfway up a mountain")]
+        public float slideSpeed = 5f;
+
         // ── State ─────────────────────────────────────────────────────────────
         public StaminaModel StaminaModel { get; private set; }
         public float  Stamina     => StaminaModel.Current;
@@ -86,6 +90,9 @@ namespace ProjectFossil.Player
         public float Concealment { get; private set; }
         public bool  InCover  => Concealment >= ViewBlockers.CoverAt;
         public bool  IsHidden => Concealment >= ViewBlockers.HiddenAt && Stance != Stance.Standing;
+
+        // Tools (the island audit) walk the survivor by setting this; null hands control back to the player.
+        [System.NonSerialized] public Vector2? ScriptedMove;
 
         // Set by UI (shop, results screen) to freeze movement/look and free the cursor.
         public bool InputBlocked
@@ -236,6 +243,7 @@ namespace ProjectFossil.Player
                 _lookInput   = Vector2.zero;
                 _jumpPressed = false;
             }
+            if (ScriptedMove.HasValue) _moveInput = ScriptedMove.Value;
 
             HandleLook();
             HandleMovement();
@@ -278,8 +286,35 @@ namespace ProjectFossil.Player
             _jumpPressed        = false;
 
             Vector3 before = transform.position;
-            _cc.Move((HorizontalMove() + Vector3.up * _verticalVelocity) * Time.deltaTime);
+            Vector3 slide  = SlopeSlide();
+            Vector3 walk   = HorizontalMove();
+            if (slide != Vector3.zero)
+            {
+                // No walking up it; across or down is fine.
+                Vector3 downhill = slide.normalized;
+                float up = Vector3.Dot(walk, downhill);
+                if (up < 0f) walk -= downhill * up;
+            }
+            _cc.Move((walk + slide + Vector3.up * _verticalVelocity) * Time.deltaTime);
             StayInShallowWater(before);
+        }
+
+        // On ground steeper than the controller's slope limit the CharacterController neither climbs nor slides:
+        // gravity just presses it into the face, and in a fold between two steep faces it was stuck for good.
+        // Slide down instead. Reads the island's own ground (rocks and props are left to the controller).
+        private Vector3 SlopeSlide()
+        {
+            var world = IslandWorld.Current;
+            if (world == null || IsSwimming) return Vector3.zero;
+            Vector3 p = transform.position;
+            if (p.y - world.GroundAt(p) > 0.4f) return Vector3.zero; // in the air, or standing on something
+            float c  = world.Cell;
+            float gx = (world.GroundAt(p + Vector3.right * c)   - world.GroundAt(p - Vector3.right * c))   / (2f * c);
+            float gz = (world.GroundAt(p + Vector3.forward * c) - world.GroundAt(p - Vector3.forward * c)) / (2f * c);
+            var   down  = new Vector3(-gx, 0f, -gz);
+            float grade = down.magnitude;
+            if (grade < Mathf.Tan((_cc.slopeLimit + 1f) * Mathf.Deg2Rad)) return Vector3.zero;
+            return down / grade * slideSpeed;
         }
 
         // The sea floor keeps going down; stop at chest depth instead of walking along the bottom.

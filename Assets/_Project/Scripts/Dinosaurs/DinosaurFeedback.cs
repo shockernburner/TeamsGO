@@ -20,6 +20,10 @@ namespace ProjectFossil.Dinosaurs
         private Transform _visual;
         private Vector3   _visualBasePos;
 
+        // How far the body is raised to stand on the island's ground. The NavMesh the root walks on is simplified
+        // and runs up to a couple of metres under sharp ridges and rounded hills, which sank dinosaurs to the belly.
+        public float GroundLift { get; private set; }
+
         private void Awake()
         {
             _ai = GetComponent<DinosaurAI>();
@@ -102,8 +106,12 @@ namespace ProjectFossil.Dinosaurs
             for (int i = 0; i < _materials.Length; i++)
                 _materials[i].color = Color.Lerp(_baseColors[i], tint, t);
 
-            if (_visual != null)
-                _visual.localPosition = _visualBasePos + Vector3.up * (rearHeight * rear);
+            if (_visual == null) return;
+            var world = IslandWorld.Current;
+            float under = world != null ? Mathf.Max(0f, world.GroundAt(transform.position) - transform.position.y) : 0f;
+            GroundLift = Mathf.MoveTowards(GroundLift, under, 6f * Time.deltaTime + Mathf.Max(0f, under - GroundLift - 0.5f));
+            _visual.localPosition = _visualBasePos + Vector3.up * (rearHeight * rear);
+            _visual.position += Vector3.up * GroundLift;
         }
     }
 }
