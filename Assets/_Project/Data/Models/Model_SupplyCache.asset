@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 01698656cdbe44bfa324478da1abf434, type: 3}
   m_Name: Model_SupplyCache
   m_EditorClassIdentifier: ProjectFossil.Core::ProjectFossil.Core.ModelDefinition
-  model: {fileID: 0}
+  model: {fileID: 919132149155446097, guid: fdb74ef5e488d445c9d409f0cc6991d8, type: 3}
   animator: {fileID: 0}
   attachments: []
   trimMeshes: []
   keepBones: []
-  height: 0.8
+  height: 0.9
   yawOffset: 0
   faceHeadForward: 0

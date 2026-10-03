@@ -569,3 +569,22 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - Esc opens a menu at any point in a match: Resume, or Leave match (confirmed) back to the start menu. Solo, the
   island pauses while it's open; co-op can't pause, so it just blocks your input. The results screen also has
   "Main menu". Leaving takes the island down and drops the connection; the match doesn't count.
+- Tested in Play mode: each difficulty starts (Easy shows fewer animals), Esc pauses (match clock, audio and input
+  stop) and Esc resumes, Leave goes back to the start menu with the island, player and match gone, and a new solo
+  game starts after it.
+- On the start menu and after leaving there is no player camera, so Unity logged "no audio listeners" every
+  frame. `MatchBootstrap` now keeps a stand-in listener that is on only while there is no player.
+
+## 2026-10-03 — Real caches: a chest, and ruins
+
+- Caches were yellow placeholder boxes: their model definitions pointed at the Pirate Kit chests only after a
+  manual menu step, and those files' `.meta` were never committed, so the link could not survive in git.
+- Supply caches are now a closed chest and ruin stashes a small ruin, both from Quaternius' CC0 Ultimate Modular
+  Ruins Pack (the whole pack came from Poly Pizza as one GLB; Google Drive was over its download quota).
+  `Tools/glb2obj.py` converts the pieces used to OBJ, which Unity imports without a package. Files, `.meta`,
+  the `RuinStash` prefab and both model definitions are committed, so they work on every machine at once.
+- A ruin stash: the chest in front of a broken overgrown arch, a short column, a fallen wall and broken pots.
+  Stone pieces have box colliders. `GroundedParts` settles each piece onto the slope where the stash lands (on a
+  ridge the arch half sinks in, like an old ruin). `Project Fossil > Art > Build Cache Models` rebuilds the prefab.
+- A tree stump's box takes in its spreading roots, and on a slope the NavMesh climbed onto it from uphill: the
+  survivor stuck on one. Rocks and stumps under 1 m now have no collider (was 0.75 m).

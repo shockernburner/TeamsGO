@@ -74,6 +74,17 @@ namespace ProjectFossil.Match
             StartSolo();
         }
 
+        // On the start menu (and after leaving a match) there is no player and so no camera to hear with; Unity
+        // then complained every frame. This ear stands in until a player arrives, and steps aside for theirs.
+        private AudioListener _menuEar;
+
+        private void LateUpdate()
+        {
+            if (_menuEar == null) _menuEar = gameObject.AddComponent<AudioListener>();
+            bool needed = _player == null || !_player.activeInHierarchy;
+            if (_menuEar.enabled != needed) _menuEar.enabled = needed;
+        }
+
         public void StartSolo()
         {
             int usedSeed = randomSeed ? Random.Range(0, int.MaxValue) : seed;

@@ -394,8 +394,7 @@ namespace ProjectFossil.Editor
                 RemapMaterials(path, "Props/");
                 models[System.IO.Path.GetFileNameWithoutExtension(path)] = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             }
-            AssignStatic("Model_SupplyCache", "Props/Prop_Chest_Closed.fbx");
-            AssignStatic("Model_RuinStash",   "Props/Prop_Chest_Gold.fbx");
+            CacheModelSetup.Run(); // caches use the ruins pack's chest and a ruin built round it
 
             var palms = new[] { "Environment_PalmTree_1", "Environment_PalmTree_2", "Environment_PalmTree_3" };
             var bones = Rocks.Append("Environment_LargeBones").ToArray();
@@ -405,16 +404,6 @@ namespace ProjectFossil.Editor
             SetBiome("BiomeDef_Swamp",    Get(dead.Concat(twisted).ToArray()),    Get(Rocks), Get("Fern_1", "Plant_1", "Grass_Wispy_Tall", "Mushroom_Common"));
             SetBiome("BiomeDef_Beach",    Get(models.ContainsKey(palms[0]) ? palms : pines), Get(Rocks), Get("Grass_Wispy_Tall"));
             SetBiome("BiomeDef_Volcanic", Get(dead),                              Get(bones.Append("Environment_Skulls").ToArray()), Get("Mushroom_Common"));
-        }
-
-        private static void AssignStatic(string defName, string modelFile)
-        {
-            var def = AssetDatabase.LoadAssetAtPath<ModelDefinition>($"{ModelData}/{defName}.asset");
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{Pack}/{modelFile}");
-            if (def == null || model == null) { Debug.LogWarning($"[ModelPackSetup] Can't set {defName} to {modelFile}."); return; }
-            def.model = model;
-            def.animator = null;
-            EditorUtility.SetDirty(def);
         }
 
         private static void SetBiome(string asset, GameObject[] trees, GameObject[] rocks, GameObject[] plants)

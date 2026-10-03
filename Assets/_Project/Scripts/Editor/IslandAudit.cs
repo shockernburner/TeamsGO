@@ -373,6 +373,7 @@ namespace ProjectFossil.Editor
 
             // ── Caches: resting on the ground, not hanging off a slope or perched on a tree ──
             int cacheShots = 0;
+            var shotKinds = new HashSet<string>();
             foreach (var cache in Object.FindObjectsByType<ProjectFossil.Economy.LootContainer>(FindObjectsSortMode.None))
             {
                 var col = cache.GetComponent<Collider>();
@@ -385,7 +386,7 @@ namespace ProjectFossil.Editor
                     gap = Mathf.Min(gap, bounds.min.y - world.GroundAt(corner));
                 }
                 if (gap > 0.25f) Note(r, "cache-floating", cache.transform.position, $"{cache.name}: lowest corner {gap:0.00} m above the ground");
-                if (cacheShots < 2)
+                if (cacheShots < 2 && shotKinds.Add(cache.name)) // one of each kind: supply cache, ruin stash
                 {
                     cacheShots++;
                     Vector3 cp = cache.transform.position, side = new Vector3(6f, 0f, 3f);

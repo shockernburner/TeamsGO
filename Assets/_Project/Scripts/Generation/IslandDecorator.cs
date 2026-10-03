@@ -475,9 +475,11 @@ namespace ProjectFossil.Generation
 
         // Sizes match the primitives they replace: trees ~7 m, rocks ~1.5 m across, plants ~1.2 m, at scale 1.
         private const float TreeHeight = 7f, RockWidth = 1.5f, PlantHeight = 1.2f;
-        // Rocks lower than this above the ground get no collider. The NavMesh climbs anything this low, so paths ran
-        // straight over knee-high stones and stumps that the survivor (who steps 0.3 m) walked into and stuck on.
-        private const float WalkOverHeight = 0.75f;
+        // Rocks lower than this above the ground get no collider. The NavMesh climbs anything 0.75 m high, and on a
+        // slope it climbed onto taller boxes from the uphill side, so paths ran straight over stones and stumps that
+        // the survivor (who steps 0.3 m) walked into and stuck on. A stump's box also takes in its spreading roots,
+        // so it stands taller than it looks: up to hip height, walk over it.
+        private const float WalkOverHeight = 1.0f;
         // Low, spreading plants (banana leaves, big ferns) scaled up to plant height become leaves metres wide
         // that fill the screen when you crawl past. No plant gets wider than this at scale 1.
         private const float PlantMaxWidth = 1.8f;
