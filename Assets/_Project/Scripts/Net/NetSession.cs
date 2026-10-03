@@ -133,7 +133,11 @@ namespace ProjectFossil.Net
 
         // ── Menu choices ───────────────────────────────────────────────────────
 
-        private void PlaySolo(ChallengeLevel level)
+        // On the start menu, not in a match or connecting.
+        public bool InMenu => _mode == Mode.Menu;
+
+        // The start menu's Play solo. Tools call it too (the island audit starts a solo match this way).
+        public void PlaySolo(ChallengeLevel level)
         {
             _pickingChallenge = false;
             Challenge.Current = level;

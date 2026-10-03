@@ -28,11 +28,50 @@ namespace ProjectFossil.Editor
     {
         public static AuditRunner Runner { get; internal set; }
 
+        private const string MenuSeeds = "1,2,3,4";
+        private const string PendingKey = "ProjectFossil.Audit.Pending";
+
+        // From the menu it does the whole thing: enters Play mode if needed, starts a solo match, then the audit.
         [MenuItem("Project Fossil/Audit/Run Island Audit (seeds 1-4)")]
         private static void RunFromMenu()
         {
-            if (!EditorApplication.isPlaying) { Debug.LogWarning("[Audit] Enter Play mode first."); return; }
-            Start("1,2,3,4", 3f, 0);
+            if (EditorApplication.isPlaying) { StartWhenReady(); return; }
+            // The match lives in the game's first scene (Bootstrap); open it if another scene is up.
+            if (Object.FindAnyObjectByType<MatchBootstrap>() == null)
+            {
+                var first = EditorBuildSettings.scenes.FirstOrDefault(sc => sc.enabled);
+                if (first == null) { Debug.LogWarning("[Audit] No scene in Build Settings to play."); return; }
+                if (!UnityEditor.SceneManagement.EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+                UnityEditor.SceneManagement.EditorSceneManager.OpenScene(first.path);
+            }
+            SessionState.SetBool(PendingKey, true); // survives the domain reload that entering Play mode does
+            EditorApplication.isPlaying = true;
+        }
+
+        [InitializeOnLoadMethod]
+        private static void ResumeAfterReload()
+        {
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state != PlayModeStateChange.EnteredPlayMode || !SessionState.GetBool(PendingKey, false)) return;
+                SessionState.EraseBool(PendingKey);
+                StartWhenReady();
+            };
+        }
+
+        // Waits a few frames for the scene's bootstrap, leaves the start menu, then begins.
+        private static void StartWhenReady()
+        {
+            double giveUp = EditorApplication.timeSinceStartup + 20.0;
+            void Tick()
+            {
+                if (!EditorApplication.isPlaying) { EditorApplication.update -= Tick; return; }
+                if (Object.FindAnyObjectByType<MatchBootstrap>() == null && EditorApplication.timeSinceStartup < giveUp) return;
+                EditorApplication.update -= Tick;
+                var result = Start(MenuSeeds, 3f, 0);
+                Debug.Log($"[Audit] {result}"); // e.g. { started = True, seeds = ..., output = ... }
+            }
+            EditorApplication.update += Tick;
         }
 
         [CliCommand("fossil_audit", "Project Fossil: in Play mode, generate each seed, walk the survivor to every " +
@@ -48,8 +87,11 @@ namespace ProjectFossil.Editor
                 return new { started = false, error = "Not in Play mode. Run `unity cmd editor_play` first." };
             if (Runner != null && Runner.Running)
                 return new { started = false, error = "An audit is already running.", status = Runner.Status() };
-            var bootstrap = Object.FindFirstObjectByType<MatchBootstrap>();
+            var bootstrap = Object.FindAnyObjectByType<MatchBootstrap>();
             if (bootstrap == null) return new { started = false, error = "No MatchBootstrap in the scene." };
+            // Off the start menu first, so its overlay and input lock don't sit over the walk.
+            var session = Object.FindAnyObjectByType<ProjectFossil.Net.NetSession>();
+            if (session != null && session.InMenu) session.PlaySolo(ChallengeLevel.Hard);
 
             var list = seeds.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).Select(int.Parse).ToList();
             string dir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", "FossilAudit",
@@ -132,7 +174,7 @@ namespace ProjectFossil.Editor
         {
             if (!EditorApplication.isPlaying) return new { error = "Not in Play mode." };
             Directory.CreateDirectory(saveDir);
-            var match = Object.FindFirstObjectByType<MatchManager>();
+            var match = Object.FindAnyObjectByType<MatchManager>();
             var player = match != null ? match.Player : GameObject.FindWithTag("Player");
             var files = new List<string>();
             var cam = player != null ? player.GetComponentInChildren<Camera>() : Camera.main;
@@ -244,7 +286,7 @@ namespace ProjectFossil.Editor
         private class SeedReport
         {
             public int seed;
-            public int extractions, reached, unreachable, stuck, teleports, dinos;
+            public int extractions, reached, unreachable, stuck, teleports, dinos, detours;
             public float fpsAvg, fpsLow, worstFrameMs;
             public readonly List<float> frameMs = new List<float>();
             public readonly List<string> legs = new List<string>();
@@ -282,7 +324,7 @@ namespace ProjectFossil.Editor
 
         private static object Summary(SeedReport r) => new
         {
-            r.seed, r.extractions, r.reached, r.unreachable, r.stuck, r.teleports, r.dinos,
+            r.seed, r.extractions, r.reached, r.unreachable, r.stuck, r.teleports, r.dinos, r.detours,
             fpsAvg = Mathf.Round(r.fpsAvg), fpsLow = Mathf.Round(r.fpsLow), worstFrameMs = Mathf.Round(r.worstFrameMs),
             issueCount = r.issues.Count,
             issues = r.issues.ToArray().Take(25).Select(i => i.ToString()).ToList(),
@@ -374,7 +416,7 @@ namespace ProjectFossil.Editor
             // ── Caches: resting on the ground, not hanging off a slope or perched on a tree ──
             int cacheShots = 0;
             var shotKinds = new HashSet<string>();
-            foreach (var cache in Object.FindObjectsByType<ProjectFossil.Economy.LootContainer>(FindObjectsSortMode.None))
+            foreach (var cache in Object.FindObjectsByType<ProjectFossil.Economy.LootContainer>())
             {
                 var col = cache.GetComponent<Collider>();
                 if (col == null) continue;
@@ -473,7 +515,34 @@ namespace ProjectFossil.Editor
 
                     if (Time.time - lastCheckTime >= StuckWindow)
                     {
-                        if (Flat(p - lastCheckPos) < StuckDistance)
+                        bool blocked = Flat(p - lastCheckPos) < StuckDistance;
+                        if (blocked)
+                        {
+                            // A player who walks into a stump steps round it: try a few metres to each side first.
+                            // Only a spot that can't be walked out of is a stuck spot.
+                            Vector3 stuckAt = p;
+                            foreach (float side in new[] { 90f, -90f })
+                            {
+                                Vector3 dir = line[Mathf.Min(corner, line.Length - 1)] - stuckAt; dir.y = 0f;
+                                if (dir.sqrMagnitude < 0.01f) dir = pc.transform.forward;
+                                pc.transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, side, 0f) * dir);
+                                pc.ScriptedMove = Vector2.up;
+                                float stepEnd = Time.time + 1.5f;
+                                while (Time.time < stepEnd && pc != null && pc.isActiveAndEnabled) yield return null;
+                                if (pc == null || Flat(pc.transform.position - stuckAt) > 1.5f) break;
+                            }
+                            if (pc != null && Flat(pc.transform.position - stuckAt) > 1.5f)
+                            {
+                                r.detours++;
+                                blocked = false;
+                                // Plan again from the side step.
+                                if (NavMesh.SamplePosition(pc.transform.position, out var off, 6f, NavMesh.AllAreas) &&
+                                    NavMesh.CalculatePath(off.position, navGoal, NavMesh.AllAreas, path) && path.corners.Length > 1)
+                                { line = path.corners; corner = 1; }
+                            }
+                            p = pc != null ? pc.transform.position : p;
+                        }
+                        if (blocked)
                         {
                             r.stuck++; stuckHere++;
                             Note(r, "stuck", p, StuckDetail(pc, world, p));
@@ -597,10 +666,10 @@ namespace ProjectFossil.Editor
             sb.AppendLine($"# Island audit {Path.GetFileName(_dir)}");
             sb.AppendLine($"Status: {_phase}. Time scale while walking: {_timeScale}. FPS is the Editor Game view standing still, not a player build.");
             sb.AppendLine();
-            sb.AppendLine("| seed | extractions | reached | unreachable | stuck | teleports | dinos | fps avg | fps 1% low | worst frame ms | issues |");
-            sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
+            sb.AppendLine("| seed | extractions | reached | unreachable | stuck | teleports | side-steps | dinos | fps avg | fps 1% low | worst frame ms | issues |");
+            sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
             foreach (var r in _reports)
-                sb.AppendLine($"| {r.seed} | {r.extractions} | {r.reached} | {r.unreachable} | {r.stuck} | {r.teleports} | {r.dinos} | {r.fpsAvg:0} | {r.fpsLow:0} | {r.worstFrameMs:0} | {r.issues.Count} |");
+                sb.AppendLine($"| {r.seed} | {r.extractions} | {r.reached} | {r.unreachable} | {r.stuck} | {r.teleports} | {r.detours} | {r.dinos} | {r.fpsAvg:0} | {r.fpsLow:0} | {r.worstFrameMs:0} | {r.issues.Count} |");
             foreach (var r in _reports)
             {
                 sb.AppendLine();

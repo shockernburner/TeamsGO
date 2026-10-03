@@ -43,6 +43,8 @@ namespace ProjectFossil.Core
         public ModelDefinition flyer;
         [Tooltip("Rain pack effects, played around the camera: steady rain, and heavier rain for storms")]
         public GameObject rain, heavyRain;
+        [Tooltip("The rain pack folder last checked, usable or not, so it isn't set up again on every Editor start")]
+        public string rainPackChecked;
 
         [Header("People and machines")]
         [Tooltip("Player looks, one per outfit; teammates get different ones")]

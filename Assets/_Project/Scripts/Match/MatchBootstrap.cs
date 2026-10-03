@@ -78,6 +78,8 @@ namespace ProjectFossil.Match
         // then complained every frame. This ear stands in until a player arrives, and steps aside for theirs.
         private AudioListener _menuEar;
 
+        private void Awake() => _menuEar = gameObject.AddComponent<AudioListener>(); // from the very first frame
+
         private void LateUpdate()
         {
             if (_menuEar == null) _menuEar = gameObject.AddComponent<AudioListener>();
@@ -260,6 +262,7 @@ namespace ProjectFossil.Match
 
             Vector3 spawnPos = GetSpawnPosition(data) + spawnOffset;
             var player = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+            if (_menuEar != null) _menuEar.enabled = false; // the player's camera hears from this frame on
 
             // Gameplay components the prefab may not carry yet (inventory first: combat reads its weapon).
             EnsureComponent<PlayerInventory>(player);

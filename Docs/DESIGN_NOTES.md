@@ -588,3 +588,22 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   ridge the arch half sinks in, like an old ruin). `Project Fossil > Art > Build Cache Models` rebuilds the prefab.
 - A tree stump's box takes in its spreading roots, and on a slope the NavMesh climbed onto it from uphill: the
   survivor stuck on one. Rocks and stumps under 1 m now have no collider (was 0.75 m).
+
+## 2026-10-03 — Console clean-up after merging #45
+
+- Four red errors on Editor start ("Tried to get mapping information from scalar node", "Assertion failed on
+  expression: 'IsMapping()'") came from `SoftVolume.mat` and `SkyParticle.mat`: each, written by hand, had one
+  blank line inside its property block, which Unity 6.5's YAML reader rejects (Search indexed them on start). The
+  blank lines are gone; no other committed asset has one.
+- `Project Fossil > Audit > Run Island Audit` no longer needs Play mode first: it opens the Bootstrap scene if
+  needed, enters Play mode, leaves the start menu for a solo match and then starts the audit.
+- The audit side-steps a few metres each way when the survivor is blocked, as a player would round a stump; only
+  a spot it can't walk out of counts as stuck.
+- `BoughtPackSetup` ran on every Editor start ("New rain pack"): the rain pack has no prefab URP can draw (its
+  effects use legacy particle shaders), so the rain slot stayed empty and looked new each time. That rerun
+  reimported the bought dinosaurs and printed 38 "Transform 'Tric' has the same name as transform" warnings.
+  `BoughtArt.rainPackChecked` remembers the folder, so it runs once. The warnings themselves come from node names
+  inside the paid FBX files; silencing them would mean editing those files, so they stay, but now only appear when
+  the packs really are set up again.
+- The start menu's stand-in AudioListener exists from the first frame and steps aside the moment the player
+  spawns: no more "no audio listeners" or "2 audio listeners" lines.

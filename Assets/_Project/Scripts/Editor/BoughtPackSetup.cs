@@ -166,7 +166,9 @@ namespace ProjectFossil.Editor
                 found.Add("helicopter pack");
             if ((FindDir("Creatures/VOLI") != null || FindDir("Forest Environment Dynamic Nature") != null) && art == null)
                 found.Add("dinosaur or forest pack");
-            if (FindDir("Rainy VFX") != null && art != null && art.rain == null)
+            // A rain pack with nothing usable leaves art.rain empty; remembering which folder was checked stops it
+            // from reading as new on every Editor start (which re-ran the whole setup each time).
+            if (FindDir("Rainy VFX") is string rainDir && art != null && art.rain == null && art.rainPackChecked != rainDir)
                 found.Add("rain pack");
             if (SoundSetup.Misplaced().Count > 0) found.Add("recorded sounds");
             return found.Count == 0 ? null : "New " + string.Join(" and ", found);
@@ -802,6 +804,7 @@ namespace ProjectFossil.Editor
         private static void SetUpRain(BoughtArt art, string dir)
         {
             Log.AppendLine();
+            art.rainPackChecked = dir;
             string[] notRain = { "splash", "ripple", "drop", "window", "glass", "screen", "puddle", "lightning", "thunder", "mist", "fog", "cloud", "demo" };
             var candidates = Directory.GetFiles(dir, "*.prefab", SearchOption.AllDirectories)
                 .Select(p => p.Replace('\\', '/'))
