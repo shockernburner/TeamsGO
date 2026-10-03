@@ -16,13 +16,6 @@
       },
       "hash": "73f30cf2425dc808a4f463f0a233d386010810b3"
     },
-    "com.firstgeargames.fishysteamworks": {
-      "version": "https://github.com/FirstGearGames/FishySteamworks.git#4.1.1",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "21e858249249e2c322365fe9fefbe865f290b0d9"
-    },
     "com.rlabrecque.steamworks.net": {
       "version": "https://github.com/rlabrecque/Steamworks.NET.git?path=/com.rlabrecque.steamworks.net#2025.164.1",
       "depth": 0,
