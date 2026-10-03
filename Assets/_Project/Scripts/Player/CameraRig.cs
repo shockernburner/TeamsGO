@@ -63,7 +63,7 @@ namespace ProjectFossil.Player
             for (int i = 0; i < n; i++)
             {
                 var col = _hits[i].collider;
-                if (col == null || !BlocksView(col)) continue;
+                if (col == null || !BlocksView(col, origin)) continue;
                 if (_hits[i].distance <= 0f) continue; // started inside it; the other hits decide
                 allowed = Mathf.Min(allowed, _hits[i].distance);
             }
@@ -87,14 +87,20 @@ namespace ProjectFossil.Player
             HidePlants(pos, origin, plantClearance);
         }
 
-        // Terrain, trunks and rocks block; the player, animals and anything that moves don't.
-        private bool BlocksView(Collider col)
+        // Terrain, trunks and rocks block; the player and anything that moves don't, so the view doesn't jump each
+        // time an animal walks behind. Except an animal right on top of the player: a dinosaur biting from behind
+        // put the camera inside its body, and the screen went dark with its hide at the moment that mattered.
+        private bool BlocksView(Collider col, Vector3 pivot)
         {
             if (_owner != null && col.transform.IsChildOf(_owner)) return false;
             if (col is CharacterController || col.attachedRigidbody != null) return false;
-            if (col.GetComponentInParent<NavMeshAgent>() != null) return false;
+            if (col.GetComponentInParent<NavMeshAgent>() != null)
+                return (col.ClosestPoint(pivot) - pivot).sqrMagnitude < CloseAnimal * CloseAnimal;
             return true;
         }
+
+        // Metres from the player inside which an animal blocks the camera like a wall.
+        private const float CloseAnimal = 4f;
 
         private void HidePlants(Vector3 cameraPos, Vector3 target, float clearance)
         {

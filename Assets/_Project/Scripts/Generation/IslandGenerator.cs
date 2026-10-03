@@ -182,8 +182,17 @@ namespace ProjectFossil.Generation
             float dy   = (ny - 0.5f) * 2f;
             float dist = Mathf.Sqrt(dx * dx + dy * dy) / CoastWarp(nx, ny); // 0 at center, ~1.41 at corner
             float limit = _settings.islandRadiusFraction * 2f;
-            return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(limit - 0.15f, limit + 0.35f, dist));
+            float radial = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(limit - 0.15f, limit + 0.35f, dist));
+            // The coast warp can stretch a headland past the map's edge, where the ground stopped in a sheer cut over
+            // nothing: a survivor swam out over the void and a dinosaur stood on the water beside it. Open sea all
+            // round the edge, whatever the warp does.
+            float toEdge = Mathf.Min(Mathf.Min(nx, 1f - nx), Mathf.Min(ny, 1f - ny));
+            float border = 1f - Mathf.SmoothStep(0f, 1f, toEdge / EdgeSea);
+            return Mathf.Max(radial, border);
         }
+
+        // Share of the map along each edge that is always open sea.
+        public const float EdgeSea = 0.12f;
 
         // ── Volcano ──────────────────────────────────────────────────────────
 
