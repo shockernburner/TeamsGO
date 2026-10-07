@@ -659,11 +659,14 @@ namespace ProjectFossil.Net
             string crew = _mode == Mode.Joined && !string.IsNullOrEmpty(_hostCrew) ? _hostCrew : CrewName;
             int size = _mode == Mode.Hosting ? _avatars.Count : _mode == Mode.Joined ? NetAvatar.All.Count : 1;
             stats.Crew = crew;
-            stats.BoardPlace = Leaderboard.Local.Record(new RunRecord
+            var run = new RunRecord
             {
                 Player = PlayerName, Crew = crew, CrewSize = Mathf.Max(1, size), Score = stats.Score, Result = stats.Result,
                 Seconds = stats.TimeSurvived, Kills = stats.DinosKilled, Challenge = stats.Challenge, Seed = stats.Seed,
-            });
+            };
+            stats.BoardPlace = Leaderboard.Local.Record(run);
+            // Worldwide too; the crew's entry comes from whoever named the crew (the host, or a solo player).
+            OnlineLeaderboard.Submit(run, forCrew: _mode != Mode.Joined);
         }
 
         private void OnFlareDropped(Vector3 pad)
