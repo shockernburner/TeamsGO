@@ -60,7 +60,7 @@ Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, surv
 
 **Description:**
 
-> Sixty-six million years ago, the asteroid missed.
+> In some parallel universe, the dinosaurs never died out.
 >
 > The dinosaurs never left. Humanity pushed them back to a ring of islands beyond the Cordon and called it peace.
 > On the islands, they changed. They learned our engines. Our lights. Our voices.
