@@ -23,6 +23,7 @@ namespace ProjectFossil.Net
         private const float MenuFog = 0.0016f;
         private const string SeenKey = "ProjectFossil.IntroSeen";
         private const float StudioSeconds = 3f, LogoSeconds = 4f, RiseSeconds = 1.2f, FadeSeconds = 1f;
+        private const float VoiceDelay = 0.5f;    // the narrator starts as the words fade in (Tools/voice/fit_voice.py)
         private const float VoiceBreath = 0.8f;   // a card holds this long after its line is spoken
         private const float RingSeconds = 9f;     // the logo hit rings on under the menu before the loop takes over
         private const float MusicVolume = 1f, DuckedVolume = 0.55f, BedVolume = 1f;
@@ -97,7 +98,7 @@ namespace ProjectFossil.Net
                 var cue = parts.Length > 3 && System.Enum.TryParse(parts[3].Trim(), true, out SoundSynth.Cue c) ? c
                         : shot == "space" ? SoundSynth.Cue.Stars : SoundSynth.Cue.Pad;
                 var voice = Resources.Load<AudioClip>($"Story/Voice/Line{_cards.Count + 1:00}");
-                if (voice != null) s = Mathf.Max(s, voice.length + VoiceBreath);
+                if (voice != null) s = Mathf.Max(s, VoiceDelay + voice.length + VoiceBreath);
                 _cards.Add((s, parts[1].Trim(), shot == "space" ? Shot.Space : shot == "dark" ? Shot.Dark : Shot.Flight, cue, voice));
             }
             _cardStart = new float[_cards.Count + 1];
@@ -210,7 +211,7 @@ namespace ProjectFossil.Net
             while (c < _cards.Count - 1 && _t >= _cardStart[c + 1]) c++;
             _card = c;
             _cardTime = _t - _cardStart[c];
-            if (_spoken != c)
+            if (_spoken != c && _cardTime >= VoiceDelay)
             {
                 _spoken = c;
                 if (_cards[c].voice != null) { _voice.Stop(); _voice.clip = _cards[c].voice; _voice.Play(); }

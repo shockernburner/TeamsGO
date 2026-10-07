@@ -764,3 +764,14 @@ sign in with a username and password, offline is practice only.
   for the microphone instead of silently giving the game nothing.
 - Untested here: signing up, Relay hosting/joining and Vivox need a real account, which I can't create; offline
   hosting, the menus and leaving were tested in Play mode.
+
+## 2026-10-07 — The narrator's voice in the intro
+
+- Firdous recorded the ten lines (`Tools/voice/source/Line01-10.mp3`). `Tools/voice/fit_voice.py` (ffmpeg) fits
+  each to its card: trims the silence at both ends, slows it with the pitch kept so the speech fills the card from
+  0.5 s in to 1.1 s before its end, but never faster than recorded and never more than 18% slower, normalises the
+  loudness (-16 LUFS), and writes `Resources/Story/Voice/LineNN.wav` (mono; Unity compresses it in builds).
+  Result: lines 2, 8 and 10 slowed (10, "They can hear you", the most), lines 3, 4, 6 and 9 a little longer
+  than their cards, so those cards stretch (the score is composed from the final card lengths, so the music
+  still lands with the words). Run it again after re-recording any line.
+- The narrator starts 0.5 s into each card, as the words fade in; the music ducks under the voice.
