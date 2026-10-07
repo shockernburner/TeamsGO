@@ -1,14 +1,16 @@
+using System.Collections.Generic;
 using ProjectFossil.Match;
 using UnityEngine;
 
 namespace ProjectFossil.Net
 {
-    // The start menu's leaderboard: the best survivors and the best crews on this computer. Online boards
-    // (Steam, once the game has its App ID) will appear here as more tabs over the same records.
+    // The start menu's leaderboard: the best survivors and the best crews, worldwide (OnlineLeaderboard) or on
+    // this computer (Leaderboard.Local).
     public static class LeaderboardPanel
     {
         private const int Shown = 10;
-        private static int _tab; // 0 survivors, 1 crews
+        private static int _tab;            // 0 survivors, 1 crews
+        private static bool _online = true; // worldwide, or this computer
         private static GUIStyle _title, _head, _row, _mine, _small;
 
         // Returns true when the player presses Back. Rows for this player and crew are highlighted.
@@ -22,10 +24,24 @@ namespace ProjectFossil.Net
             if (GUILayout.Toggle(_tab == 0, "Survivors", GUI.skin.button, GUILayout.Height(30))) _tab = 0;
             if (GUILayout.Toggle(_tab == 1, "Crews", GUI.skin.button, GUILayout.Height(30))) _tab = 1;
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Toggle(_online, "Worldwide", GUI.skin.button, GUILayout.Height(24))) _online = true;
+            if (GUILayout.Toggle(!_online, "This computer", GUI.skin.button, GUILayout.Height(24))) _online = false;
+            GUILayout.EndHorizontal();
             GUILayout.Space(6);
 
-            var board = Leaderboard.Local;
-            var rows = _tab == 0 ? board.TopSurvivors(Shown) : board.TopCrews(Shown);
+            List<RunRecord> rows;
+            if (_online)
+            {
+                OnlineLeaderboard.Refresh(); // at most every 20 seconds
+                var all = _tab == 0 ? OnlineLeaderboard.Survivors : OnlineLeaderboard.Crews;
+                rows = all.GetRange(0, Mathf.Min(Shown, all.Count));
+            }
+            else
+            {
+                var board = Leaderboard.Local;
+                rows = _tab == 0 ? board.TopSurvivors(Shown) : board.TopCrews(Shown);
+            }
             GUILayout.BeginHorizontal();
             GUILayout.Label("#", _head, GUILayout.Width(28));
             GUILayout.Label(_tab == 0 ? "Survivor" : "Crew", _head, GUILayout.Width(_tab == 0 ? 130 : 170));
@@ -37,7 +53,7 @@ namespace ProjectFossil.Net
             if (rows.Count == 0)
             {
                 GUILayout.Space(20);
-                GUILayout.Label("No runs yet. Finish a match to get on the board.", _small);
+                GUILayout.Label(_online && OnlineLeaderboard.Busy ? "Loading..." : "No runs yet. Finish a match to get on the board.", _small);
             }
             for (int i = 0; i < rows.Count; i++)
             {
@@ -54,9 +70,7 @@ namespace ProjectFossil.Net
             }
 
             GUILayout.FlexibleSpace();
-            GUILayout.Label(SteamService.Ready
-                ? "Runs on this computer. Online boards arrive with the Steam release."
-                : "Runs on this computer.", _small);
+            GUILayout.Label(_online ? OnlineLeaderboard.Status : "Runs played on this computer.", _small);
             if (GUILayout.Button("Back", GUILayout.Height(32))) back = true;
             GUILayout.EndArea();
             return back;

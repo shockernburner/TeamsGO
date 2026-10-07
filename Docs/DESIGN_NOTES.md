@@ -681,3 +681,42 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   (one app for Apple silicon and Intel). No steam_appid.txt in either, so Steam stays off and co-op is LAN or
   direct IP. The Steam test build (`Co-op > Build for Windows`) still ships it.
 - Each build is about 1.7 GB, mostly the bought packs' textures; the Mac had under 5 GB free when building.
+
+## 2026-10-07 — Worldwide leaderboards, run in background, app icon
+
+- Online boards on Unity Gaming Services (Firdous chose this over Steam-only, so itch players get them too):
+  packages `com.unity.services.leaderboards` 2.3.4 and `com.unity.services.deployment` 1.7.2. The project was
+  already linked to the TeamsGO Unity Cloud project. Two boards, defined as files in `Data/Services`
+  (`survivors.lb`, `crews.lb`: highest score first, each player's best kept) and deployed to the "production"
+  environment from Services > Deployment (both show Deployed).
+- `Net/OnlineLeaderboard`: anonymous sign-in (no account, no name prompt), then every finished run goes on
+  survivors; the crew board gets it from whoever named the crew (the host online, the player solo). Player
+  name, crew, crew size, kills, time and result ride along as metadata. The panel has Worldwide / This computer
+  over Survivors / Crews; worldwide refreshes at most every 20 seconds and shows each crew name once.
+  Offline, it says so and the local board still works.
+- Known limit: scores come from the game itself, so a modified client could post a fake one. If that happens,
+  move submission behind Cloud Code (server checks) or reset the boards from the dashboard.
+- Privacy: anonymous sign-in gives each install a Unity player ID. The itch/Steam page's privacy note should
+  mention Unity Gaming Services.
+- Run In Background is on: a host who switches windows no longer freezes the match for the team.
+- App icon: `Brand/Icon1024.png` (default icon for every platform).
+
+## 2026-10-07 — Intro music and narration
+
+- The intro now opens "In some parallel universe" (lines and cue sheet in Docs/STORY.md; the asteroid streak is
+  gone, the stars stay).
+- Music (`Audio/SoundSynth.Score.cs`): composed in code like the other synthesized sounds, so there's no licence
+  to track. D minor: drone and strings that change chord with each card, a high shimmer under the stars, the
+  music dropping away at "the outposts went silent", a pulse with drums building under the crews, silence and a
+  breath before "They can hear you", then a boom, a crash and the full chord with a roar as TETHER slams in. The
+  hit rings for 9 s, then a quiet 32 s loop (no seam) plays behind the menu; it fades out when a match starts and
+  returns with the menu. Each card's music is the fourth column of `Story/Intro.txt` (pad, stars, drop, build,
+  hold, silence).
+- The intro's clock is the music's playback position, so words, pictures and notes can't drift apart. The menu
+  island is built first, behind black, so the build doesn't stall the music. Composing the score takes about 3 s
+  on a worker thread, done while the island builds.
+- Narration: `Resources/Story/Voice/Line01..Line10` (any audio format Unity imports). A spoken card holds until its
+  line is finished plus 0.8 s, the music ducks under the voice, and skipping stops it. No clips yet: text only.
+- Skipping jumps the music to the logo hit and goes to the menu.
+- Tests: `IntroScoreTests` check the score's length, that the hit is the loudest moment, the silence before the
+  last line, the drop at the outposts, the build growing, determinism, and the seamless menu loop.

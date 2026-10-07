@@ -5,7 +5,7 @@ namespace ProjectFossil.Audio
     // Placeholder sound effects built from oscillators, noise and envelopes, so the game has audio before any
     // recorded sounds are licensed. Pure C# (no UnityEngine): every recipe returns mono samples in -1..1 and is
     // deterministic for a given variant, which keeps it testable. Swap a recipe for a real clip at any time.
-    public static class SoundSynth
+    public static partial class SoundSynth
     {
         public const int SampleRate = 22050;
 

@@ -10,7 +10,11 @@
         "ProjectFossil.Dinosaurs",
         "ProjectFossil.Player",
         "ProjectFossil.Match",
-        "ProjectFossil.Economy"
+        "ProjectFossil.Economy",
+        "ProjectFossil.Audio",
+        "Unity.Services.Core",
+        "Unity.Services.Authentication",
+        "Unity.Services.Leaderboards"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

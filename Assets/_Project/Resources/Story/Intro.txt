@@ -1,12 +1,14 @@
-# The intro's story cards, from Docs/STORY.md: seconds | line | shot.
-# Shots: space = black with stars and the asteroid that missed, flight = over the island, dark = the island, near black.
-5|Sixty-six million years ago, the asteroid missed.|space
-4|The dinosaurs never left.|flight
-5|We came late. Small, clever, and afraid of the dark.|flight
-6|We built fire. Then walls. Then cities. We pushed them back to the sea.|flight
-6|The last of them were sealed on islands beyond the Cordon. We called it peace.|flight
-6|On the islands, they changed. They learned our engines. Our lights. Our voices.|flight
-4|One by one, the outposts went quiet.|dark
-6|Now crews of four drop in to bring back what was left. And get out before dark.|flight
-4|Stay quiet. Stay close. Leave no one.|flight
-3|They can hear you.|dark
+# The intro's story cards, from Docs/STORY.md: seconds | line | shot | music.
+# Shots: space = black with stars, flight = over the island, dark = the island, near black.
+# Music (fourth column, Docs/STORY.md cue sheet): pad, stars, drop, build, hold, silence.
+# The narrator reads each line exactly as written; a card lasts at least as long as its voice clip (Story/Voice/Line01..10).
+6|In some parallel universe, the dinosaurs never died out.|space|stars
+6|They ruled the Earth for sixty-six million more years.|flight|pad
+5.5|Then we came. Small, clever, and afraid of the dark.|flight|pad
+7|We built fire. Then walls. Then cities. And we pushed them back to the sea.|flight|pad
+7|The last of them were sealed on islands beyond the Cordon. We called it peace.|flight|pad
+7.5|But on the islands, they changed. They learned our engines. Our lights. Our voices.|flight|pad
+4.5|One by one, our outposts went silent.|dark|drop
+8|Now we send crews of four to bring back what was left. And get out before dark.|flight|build
+4.5|Stay quiet. Stay close. Leave no one.|flight|hold
+3.5|They can hear you.|dark|silence
