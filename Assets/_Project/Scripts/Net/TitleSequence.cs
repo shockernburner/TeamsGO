@@ -227,7 +227,7 @@ namespace ProjectFossil.Net
             _music.volume = MusicVolume;
             if (_hitPlayed) return;
             _hitPlayed = true;
-            if (_roar != null) _sting.PlayOneShot(_roar, 0.9f);
+            if (_roar != null) _sting.PlayOneShot(_roar, 0.55f); // distant, under the chord
         }
 
         // Any key: the story's music jumps to the hit, the narrator stops, and the menu comes up.
@@ -279,14 +279,15 @@ namespace ProjectFossil.Net
                 }
                 return;
             }
-            bool ringing = _music.isPlaying && _music.clip == _score && _music.time < _score.length - 2f;
+            // The loop fades in under the logo's chord while it rings, so there's no gap between them.
+            bool ringing = _music.isPlaying && _music.clip == _score && _music.time < _hitAt + 4f;
             if (!ringing && _bedClip != null && !_bed.isPlaying)
             {
                 _bed.clip = _bedClip;
                 _bed.volume = 0f;
                 _bed.Play();
             }
-            if (_bed.isPlaying) _bed.volume = Mathf.MoveTowards(_bed.volume, BedVolume, Time.unscaledDeltaTime * 0.25f);
+            if (_bed.isPlaying) _bed.volume = Mathf.MoveTowards(_bed.volume, BedVolume, Time.unscaledDeltaTime * 0.15f);
         }
 
         private bool IslandShown => _cam != null && _cam.gameObject.activeSelf && IslandWorld.Current != null;
@@ -314,7 +315,8 @@ namespace ProjectFossil.Net
                 var go = new GameObject("Title Camera") { tag = "MainCamera" };
                 _cam = go.AddComponent<Camera>();
                 _cam.fieldOfView = 50f;
-                _cam.farClipPlane = 15000f; // out to the sea's horizon
+                _cam.nearClipPlane = 1f;
+                _cam.farClipPlane = 120000f; // out to the sea's horizon
             }
             _cam.gameObject.SetActive(true);
             Orbit();

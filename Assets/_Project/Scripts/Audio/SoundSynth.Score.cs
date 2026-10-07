@@ -9,7 +9,8 @@ namespace ProjectFossil.Audio
     // the logo slams in, ringing out into the menu.
     public static partial class SoundSynth
     {
-        // What the music does under one story card.
+        // What the music does under one story card. Build swells the strings and quickens the arpeggio (no drums:
+        // they came in too suddenly); Hold keeps it steady.
         public enum Cue { Pad, Stars, Drop, Build, Hold, Silence }
 
         private static readonly float[][] Chords =
@@ -41,11 +42,8 @@ namespace ProjectFossil.Audio
 
             var s = Buffer(hitAt + ring);
             var rng = new Random(6600);
-            var wind = new OnePole(260f);
             var padLp = new OnePole(2400f);
-            var crash = new HighPass(300f);
             var breathLp = new OnePole(1200f);
-            var snareHp = new HighPass(900f);
             int card = -1;
             float level = 0f; // the drone and strings, eased between cues
 
@@ -62,9 +60,7 @@ namespace ProjectFossil.Audio
                 float tau = target >= level ? 1.5f : cue == Cue.Silence ? 0.15f : 0.8f; // seconds
                 level += (target - level) / (tau * SampleRate);
 
-                // Wind under everything except the silence.
-                float windLevel = cue == Cue.Silence && story ? 0.15f : 1f;
-                float v = wind.Next(Noise(rng)) * 0.3f * windLevel;
+                float v = 0f; // no wind: on speakers it read as a hiss, like a television with no signal
 
                 // Drone on D: the low notes for headphones and big speakers, and their octaves above so a laptop
                 // (which plays almost nothing under 150 Hz) still hears it.
@@ -96,27 +92,6 @@ namespace ProjectFossil.Audio
                     v += (float)(Math.Sin(Tau * 587.33f * t) + 0.6 * Math.Sin(Tau * 880f * t) + 0.3 * Math.Sin(Tau * 1174.66f * t)) * 0.02f * w * trem;
                 }
 
-                // Build: a pulse that speeds up (90 to 120 a minute) with a low drum on every beat and a snare on
-                // the off-beat once it gets going, all growing louder. Hold keeps a softer pulse.
-                if (story && (cue == Cue.Build || cue == Cue.Hold))
-                {
-                    float into = t - start[card], len = cards[card];
-                    float k = cue == Cue.Build ? into / len : 0.4f;
-                    float bpm = Lerp(90f, 120f, k);
-                    float beat = into * bpm / 60f, inBeat = (beat - (float)Math.Floor(beat)) * 60f / bpm;
-                    float loud = cue == Cue.Build ? Lerp(0.35f, 1f, k) : 0.35f;
-                    // the drum: a falling low tone, its octave, and a click of noise that laptops can hear
-                    float kick = (float)Math.Sin(Tau * (55f + 40f * (float)Math.Exp(-inBeat / 0.03f)) * inBeat);
-                    float body = (float)Math.Sin(Tau * (130f + 60f * (float)Math.Exp(-inBeat / 0.02f)) * inBeat);
-                    float click = snareHp.Next(Noise(rng)) * Exp(inBeat, 0.0005f, 0.008f);
-                    v += (kick * 0.4f + body * 0.35f) * Exp(inBeat, 0.003f, 0.12f) * loud + click * 0.3f * loud;
-                    float off = inBeat - 30f / bpm;
-                    if (cue == Cue.Build && k > 0.35f && off > 0f)
-                        v += snareHp.Next(Noise(rng)) * Exp(off, 0.002f, 0.07f) * 0.45f * loud;
-                    // the pulse itself: a low octave throb
-                    v += (float)Math.Sin(Tau * 73.42f * t) * Exp(inBeat, 0.02f, 0.25f) * 0.15f * loud;
-                }
-
                 // Silence, then a breath before the last line settles.
                 if (story && cue == Cue.Silence)
                 {
@@ -124,17 +99,24 @@ namespace ProjectFossil.Audio
                     if (tb > 0f && tb < 1.4f) v += breathLp.Next(Noise(rng)) * Adsr(tb, 0.5f, 0.3f, 0.6f, 1.4f, 0.6f) * 0.45f;
                 }
 
-                // The hit: a low boom, a crash of noise, and D minor ringing out into the menu.
+                // Out of the silence: the strings swell back in under "They can hear you", so the logo arrives on a
+                // rising chord instead of a jolt.
+                if (story && cue == Cue.Silence)
+                {
+                    float rise = Ramp(t, start[card] + cards[card] * 0.35f, hitAt);
+                    rise *= rise;
+                    v += Strings(new[] { 146.83f, 174.61f, 220f }, t, 0.4f) * rise * 0.22f + Drone(t) * rise * 0.6f;
+                }
+
+                // The logo: a soft low boom under the full D minor chord, which rings on and fades into the menu.
                 if (sinceHit >= 0f)
                 {
-                    float f = 30f + 30f * (float)Math.Exp(-sinceHit / 0.25f);
-                    v += (float)Math.Sin(Tau * f * sinceHit) * Exp(sinceHit, 0.004f, 1.1f) * 0.45f;
-                    v += (float)Math.Sin(Tau * (110f + 80f * (float)Math.Exp(-sinceHit / 0.05f)) * sinceHit) * Exp(sinceHit, 0.002f, 0.4f) * 0.35f;
-                    v += crash.Next(Noise(rng)) * Exp(sinceHit, 0.002f, 0.7f) * 0.35f;
-                    float ringing = Exp(sinceHit, 0.05f, 4.5f);
-                    v += Strings(new[] { 146.83f, 174.61f, 220f, 293.66f }, t, 0.9f) * ringing * 0.3f;
-                    v += Drone(t) * ringing;
-                    v += wind.Next(Noise(rng)) * 0.2f;
+                    float f = 40f + 25f * (float)Math.Exp(-sinceHit / 0.3f);
+                    v += (float)Math.Sin(Tau * f * sinceHit) * Exp(sinceHit, 0.03f, 1.4f) * 0.3f;
+                    float ringing = Exp(sinceHit, 0.25f, 5.5f);
+                    v += Strings(new[] { 146.83f, 174.61f, 220f, 293.66f }, t, 0.7f) * ringing * 0.3f;
+                    v += Drone(t) * Math.Max(ringing, 0.35f);
+                    v += Arpeggio(new[] { 146.83f, 174.61f, 220f }, sinceHit, 0.6f) * 0.06f * ringing;
                 }
                 s[i] = v;
             }
@@ -146,8 +128,6 @@ namespace ProjectFossil.Audio
         {
             float fade = 2f;
             var s = Buffer(seconds + fade);
-            var rng = new Random(6700);
-            var wind = new OnePole(220f);
             var padLp = new OnePole(2000f);
             for (int i = 0; i < s.Length; i++)
             {
@@ -156,7 +136,7 @@ namespace ProjectFossil.Audio
                 float pad = Strings(Chords[0], t, 0.4f) * w + Strings(Chords[1], t, 0.4f) * (1f - w);
                 // a sparse bell every 2 s, on the chord that is sounding
                 float bell = Arpeggio(w > 0.5f ? Chords[0] : Chords[1], t, 2f);
-                s[i] = padLp.Next(pad) * 0.2f + Drone(t) * 0.8f + bell * 0.05f + wind.Next(Noise(rng)) * 0.15f;
+                s[i] = padLp.Next(pad) * 0.2f + Drone(t) * 0.8f + bell * 0.05f;
             }
             // Fold the extra seconds over the start, so the end runs straight into the beginning.
             int len = (int)(seconds * SampleRate), over = s.Length - len;

@@ -775,3 +775,20 @@ sign in with a username and password, offline is practice only.
   than their cards, so those cards stretch (the score is composed from the final card lengths, so the music
   still lands with the words). Run it again after re-recording any line.
 - The narrator starts 0.5 s into each card, as the words fade in; the music ducks under the voice.
+
+## 2026-10-07 — Intro polish after Firdous's listen
+
+- Sea edge, again: the sea is see-through, so the island's square seabed showed through it and stopped at its edge.
+  A dark sea floor plane now sits 1.5 m under the surface everywhere (shallows above it stay clear, deeper water
+  looks the same inside and outside the island's square), the sea is 200 km across, and the title camera sees
+  120 km, so only a straight horizon is left.
+- The hiss is gone: the score's and the menu loop's filtered-noise wind read as TV static on speakers.
+- No drums: the build under "Now we send crews of four" came in as a sudden drum roll that ran into the next line.
+  It is now a swell of the strings and a quickening arpeggio; "Hold" keeps them steady.
+- Into the logo: the strings swell back in under "They can hear you", the logo lands on a soft low boom and the
+  full D minor chord (no crash), the roar sits quieter under it, and the menu loop fades in while the chord still
+  rings, so there's no gap.
+- Studio logo: Firdous's Vantward mark (`Docs/Brand/source/VantwardMark_original.png`). For the dark intro its
+  white background is made transparent and its navy circuit lines turned cream (the wordmark's colour), keeping
+  the cyan waves; `VantwardMark.png` and `VantwardGames.png` (mark beside the VANTWARD GAMES wordmark) are
+  rebuilt from it. `VantwardMark_light_bg.png` keeps the original colours on transparent for light backgrounds.

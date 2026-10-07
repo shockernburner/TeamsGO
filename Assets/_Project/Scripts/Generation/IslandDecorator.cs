@@ -291,14 +291,37 @@ namespace ProjectFossil.Generation
             Object.DestroyImmediate(water.GetComponent<Collider>()); // immediate: the NavMesh bakes this frame
             water.transform.SetParent(parent, false);
             water.transform.localPosition = new Vector3(s.worldSize * 0.5f, s.seaLevel * s.maxHeight, s.worldSize * 0.5f);
-            // 20 km across: wide enough that, even from a peak or the title flight, the sea runs out to the horizon
-            // and its edges are lost in the haze instead of showing as a square.
-            water.transform.localScale    = new Vector3(2000f, 1f, 2000f);
+            // 200 km across: the sea runs out to the horizon from any height, with no edge to see.
+            water.transform.localScale    = new Vector3(SeaScale, 1f, SeaScale);
 
             var r = water.GetComponent<Renderer>();
             var mat = WaterMaterial();
             r.sharedMaterial   = mat;
             r.shadowCastingMode = ShadowCastingMode.Off;
+
+            // The sea is see-through, so the island's square seabed showed through it and stopped at its edge. A dark
+            // floor just under the surface makes deep water look the same everywhere; shallows (above it) stay clear.
+            var floor = Placeholder.Primitive(PrimitiveType.Plane);
+            floor.name = "Sea Floor";
+            Object.DestroyImmediate(floor.GetComponent<Collider>());
+            floor.transform.SetParent(parent, false);
+            floor.transform.localPosition = water.transform.localPosition - Vector3.up * SeaFloorDepth;
+            floor.transform.localScale    = water.transform.localScale;
+            var fr = floor.GetComponent<Renderer>();
+            fr.sharedMaterial    = SeaFloorMaterial();
+            fr.shadowCastingMode = ShadowCastingMode.Off;
+            fr.receiveShadows    = false;
+        }
+
+        private const float SeaScale = 20000f;      // a Unity plane is 10 m, so 200 km
+        private const float SeaFloorDepth = 1.5f;   // metres under the surface
+
+        private static Material _seaFloor;
+
+        private static Material SeaFloorMaterial()
+        {
+            if (_seaFloor == null) _seaFloor = NewLit(new Color(0.03f, 0.1f, 0.12f), 0f);
+            return _seaFloor;
         }
 
         private static Material _water;
