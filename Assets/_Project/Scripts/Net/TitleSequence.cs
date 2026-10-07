@@ -25,7 +25,8 @@ namespace ProjectFossil.Net
         private const float StudioSeconds = 3f, LogoSeconds = 4f, RiseSeconds = 1.2f, FadeSeconds = 1f;
         private const float VoiceDelay = 0.5f;    // the narrator starts as the words fade in (Tools/voice/fit_voice.py)
         private const float VoiceBreath = 0.8f;   // a card holds this long after its line is spoken
-        private const float RingSeconds = 9f;     // the logo hit rings on under the menu before the loop takes over
+        private const float LastLineGap = 0.15f;  // "They can hear you" ... then the roar and the logo
+        private const float RingSeconds = 9f;     // the background carries on under the logo before the menu loop takes over
         private const float MusicVolume = 1f, DuckedVolume = 0.55f, BedVolume = 1f;
 
         private enum Phase { Building, Studio, Story, Title, Menu }
@@ -100,6 +101,13 @@ namespace ProjectFossil.Net
                 var voice = Resources.Load<AudioClip>($"Story/Voice/Line{_cards.Count + 1:00}");
                 if (voice != null) s = Mathf.Max(s, VoiceDelay + voice.length + VoiceBreath);
                 _cards.Add((s, parts[1].Trim(), shot == "space" ? Shot.Space : shot == "dark" ? Shot.Dark : Shot.Flight, cue, voice));
+            }
+            // The last line runs straight into the roar and the logo: its card ends just after the voice does.
+            int last = _cards.Count - 1;
+            if (last >= 0 && _cards[last].voice != null)
+            {
+                var c = _cards[last];
+                _cards[last] = (VoiceDelay + c.voice.length + LastLineGap, c.text, c.shot, c.cue, c.voice);
             }
             _cardStart = new float[_cards.Count + 1];
             _cardStart[0] = StudioSeconds;
@@ -395,7 +403,8 @@ namespace ProjectFossil.Net
             Fill(Color.black, veil);
             if (shot == Shot.Space) DrawStars();
 
-            var c = GUI.color; GUI.color = new Color(1f, 1f, 1f, Fade(_cardTime, 0f, FadeSeconds, seconds - FadeSeconds, seconds));
+            float fade = Mathf.Min(FadeSeconds, seconds * 0.3f); // short cards (the last line) fade faster
+            var c = GUI.color; GUI.color = new Color(1f, 1f, 1f, Fade(_cardTime, 0f, fade, seconds - fade, seconds));
             GUI.Label(new Rect(Screen.width * 0.12f, Screen.height * 0.64f, Screen.width * 0.76f, 120f), text, _story);
             GUI.color = c;
         }
@@ -419,7 +428,7 @@ namespace ProjectFossil.Net
             Fill(Color.black, Mathf.Lerp(0.65f, 0.3f, Mathf.Clamp01((t - LogoSeconds) / RiseSeconds)));
             float slam = Mathf.Clamp01(t / 0.35f);
             float scale = Mathf.Lerp(1.18f, 1f, 1f - (1f - slam) * (1f - slam));
-            float wipe = Mathf.Clamp01(t / 0.9f);
+            float wipe = Mathf.Clamp01(t / 0.45f); // the logo is there at once, with the roar
             float primal = Mathf.Clamp01((t - 1.3f) / 1f);
             float rise = Mathf.Clamp01((t - LogoSeconds) / RiseSeconds);
             rise = rise * rise * (3f - 2f * rise);
