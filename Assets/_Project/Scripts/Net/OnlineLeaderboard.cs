@@ -2,15 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ProjectFossil.Match;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
 using Unity.Services.Leaderboards;
 using UnityEngine;
 
 namespace ProjectFossil.Net
 {
-    // The worldwide boards, on Unity Gaming Services (works on itch and Steam alike). Each player signs in
-    // anonymously, without an account; the service keeps one best score per player on each board:
+    // The worldwide boards, on Unity Gaming Services (works on itch and Steam alike), for signed-in accounts
+    // (Account) playing online; the service keeps one best score per player on each board:
     //   survivors: every player's best run.
     //   crews:     the best run of each crew, sent by whoever names it (the host online, the player solo), so a
     //              player's entry is their best crew run; the panel shows each crew name once.
@@ -35,29 +33,15 @@ namespace ProjectFossil.Net
             public float seconds;
         }
 
-        private static Task<bool> _signIn;
-
-        private static Task<bool> SignIn() => _signIn != null && !_signIn.IsFaulted && (!_signIn.IsCompleted || _signIn.Result)
-            ? _signIn : _signIn = SignInNow();
-
-        private static async Task<bool> SignInNow()
+        // The boards belong to signed-in accounts: without one there's nothing to send or show.
+        private static Task<bool> SignIn()
         {
-            try
-            {
-                if (UnityServices.State != ServicesInitializationState.Initialized) await UnityServices.InitializeAsync();
-                if (!AuthenticationService.Instance.IsSignedIn) await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                return true;
-            }
-            catch (Exception e)
-            {
-                Status = "Online boards are offline (no connection?).";
-                Debug.Log($"[OnlineLeaderboard] Sign-in failed: {e.Message}");
-                return false;
-            }
+            if (!Account.SignedIn) Status = "Sign in with Play Online to see and join the worldwide boards.";
+            return Task.FromResult(Account.SignedIn);
         }
 
-        // Runs waiting to go up: a match finished offline (solo, or co-op on the same Wi-Fi with no internet) is
-        // kept on this computer and sent the next time the boards are reachable.
+        // Runs waiting to go up: an online match whose result couldn't be sent at once (the connection dropped) is
+        // kept on this computer and sent the next time the boards are reachable. Offline practice never comes here.
         [Serializable] private class Pending { public RunRecord Run; public bool ForCrew; }
         [Serializable] private class PendingList { public List<Pending> Items = new List<Pending>(); }
         private const string PendingKey = "ProjectFossil.PendingRuns";

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.alven.fishnet.unitytransport": "https://github.com/ooonush/FishyUnityTransport.git?path=Assets/FishNet/Plugins/FishyUnityTransport",
     "com.firstgeargames.fishnet": "https://github.com/FirstGearGames/FishNet.git?path=Assets/FishNet#4.7.3",
     "com.rlabrecque.steamworks.net": "https://github.com/rlabrecque/Steamworks.NET.git?path=/com.rlabrecque.steamworks.net#2025.164.1",
     "com.unity.ai.assistant": "2.20.0-pre.1",
@@ -15,6 +16,8 @@
     "com.unity.render-pipelines.universal": "17.5.0",
     "com.unity.services.deployment": "1.7.2",
     "com.unity.services.leaderboards": "2.3.4",
+    "com.unity.services.multiplayer": "2.3.3",
+    "com.unity.services.vivox": "16.12.1",
     "com.unity.test-framework": "1.7.0",
     "com.unity.timeline": "1.8.12",
     "com.unity.ugui": "2.5.0",

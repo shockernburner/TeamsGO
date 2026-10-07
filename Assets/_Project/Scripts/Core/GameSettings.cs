@@ -73,6 +73,9 @@ namespace ProjectFossil.Core
             if (screenChanged) ApplyScreen();
         }
 
+        // Voice mode or volume changed (the online voice applies the new volume).
+        public static event System.Action VoiceChanged;
+
         public static void SetVoice(VoiceMode mode, float volume)
         {
             Load();
@@ -80,6 +83,7 @@ namespace ProjectFossil.Core
             PlayerPrefs.SetInt(Prefix + "Voice", (int)Voice);
             PlayerPrefs.SetFloat(Prefix + "VoiceVolume", VoiceVolume);
             PlayerPrefs.Save();
+            VoiceChanged?.Invoke();
         }
 
         private static void Apply()

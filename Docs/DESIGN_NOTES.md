@@ -735,3 +735,32 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   Leaderboard opens). Up to 50 runs are kept.
 - The join hint mentions 127.0.0.1 only in development builds; release builds explain same Wi-Fi and, without
   Steam, port 7770 or a virtual LAN for internet play.
+
+## 2026-10-07 — Online and offline, accounts, join codes, Vivox voice
+
+Decided with Firdous: everything online comes from Unity Gaming Services (the same on itch and Steam), players
+sign in with a username and password, offline is practice only.
+
+- Start menu: **Play Online** (needs an account; Solo or Co-op; scores go to the worldwide boards) and **Play
+  Offline** (practice: Solo, or co-op on the same Wi-Fi by address; scores stay on this computer). The top line in
+  a match says "practice" for offline games.
+- Accounts (`Net/Account`): username and password on Unity Authentication, checked locally first (username 3-20
+  of letters, digits . - @ _ and not offensive; password 8-30 with upper, lower, digit and symbol). The session is
+  remembered, so a computer signs back in at start. Online, a player's name is the account's username.
+- Online co-op (`NetSession`): the host gets a Unity Relay allocation and a 6-character join code, shown at the
+  top of the screen with a "Copy join code" button; friends type the code. No ports to open. Networking is now
+  always a FishNet Multipass of LAN (Tugboat), Relay (FishyUnityTransport) and Steam (when running); each match
+  starts only the transports it needs, and the one it depends on (Relay online, LAN offline) decides whether
+  hosting worked. Steam builds still take Steam invites when hosting online.
+- Voice: Steam voice is gone. The dinosaurs' ears now use Unity's own microphone input (`Net/MicLevel`, loudness
+  only), so they hear you in every build, solo too. Teammates hear each other online through Vivox
+  (`Net/VivoxVoice`): one positional channel per match named after the join code (heard within 35 m, clear within
+  3 m, fading by distance), push to talk on T mutes the mic between presses, Off never joins. Offline (same
+  Wi-Fi) has no voice transport; players are in the same place anyway.
+- Joiners send only their loudness to the host (`VoiceLevelMessage`), where the dinosaurs live.
+- The worldwide boards take only online matches from signed-in accounts; an online result that couldn't be sent
+  waits on the computer and goes up later. Offline results never do.
+- macOS microphone permission text is set (Player Settings > Mac > Microphone Usage Description), so macOS asks
+  for the microphone instead of silently giving the game nothing.
+- Untested here: signing up, Relay hosting/joining and Vivox need a real account, which I can't create; offline
+  hosting, the menus and leaving were tested in Play mode.
