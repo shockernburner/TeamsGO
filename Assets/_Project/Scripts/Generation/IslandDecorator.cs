@@ -291,7 +291,9 @@ namespace ProjectFossil.Generation
             Object.DestroyImmediate(water.GetComponent<Collider>()); // immediate: the NavMesh bakes this frame
             water.transform.SetParent(parent, false);
             water.transform.localPosition = new Vector3(s.worldSize * 0.5f, s.seaLevel * s.maxHeight, s.worldSize * 0.5f);
-            water.transform.localScale    = new Vector3(s.worldSize * 0.4f, 1f, s.worldSize * 0.4f); // 4x the island
+            // 20 km across: wide enough that, even from a peak or the title flight, the sea runs out to the horizon
+            // and its edges are lost in the haze instead of showing as a square.
+            water.transform.localScale    = new Vector3(2000f, 1f, 2000f);
 
             var r = water.GetComponent<Renderer>();
             var mat = WaterMaterial();

@@ -74,7 +74,7 @@ namespace ProjectFossil.Net
         {
             bool want = SteamService.Ready && InMatch && LocalPlayer != null && GameSettings.Voice != VoiceMode.Off &&
                         (GameSettings.Voice == VoiceMode.OpenMic ||
-                         (Keyboard.current != null && Keyboard.current.vKey.isPressed));
+                         (Keyboard.current != null && Keyboard.current.tKey.isPressed));
             if (want && !_recording) { SteamUser.StartVoiceRecording(); _recording = true; }
             else if (!want && _recording) StopRecording();
 

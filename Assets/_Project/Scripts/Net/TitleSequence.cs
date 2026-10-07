@@ -25,7 +25,7 @@ namespace ProjectFossil.Net
         private const float StudioSeconds = 3f, LogoSeconds = 4f, RiseSeconds = 1.2f, FadeSeconds = 1f;
         private const float VoiceBreath = 0.8f;   // a card holds this long after its line is spoken
         private const float RingSeconds = 9f;     // the logo hit rings on under the menu before the loop takes over
-        private const float MusicVolume = 0.85f, DuckedVolume = 0.5f, BedVolume = 0.5f;
+        private const float MusicVolume = 1f, DuckedVolume = 0.55f, BedVolume = 1f;
 
         private enum Phase { Building, Studio, Story, Title, Menu }
         private enum Shot { Flight, Space, Dark }
@@ -313,7 +313,7 @@ namespace ProjectFossil.Net
                 var go = new GameObject("Title Camera") { tag = "MainCamera" };
                 _cam = go.AddComponent<Camera>();
                 _cam.fieldOfView = 50f;
-                _cam.farClipPlane = 4000f;
+                _cam.farClipPlane = 15000f; // out to the sea's horizon
             }
             _cam.gameObject.SetActive(true);
             Orbit();

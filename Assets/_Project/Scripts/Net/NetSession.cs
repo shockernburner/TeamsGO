@@ -99,6 +99,7 @@ namespace ProjectFossil.Net
             _boot = GetComponent<MatchBootstrap>();
             _soloDinosaur = _boot != null ? _boot.dinosaurPrefab : null;
             _address = PlayerPrefs.GetString(AddressKey, "127.0.0.1");
+            OnlineLeaderboard.Flush(); // runs finished offline last time go up now
             PlayerName = CleanName(PlayerPrefs.GetString(NameKey, ""));
             if (string.IsNullOrEmpty(PlayerName) && SteamService.Ready) PlayerName = CleanName(SteamService.PersonaName);
             if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
@@ -818,9 +819,12 @@ namespace ProjectFossil.Net
             GUI.enabled = true;
 
             GUILayout.Space(8);
+            // 127.0.0.1 (two copies on one computer) is for testing, so only development builds mention it.
+            string sameWifi = "Same Wi-Fi: type the address shown at the top of the host's screen.";
+            if (Debug.isDebugBuild) sameWifi += " Same computer: 127.0.0.1.";
             GUILayout.Label(SteamService.Ready
-                ? "Steam friends join from your invite, or from \"Join game\" in the Steam friends list. Same Wi-Fi: type the host's address above."
-                : "Same computer: 127.0.0.1. Same Wi-Fi: the address the host sees at the top of their screen. (Start Steam to play with friends online.)", _label);
+                ? "Steam friends join from your invite, or from \"Join game\" in the Steam friends list. " + sameWifi
+                : sameWifi + " Over the internet: the host forwards UDP port " + Port + ", or both join the same virtual LAN.", _label);
             if (!string.IsNullOrEmpty(_status))
             {
                 GUILayout.Space(6);

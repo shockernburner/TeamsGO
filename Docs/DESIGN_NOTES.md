@@ -720,3 +720,18 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - Skipping jumps the music to the logo hit and goes to the menu.
 - Tests: `IntroScoreTests` check the score's length, that the hit is the loudest moment, the silence before the
   last line, the drop at the outposts, the build growing, determinism, and the seamless menu loop.
+
+## 2026-10-07 — Audible music, a sea to the horizon, push to talk on T, offline runs
+
+- The intro music played but was barely heard on a MacBook: about −28 dB and mostly under 150 Hz, which laptop
+  speakers don't reproduce. Re-voiced: strings doubled an octave up, the drone's octaves added, a soft bell
+  arpeggio over the story (quickening in the build), a click and a higher body on the drum, and the whole score
+  normalised louder. Measured in Play: most of the energy is now above 150 Hz.
+- The sea plane was 4 km across, so from the title flight (or a peak) its square edge showed against the sky. It
+  is now 20 km, and the title camera sees 15 km, so the sea meets the sky in a straight horizon.
+- Push to talk moved from V (the first/third-person view key) to T.
+- Worldwide boards: every finished run waits in a queue on this computer until it's sent, so solo or same-Wi-Fi
+  games played without internet go up the next time the game is online (at start, after a match, or when the
+  Leaderboard opens). Up to 50 runs are kept.
+- The join hint mentions 127.0.0.1 only in development builds; release builds explain same Wi-Fi and, without
+  Steam, port 7770 or a virtual LAN for internet play.
