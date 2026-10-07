@@ -101,6 +101,23 @@ namespace ProjectFossil.Match
             GenerateAndSpawn(usedSeed);
         }
 
+        // An island to look at behind the title and the menu: ground, water, plants and sky, no player and no match.
+        // Returns its centre and size. The next GenerateAndSpawn replaces it.
+        public (Vector3 centre, float extent, float top) BuildPreviewIsland(int previewSeed)
+        {
+            if (islandSettings == null) return (Vector3.zero, 0f, 0f);
+            if (_player != null) Leave();
+            IslandTerrainBuilder.DestroyExisting();
+            var data = new IslandGenerator(previewSeed, islandSettings).Generate();
+            IslandTerrainBuilder.Build(data, null, showPoiMarkers: false);
+            Physics.SyncTransforms();
+            // Golden light under a clear sky: the island at its most inviting, whatever the player picked.
+            WorldConditions.Override(DayTime.Dusk, Weather.Clear, 210f);
+            WorldConditions.Begin(previewSeed);
+            float size = islandSettings.worldSize;
+            return (new Vector3(size * 0.5f, 0f, size * 0.5f), size, islandSettings.maxHeight);
+        }
+
         public void GenerateAndSpawn(int usedSeed)
         {
             if (islandSettings == null)

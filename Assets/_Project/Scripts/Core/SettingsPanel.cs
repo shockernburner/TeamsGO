@@ -7,8 +7,10 @@ namespace ProjectFossil.Core
     public static class SettingsPanel
     {
         private static GUIStyle _title, _label, _button;
+        // Set by the title sequence while it exists: the start menu's settings then offer "Play intro".
+        public static System.Action PlayIntro;
 
-        public static bool Draw(Rect area)
+        public static bool Draw(Rect area, bool onStartMenu = false)
         {
             GameSettings.Load();
             EnsureStyles();
@@ -43,7 +45,14 @@ namespace ProjectFossil.Core
             if (voice != GameSettings.Voice || !Mathf.Approximately(voiceVol, GameSettings.VoiceVolume)) GameSettings.SetVoice(voice, voiceVol);
 
             GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            if (onStartMenu && PlayIntro != null && GUILayout.Button("Play intro", _button, GUILayout.Height(34)))
+            {
+                PlayIntro();
+                back = true;
+            }
             if (GUILayout.Button("Back", _button, GUILayout.Height(34))) back = true;
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
 
             if (quality != GameSettings.Quality || res != GameSettings.ResolutionIx || full != GameSettings.Fullscreen ||

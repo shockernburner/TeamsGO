@@ -131,6 +131,10 @@ namespace ProjectFossil.Match
         public int   BestScore;
         public bool  NewBest;
 
+        // The leaderboard on this computer (filled in by whoever records the run)
+        public string Crew;
+        public int    BoardPlace;      // 1 = best run on record here, 0 = not recorded
+
         // Survivor Rank before and after this match
         public int   RankBefore;
         public int   RankAfter;
