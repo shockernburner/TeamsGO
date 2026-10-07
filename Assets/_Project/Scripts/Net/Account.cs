@@ -159,6 +159,11 @@ namespace ProjectFossil.Net
         {
             Debug.Log($"[Account] {(signUp ? "Sign-up" : "Sign-in")} failed: {e.ErrorCode} {e.Message}");
             string m = e.Message ?? "";
+            // The project hasn't switched on username/password sign-in (Unity Cloud > Player Authentication >
+            // Identity providers). Not the player's fault, so don't blame their password.
+            if (m.IndexOf("provider is not available", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                m.IndexOf("PERMISSION_DENIED", StringComparison.Ordinal) >= 0)
+                return "Online accounts aren't switched on for this game yet. Play offline for now.";
             if (m.IndexOf("exist", StringComparison.OrdinalIgnoreCase) >= 0 && signUp) return "That username is taken. Try another.";
             if (m.IndexOf("password", StringComparison.OrdinalIgnoreCase) >= 0 && signUp) return "Password: " + PasswordRules + ".";
             if (e.ErrorCode == CommonErrorCodes.TransportError || e.ErrorCode == CommonErrorCodes.Timeout)
