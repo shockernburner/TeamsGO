@@ -792,3 +792,13 @@ sign in with a username and password, offline is practice only.
   white background is made transparent and its navy circuit lines turned cream (the wordmark's colour), keeping
   the cyan waves; `VantwardMark.png` and `VantwardGames.png` (mark beside the VANTWARD GAMES wordmark) are
   rebuilt from it. `VantwardMark_light_bg.png` keeps the original colours on transparent for light backgrounds.
+
+## 2026-10-08 — The intro: background music and voice only
+
+Firdous's direction after listening: nothing under the story but the background music and the voice.
+- The score is now only the drone and soft strings, changing chord with each card; no shimmer, arpeggio, drums,
+  swells, breath, boom or ringing chord. It steps back (to about a third) under the last line.
+- "They can hear you" runs straight into the roar and the logo: the last card ends 0.15 s after the voice (1.94 s
+  in all), the roar plays at its current, quieter level, and TETHER wipes in within 0.45 s. The background then
+  comes back under the logo and carries into the menu loop, which starts on the same chord and has no bell.
+- Short cards fade their words faster (30% of the card), so the last line is readable.

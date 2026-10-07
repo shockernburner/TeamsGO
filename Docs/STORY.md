@@ -59,9 +59,10 @@ long as its clip plus a short breath.
 movie-trailer shouting. Slow: about two words a second, with real pauses at the full stops. Lines 9 and 10 get
 quieter, line 10 almost whispered.
 
-**Music:** original, built for the game (no licensed track needed): a low drone and soft strings under lines 1 to
-6, near silence at line 7, a rising pulse with drums under line 8, a cut to silence for line 10, one big hit on the
-logo, then a quiet menu loop.
+**Music:** original, built for the game: only a quiet background (a low drone and soft strings) under the narrator,
+changing chord with each line. It steps back under "They can hear you"; the moment that line ends, the roar plays and
+the TETHER logo appears, and the same background carries on into the menu. No drums, swells, bells or hits
+(Firdous, 2026-10-08).
 
 **Who sees it:** the whole intro plays the first time the game starts on a computer. After that the game opens on
 the TETHER: Primal logo and the menu. Settings has "Play intro" to watch it again, and any key skips it.

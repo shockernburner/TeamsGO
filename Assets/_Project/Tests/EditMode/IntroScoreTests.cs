@@ -37,30 +37,29 @@ namespace ProjectFossil.Tests.EditMode
             Assert.AreEqual(hit + Ring, Score.Length / (float)SoundSynth.SampleRate, 0.01f);
         }
 
-        // The logo is the high point, but a swell rather than a jolt: louder than the story, not twice as loud.
+        // Only a background: under the logo it carries on at about the story's level, no hit and no jump.
         [Test]
-        public void TheLogoIsTheHighPoint_WithoutAJolt()
+        public void NoHitAtTheLogo_TheBackgroundCarriesOn()
         {
-            float hit = Start(Cards.Length);
-            float atHit = Rms(hit, hit + 1f), story = Rms(Start(1) + 2f, Start(1) + 4f);
-            Assert.Greater(atHit, story);
-            Assert.Less(atHit, story * 3f);
-            Assert.Greater(atHit, Rms(Start(7) + 5f, Start(8)));
-            Assert.Greater(Rms(hit - 0.5f, hit), Rms(Start(9) + 0.3f, Start(9) + 0.5f), "the music swells back before the logo");
+            float end = Start(Cards.Length), story = Rms(Start(3) + 2f, Start(4));
+            float under = Rms(end, end + 1f);
+            Assert.Less(under, story * 1.2f, "no hit when the logo appears");
+            Assert.Greater(Rms(end + 3f, end + 5f), story * 0.6f, "the background comes back under the logo");
         }
 
         [Test]
-        public void SilenceBeforeTheLastLine_AndTheMusicDropsAtTheOutposts()
+        public void TheBackgroundStepsBackForTheLastLine()
         {
             float pad = Rms(Start(3) + 2f, Start(4));
-            Assert.Less(Rms(Start(9) + 0.3f, Start(9) + 0.5f), pad * 0.4f, "silence on 'They can hear you'");
-            Assert.Less(Rms(Start(6) + 2f, Start(7)), pad, "the music drops away when the outposts go silent");
+            Assert.Less(Rms(Start(9) + 2.5f, Start(10)), pad * 0.6f);
         }
 
         [Test]
-        public void TheBuildGrows()
+        public void SteadyThroughTheStory_NoDropsOrBuilds()
         {
-            Assert.Greater(Rms(Start(7) + 6f, Start(8)), Rms(Start(7), Start(7) + 2f));
+            float a = Rms(Start(3) + 2f, Start(4)), drop = Rms(Start(6) + 2f, Start(7)), build = Rms(Start(7) + 5f, Start(8));
+            Assert.Greater(drop, a * 0.6f);
+            Assert.Less(build, a * 1.5f);
         }
 
         [Test]
