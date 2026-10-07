@@ -700,3 +700,23 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   mention Unity Gaming Services.
 - Run In Background is on: a host who switches windows no longer freezes the match for the team.
 - App icon: `Brand/Icon1024.png` (default icon for every platform).
+
+## 2026-10-07 — Intro music and narration
+
+- The intro now opens "In some parallel universe" (lines and cue sheet in Docs/STORY.md; the asteroid streak is
+  gone, the stars stay).
+- Music (`Audio/SoundSynth.Score.cs`): composed in code like the other synthesized sounds, so there's no licence
+  to track. D minor: drone and strings that change chord with each card, a high shimmer under the stars, the
+  music dropping away at "the outposts went silent", a pulse with drums building under the crews, silence and a
+  breath before "They can hear you", then a boom, a crash and the full chord with a roar as TETHER slams in. The
+  hit rings for 9 s, then a quiet 32 s loop (no seam) plays behind the menu; it fades out when a match starts and
+  returns with the menu. Each card's music is the fourth column of `Story/Intro.txt` (pad, stars, drop, build,
+  hold, silence).
+- The intro's clock is the music's playback position, so words, pictures and notes can't drift apart. The menu
+  island is built first, behind black, so the build doesn't stall the music. Composing the score takes about 3 s
+  on a worker thread, done while the island builds.
+- Narration: `Resources/Story/Voice/Line01..Line10` (any audio format Unity imports). A spoken card holds until its
+  line is finished plus 0.8 s, the music ducks under the voice, and skipping stops it. No clips yet: text only.
+- Skipping jumps the music to the logo hit and goes to the menu.
+- Tests: `IntroScoreTests` check the score's length, that the hit is the loudest moment, the silence before the
+  last line, the drop at the outposts, the build growing, determinism, and the seamless menu loop.

@@ -11,6 +11,7 @@
         "ProjectFossil.Player",
         "ProjectFossil.Match",
         "ProjectFossil.Economy",
+        "ProjectFossil.Audio",
         "Unity.Services.Core",
         "Unity.Services.Authentication",
         "Unity.Services.Leaderboards"

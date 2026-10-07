@@ -1,16 +1,19 @@
-using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using ProjectFossil.Audio;
 using ProjectFossil.Core;
 using ProjectFossil.Match;
 
 namespace ProjectFossil.Net
 {
     // What a player sees from launch to the menu (Docs/STORY.md): the studio logo on black, the story told in short
-    // cards over a live island the camera slowly circles, then the TETHER logo slams in, PRIMAL under it, and the two
-    // ease up to the top of the screen as the menu appears. The island keeps turning behind the menu, and returns
-    // after a match. The first launch plays it all; later launches start at the logo. Any key or click skips.
+    // cards over a live island the camera slowly circles, read aloud by a narrator when the voice clips exist, then
+    // the TETHER logo slams in on a roar and a music hit, PRIMAL under it, and the two ease up to the top of the
+    // screen as the menu appears. Music runs under all of it (SoundSynth.IntroScore) and the visuals follow the
+    // music's clock, so they never drift apart. A quiet loop plays behind the menu, and stops in a match. The first
+    // launch plays it all; later launches start at the logo. Any key or click skips to the logo hit and the menu.
     public class TitleSequence : MonoBehaviour
     {
         public static TitleSequence Instance { get; private set; }
@@ -20,12 +23,17 @@ namespace ProjectFossil.Net
         private const float MenuFog = 0.0016f;
         private const string SeenKey = "ProjectFossil.IntroSeen";
         private const float StudioSeconds = 3f, LogoSeconds = 4f, RiseSeconds = 1.2f, FadeSeconds = 1f;
+        private const float VoiceBreath = 0.8f;   // a card holds this long after its line is spoken
+        private const float RingSeconds = 9f;     // the logo hit rings on under the menu before the loop takes over
+        private const float MusicVolume = 0.85f, DuckedVolume = 0.5f, BedVolume = 0.5f;
 
-        private enum Phase { Studio, Building, Story, Title, Menu }
+        private enum Phase { Building, Studio, Story, Title, Menu }
         private enum Shot { Flight, Space, Dark }
 
-        private Phase _phase = Phase.Studio;
-        private float _phaseTime;
+        private Phase _phase = Phase.Building;
+        private Phase _after = Phase.Studio;      // where Building goes once the island and the music are ready
+        private float _t;                         // the intro's clock: seconds since the studio logo appeared
+        private float _waited;
         private bool _skip;
 
         private MatchBootstrap _boot;
@@ -33,9 +41,18 @@ namespace ProjectFossil.Net
         private Vector3 _centre;
         private float _radius, _height, _angle, _lookHeight;
 
-        private readonly List<(float seconds, string text, Shot shot)> _cards = new List<(float, string, Shot)>();
+        private readonly List<(float seconds, string text, Shot shot, SoundSynth.Cue cue, AudioClip voice)> _cards =
+            new List<(float, string, Shot, SoundSynth.Cue, AudioClip)>();
+        private float[] _cardStart;
+        private float _hitAt;                     // when the logo slams in, on the intro's clock
         private int _card;
         private float _cardTime;
+        private int _spoken = -1;
+
+        private AudioSource _music, _voice, _bed, _sting;
+        private AudioClip _score, _bedClip, _roar;
+        private Task<float[]> _scoreJob, _bedJob;
+        private bool _hitPlayed;
 
         private Texture2D _studio, _tether, _primal;
         private GUIStyle _bigText, _story, _hint, _tag;
@@ -53,7 +70,8 @@ namespace ProjectFossil.Net
             _stars = new Vector2[140];
             for (int i = 0; i < _stars.Length; i++) _stars[i] = new Vector2((float)rng.NextDouble(), (float)rng.NextDouble());
             SettingsPanel.PlayIntro = PlayIntro;
-            if (PlayerPrefs.GetInt(SeenKey, 0) == 1) StartCoroutine(BuildBackdrop(Phase.Title)); // seen it: logo only
+            SetUpAudio();
+            _after = PlayerPrefs.GetInt(SeenKey, 0) == 1 ? Phase.Title : Phase.Studio; // seen it: logo only
         }
 
         private void OnDestroy()
@@ -62,6 +80,8 @@ namespace ProjectFossil.Net
             SettingsPanel.PlayIntro = null;
         }
 
+        // Each card: seconds | line | shot | music, and its narration (Story/Voice/LineNN) when it exists. A spoken
+        // card holds until the line is finished, plus a breath.
         private void LoadStory()
         {
             var asset = Resources.Load<TextAsset>("Story/Intro");
@@ -74,16 +94,58 @@ namespace ProjectFossil.Net
                 if (parts.Length < 2 || !float.TryParse(parts[0], System.Globalization.NumberStyles.Float,
                                                         System.Globalization.CultureInfo.InvariantCulture, out float s)) continue;
                 string shot = parts.Length > 2 ? parts[2].Trim() : "";
-                _cards.Add((s, parts[1].Trim(), shot == "space" ? Shot.Space : shot == "dark" ? Shot.Dark : Shot.Flight));
+                var cue = parts.Length > 3 && System.Enum.TryParse(parts[3].Trim(), true, out SoundSynth.Cue c) ? c
+                        : shot == "space" ? SoundSynth.Cue.Stars : SoundSynth.Cue.Pad;
+                var voice = Resources.Load<AudioClip>($"Story/Voice/Line{_cards.Count + 1:00}");
+                if (voice != null) s = Mathf.Max(s, voice.length + VoiceBreath);
+                _cards.Add((s, parts[1].Trim(), shot == "space" ? Shot.Space : shot == "dark" ? Shot.Dark : Shot.Flight, cue, voice));
             }
+            _cardStart = new float[_cards.Count + 1];
+            _cardStart[0] = StudioSeconds;
+            for (int i = 0; i < _cards.Count; i++) _cardStart[i + 1] = _cardStart[i] + _cards[i].seconds;
+            _hitAt = _cardStart[_cards.Count];
+        }
+
+        // Music is composed on a worker thread while the island is built (both take a moment); the clips are made
+        // on the main thread once the samples are ready.
+        private void SetUpAudio()
+        {
+            _music = NewSource(false);
+            _voice = NewSource(false);
+            _bed   = NewSource(true);
+            _sting = NewSource(false);
+            _roar  = SoundLibrary.One("Roar");
+            if (_roar == null) _roar = MakeClip("IntroRoar", SoundSynth.Roar(2));
+            var lengths = new float[_cards.Count];
+            var cues = new SoundSynth.Cue[_cards.Count];
+            for (int i = 0; i < _cards.Count; i++) { lengths[i] = _cards[i].seconds; cues[i] = _cards[i].cue; }
+            _scoreJob = Task.Run(() => SoundSynth.IntroScore(StudioSeconds, lengths, cues, RingSeconds));
+            _bedJob   = Task.Run(() => SoundSynth.MenuLoop());
+        }
+
+        private AudioSource NewSource(bool loop)
+        {
+            var a = gameObject.AddComponent<AudioSource>();
+            a.playOnAwake = false;
+            a.loop = loop;
+            a.spatialBlend = 0f;
+            a.ignoreListenerPause = true; // the intro and the menu play even if a paused match left the listener paused
+            return a;
+        }
+
+        private static AudioClip MakeClip(string name, float[] samples)
+        {
+            var clip = AudioClip.Create(name, samples.Length, 1, SoundSynth.SampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
         }
 
         // Settings' "Play intro": the whole thing again, from the studio logo.
         public void PlayIntro()
         {
             if (NetSession.Instance != null && !NetSession.Instance.InMenu) return;
-            _card = 0;
-            _cardTime = 0f;
+            _bed.Stop();
+            StartIntro(0f);
             Enter(Phase.Studio);
         }
 
@@ -91,63 +153,148 @@ namespace ProjectFossil.Net
 
         private void Update()
         {
-            _phaseTime += Time.unscaledDeltaTime;
             if (_phase != Phase.Menu && _phase != Phase.Building && AnyKey()) _skip = true;
+            CollectMusic();
 
-            switch (_phase)
+            if (_phase == Phase.Building)
             {
-                case Phase.Studio:
-                    if (_skip) { Finish(); break; }
-                    if (_phaseTime > StudioSeconds)
-                    {
-                        if (IslandShown) Enter(Phase.Story); // replayed from Settings: the island is already there
-                        else StartCoroutine(BuildBackdrop(Phase.Story));
-                    }
-                    break;
-                case Phase.Story:
-                    if (_skip) { Finish(); break; }
-                    _cardTime += Time.unscaledDeltaTime;
-                    if (_card < _cards.Count && _cardTime > _cards[_card].seconds) { _card++; _cardTime = 0f; }
-                    if (_card >= _cards.Count) Enter(Phase.Title);
-                    break;
-                case Phase.Title:
-                    if (_skip || _phaseTime > LogoSeconds + RiseSeconds) Finish();
-                    break;
+                // The island first, behind black; then the music, given a few seconds at most.
+                _waited += Time.unscaledDeltaTime;
+                if (_waited > 0.1f && !IslandShown) ShowBackdrop();
+                if (IslandShown && (_score != null || _waited > 6f))
+                {
+                    StartIntro(_after == Phase.Title ? _hitAt - 0.6f : 0f);
+                    Enter(_after);
+                }
             }
+            else if (_phase != Phase.Menu)
+            {
+                // The intro's clock is the music's while it plays, so pictures, words and notes stay together.
+                if (_music.isPlaying && _music.clip == _score) _t = _music.time;
+                else _t += Time.unscaledDeltaTime;
+
+                if (_skip) Skip();
+                else if (_t < StudioSeconds) _phase = Phase.Studio;
+                else if (_t < _hitAt) { _phase = Phase.Story; TrackCard(); }
+                else if (_t < _hitAt + LogoSeconds + RiseSeconds) { _phase = Phase.Title; Hit(); }
+                else Finish();
+            }
+
+            MenuMusic();
             // The flight is for the menu; a match brings its own camera.
             bool menu = NetSession.Instance == null || NetSession.Instance.ShowingMenu;
             if (_cam != null && _cam.gameObject.activeSelf != menu) _cam.gameObject.SetActive(menu);
             Orbit();
         }
 
-        private void Enter(Phase phase) { _phase = phase; _phaseTime = 0f; _skip = false; }
+        private void Enter(Phase phase) { _phase = phase; _skip = false; }
 
-        // Skipped or played through: straight to the menu, with an island behind it, and not the long version again.
+        private void StartIntro(float at)
+        {
+            _t = at;
+            _hitPlayed = at > _hitAt;
+            _spoken = -1;
+            _card = 0;
+            _cardTime = 0f;
+            if (_score == null) return;
+            _music.clip = _score;
+            _music.volume = MusicVolume;
+            _music.time = Mathf.Clamp(at, 0f, _score.length - 0.1f);
+            _music.Play();
+        }
+
+        // Which card is up, how long it has been, and its narration.
+        private void TrackCard()
+        {
+            int c = 0;
+            while (c < _cards.Count - 1 && _t >= _cardStart[c + 1]) c++;
+            _card = c;
+            _cardTime = _t - _cardStart[c];
+            if (_spoken != c)
+            {
+                _spoken = c;
+                if (_cards[c].voice != null) { _voice.Stop(); _voice.clip = _cards[c].voice; _voice.Play(); }
+            }
+            // The music steps back while the narrator speaks.
+            float target = _voice.isPlaying ? DuckedVolume : MusicVolume;
+            _music.volume = Mathf.MoveTowards(_music.volume, target, Time.unscaledDeltaTime * 1.5f);
+        }
+
+        // The roar with the music's hit, as TETHER slams in.
+        private void Hit()
+        {
+            _music.volume = MusicVolume;
+            if (_hitPlayed) return;
+            _hitPlayed = true;
+            if (_roar != null) _sting.PlayOneShot(_roar, 0.9f);
+        }
+
+        // Any key: the story's music jumps to the hit, the narrator stops, and the menu comes up.
+        private void Skip()
+        {
+            _voice.Stop();
+            if (_t < _hitAt)
+            {
+                if (_score != null && _music.clip == _score) _music.time = _hitAt;
+                Hit();
+            }
+            Finish();
+        }
+
+        // Played through or skipped: the menu, and not the long version again.
         private void Finish()
         {
             PlayerPrefs.SetInt(SeenKey, 1);
             PlayerPrefs.Save();
-            if (IslandShown) Enter(Phase.Menu);
-            else StartCoroutine(BuildBackdrop(Phase.Menu));
+            Enter(Phase.Menu);
         }
 
-        private bool IslandShown => _cam != null && IslandWorld.Current != null;
+        private void CollectMusic()
+        {
+            if (_score == null && _scoreJob != null && _scoreJob.IsCompleted)
+            {
+                if (_scoreJob.Status == TaskStatus.RanToCompletion) _score = MakeClip("IntroScore", _scoreJob.Result);
+                _scoreJob = null;
+            }
+            if (_bedClip == null && _bedJob != null && _bedJob.IsCompleted)
+            {
+                if (_bedJob.Status == TaskStatus.RanToCompletion) _bedClip = MakeClip("MenuLoop", _bedJob.Result);
+                _bedJob = null;
+            }
+        }
+
+        // On the menu, the loop takes over once the logo hit has rung out; in a match all of it goes quiet.
+        private void MenuMusic()
+        {
+            bool menu = _phase == Phase.Menu && (NetSession.Instance == null || NetSession.Instance.ShowingMenu);
+            if (!menu)
+            {
+                if (_phase == Phase.Menu) // a match: fade everything out
+                {
+                    _music.volume = Mathf.MoveTowards(_music.volume, 0f, Time.unscaledDeltaTime * 1.5f);
+                    _bed.volume = Mathf.MoveTowards(_bed.volume, 0f, Time.unscaledDeltaTime * 1.5f);
+                    if (_music.volume <= 0f) _music.Stop();
+                    if (_bed.volume <= 0f) _bed.Stop();
+                }
+                return;
+            }
+            bool ringing = _music.isPlaying && _music.clip == _score && _music.time < _score.length - 2f;
+            if (!ringing && _bedClip != null && !_bed.isPlaying)
+            {
+                _bed.clip = _bedClip;
+                _bed.volume = 0f;
+                _bed.Play();
+            }
+            if (_bed.isPlaying) _bed.volume = Mathf.MoveTowards(_bed.volume, BedVolume, Time.unscaledDeltaTime * 0.25f);
+        }
+
+        private bool IslandShown => _cam != null && _cam.gameObject.activeSelf && IslandWorld.Current != null;
 
         private static bool AnyKey()
         {
             return (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame) ||
                    (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) ||
                    (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame);
-        }
-
-        // Two black frames first, so the screen is clear while the island is built (that takes a few seconds).
-        private IEnumerator BuildBackdrop(Phase next)
-        {
-            Enter(Phase.Building);
-            yield return null;
-            yield return null;
-            ShowBackdrop();
-            Enter(next);
         }
 
         // The island behind the menu, and the camera that circles it. Also called on the way back from a match.
@@ -175,7 +322,7 @@ namespace ProjectFossil.Net
         // A match is starting (a tool can start one mid-intro): skip the rest.
         public void EndIntro()
         {
-            StopAllCoroutines();
+            _voice.Stop();
             if (_phase != Phase.Menu) Enter(Phase.Menu);
         }
 
@@ -205,12 +352,14 @@ namespace ProjectFossil.Net
             GUI.depth = -10; // above the menu
             switch (_phase)
             {
-                case Phase.Studio:
                 case Phase.Building:
                     Fill(Color.black, 1f);
-                    if (_phase == Phase.Studio)
-                        DrawLogo(_studio, "VANTWARD GAMES", 0.38f, Screen.height * 0.5f,
-                                 Fade(_phaseTime, 0.2f, 0.2f + FadeSeconds * 0.8f, StudioSeconds - FadeSeconds * 0.8f, StudioSeconds), _bigText);
+                    break;
+                case Phase.Studio:
+                    Fill(Color.black, 1f);
+                    DrawLogo(_studio, "VANTWARD GAMES", 0.38f, Screen.height * 0.5f,
+                             Fade(_t, 0.2f, 0.2f + FadeSeconds * 0.8f, StudioSeconds - FadeSeconds * 0.8f, StudioSeconds), _bigText);
+                    Hint();
                     break;
                 case Phase.Story:
                     DrawStory();
@@ -235,21 +384,21 @@ namespace ProjectFossil.Net
         private void DrawStory()
         {
             if (_card >= _cards.Count) { Fill(Color.black, 0.3f); return; }
-            var (seconds, text, shot) = _cards[_card];
+            var (seconds, text, shot, _, _) = _cards[_card];
             // How dark the island is under the words; it eases between cards rather than cutting.
             float veil = VeilFor(shot);
             if (_cardTime < FadeSeconds)
                 veil = Mathf.Lerp(_card > 0 ? VeilFor(_cards[_card - 1].shot) : 1f, veil, _cardTime / FadeSeconds);
             Fill(Color.black, veil);
-            if (shot == Shot.Space) DrawSpace(_cardTime / seconds);
+            if (shot == Shot.Space) DrawStars();
 
             var c = GUI.color; GUI.color = new Color(1f, 1f, 1f, Fade(_cardTime, 0f, FadeSeconds, seconds - FadeSeconds, seconds));
             GUI.Label(new Rect(Screen.width * 0.12f, Screen.height * 0.64f, Screen.width * 0.76f, 120f), text, _story);
             GUI.color = c;
         }
 
-        // Faint stars, and a bright streak crossing high and passing by: the asteroid that missed.
-        private void DrawSpace(float t)
+        // Faint, twinkling stars over black.
+        private void DrawStars()
         {
             var c = GUI.color;
             for (int i = 0; i < _stars.Length; i++)
@@ -257,27 +406,13 @@ namespace ProjectFossil.Net
                 GUI.color = new Color(1f, 1f, 1f, 0.25f + 0.25f * Mathf.Sin(Time.unscaledTime * 1.7f + i * 2.3f));
                 GUI.DrawTexture(new Rect(_stars[i].x * Screen.width, _stars[i].y * Screen.height * 0.6f, 2f, 2f), Texture2D.whiteTexture);
             }
-            float k = Mathf.Clamp01((t - 0.15f) / 0.55f); // crosses in the middle of the card
-            if (k > 0f && k < 1f)
-            {
-                var head = new Vector2(Mathf.Lerp(-0.1f, 1.1f, k) * Screen.width, Mathf.Lerp(0.12f, 0.38f, k) * Screen.height);
-                var dir = new Vector2(1.2f * Screen.width, 0.26f * Screen.height).normalized;
-                const int Trail = 90;
-                for (int i = 0; i < Trail; i++)
-                {
-                    var p = head - dir * i * 6f;
-                    float size = Mathf.Lerp(9f, 1.5f, (float)i / Trail);
-                    GUI.color = new Color(1f, 0.9f - i * 0.004f, 0.7f - i * 0.006f, 1f - (float)i / Trail);
-                    GUI.DrawTexture(new Rect(p.x - size * 0.5f, p.y - size * 0.5f, size, size), Texture2D.whiteTexture);
-                }
-            }
             GUI.color = c;
         }
 
         // TETHER slams in as its line draws left to right, PRIMAL fades in under it, then both ease up to the menu.
         private void DrawLogoReveal()
         {
-            float t = _phaseTime;
+            float t = _t - _hitAt;
             Fill(Color.black, Mathf.Lerp(0.65f, 0.3f, Mathf.Clamp01((t - LogoSeconds) / RiseSeconds)));
             float slam = Mathf.Clamp01(t / 0.35f);
             float scale = Mathf.Lerp(1.18f, 1f, 1f - (1f - slam) * (1f - slam));
