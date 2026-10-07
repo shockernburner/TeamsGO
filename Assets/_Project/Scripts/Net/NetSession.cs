@@ -709,7 +709,8 @@ namespace ProjectFossil.Net
             foreach (char c in name)
                 if (char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' || c == '.') sb.Append(c);
             string s = sb.ToString().Trim();
-            return s.Length > max ? s.Substring(0, max).Trim() : s;
+            if (s.Length > max) s = s.Substring(0, max).Trim();
+            return NameFilter.IsOffensive(s) ? "" : s; // callers fall back to a generated name
         }
 
         private void SaveName()

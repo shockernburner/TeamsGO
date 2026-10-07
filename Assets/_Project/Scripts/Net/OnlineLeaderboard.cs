@@ -118,7 +118,8 @@ namespace ProjectFossil.Net
                 catch { /* an entry without readable details still shows its score */ }
                 var run = new RunRecord
                 {
-                    Player = meta?.player ?? StripTag(e.PlayerName), Crew = meta?.crew ?? "", CrewSize = Math.Max(1, meta?.size ?? 1),
+                    Player = NameFilter.Clean(meta?.player ?? StripTag(e.PlayerName), "Survivor"),
+                    Crew = string.IsNullOrWhiteSpace(meta?.crew) ? "" : NameFilter.Clean(meta.crew, "Unnamed crew"), CrewSize = Math.Max(1, meta?.size ?? 1),
                     Score = (int)e.Score, Kills = meta?.kills ?? 0, Seconds = meta?.seconds ?? 0f,
                     Result = Enum.TryParse(meta?.result, out MatchResult r) ? r : MatchResult.Extracted,
                 };
