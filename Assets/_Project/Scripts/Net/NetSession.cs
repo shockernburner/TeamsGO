@@ -32,9 +32,11 @@ namespace ProjectFossil.Net
         public const int    MaxTeam    = 4;
         private const string AddressKey = "ProjectFossil.JoinAddress";
         private const string NameKey    = "ProjectFossil.PlayerName";
+        private const string CrewKey    = "ProjectFossil.CrewName";
         private const string TimeKey    = "ProjectFossil.DayTime";
         private const string WeatherKey = "ProjectFossil.Weather";
         private const int    MaxName    = 16;
+        private const int    MaxCrew    = 24;
         private static readonly string[] Names =
         {
             "Kestrel", "Juniper", "Rook", "Vega", "Ember", "Wren", "Flint", "Cedar", "Lark", "Briar",
@@ -52,6 +54,9 @@ namespace ProjectFossil.Net
         private VoiceChat _voice;
         // What teammates see over this player's head and in team messages.
         public string PlayerName { get; private set; }
+        // The crew this player's runs go on the leaderboard under. Joiners play under the host's.
+        public string CrewName { get; private set; }
+        private string _hostCrew; // joined: the host's crew name
         public bool IsOnline => _mode == Mode.Hosting || _mode == Mode.Joined || _mode == Mode.StartingHost || _mode == Mode.Joining;
 
         private MatchBootstrap _boot;
@@ -97,6 +102,8 @@ namespace ProjectFossil.Net
             PlayerName = CleanName(PlayerPrefs.GetString(NameKey, ""));
             if (string.IsNullOrEmpty(PlayerName) && SteamService.Ready) PlayerName = CleanName(SteamService.PersonaName);
             if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
+            CrewName = CleanName(PlayerPrefs.GetString(CrewKey, ""), MaxCrew);
+            if (string.IsNullOrEmpty(CrewName)) CrewName = CrewNames.Random(new System.Random());
             WorldConditions.ChosenTime    = (DayTime)Mathf.Clamp(PlayerPrefs.GetInt(TimeKey, 0), 0, (int)DayTime.Night);
             WorldConditions.ChosenWeather = (Weather)Mathf.Clamp(PlayerPrefs.GetInt(WeatherKey, 0), 0, (int)Weather.Fog);
             NetRole.IsFollower = false;
@@ -104,20 +111,26 @@ namespace ProjectFossil.Net
             {
                 _boot.CanPause       = () => _mode == Mode.Solo;
                 _boot.LeaveRequested = LeaveMatch;
+                _titleSequence = gameObject.AddComponent<TitleSequence>();
             }
         }
+        private TitleSequence _titleSequence;
 
         // From the in-match menu or the results: drop the island and the connection, back to the start menu.
         private void LeaveMatch()
         {
             SteamService.LeaveLobby();
             bool online = IsOnline;
+            _leaving = true;
             BackToMenu(null); // first, so the dropped connection doesn't read as "lost the host"
             if (online) StopNetwork();
+            _leaving = false;
             _avatars.Clear();
             _flares.Clear();
             _boot.Leave();
+            if (_titleSequence != null) _titleSequence.ReturnToMenu();
         }
+        private bool _leaving;
 
         private void OnEnable()
         {
@@ -150,6 +163,8 @@ namespace ProjectFossil.Net
 
         // On the start menu, not in a match or connecting.
         public bool InMenu => _mode == Mode.Menu;
+        // The start menu is on screen (also while hosting starts or a join connects).
+        public bool ShowingMenu => _mode == Mode.Menu || _mode == Mode.Joining || _mode == Mode.StartingHost;
 
         // The start menu's Play solo. Tools call it too (the island audit starts a solo match this way).
         public void PlaySolo(ChallengeLevel level)
@@ -166,6 +181,7 @@ namespace ProjectFossil.Net
             _boot.spawnOffset = Vector3.zero;
             _boot.playerSlot  = 0;
             _mode = Mode.Solo;
+            if (_titleSequence != null) _titleSequence.EndIntro();
             _boot.StartSolo();
         }
 
@@ -198,6 +214,7 @@ namespace ProjectFossil.Net
         {
             if (_mode == Mode.Solo) LeaveMatch();           // invited mid-solo-match: drop it and go
             else if (_mode != Mode.Menu) return;              // already in a team
+            if (_titleSequence != null) _titleSequence.EndIntro();
             SaveName();
             if (!EnsureNetwork() || _steamNet == null || _multipass == null)
             {
@@ -252,6 +269,13 @@ namespace ProjectFossil.Net
 
         private void BackToMenu(string why)
         {
+            // Dropped out of a match (the host went away): the island behind the menu replaces it.
+            bool wasPlaying = _mode == Mode.Solo || _mode == Mode.Hosting || _mode == Mode.Joined;
+            if (wasPlaying && !_leaving && _titleSequence != null)
+            {
+                _mode = Mode.Menu;
+                _titleSequence.ReturnToMenu();
+            }
             NetRole.IsFollower = false;
             _boot.CanRestart = null;
             _boot.RestartNote = null;
@@ -435,6 +459,7 @@ namespace ProjectFossil.Net
             _mode = Mode.Joined;
             _status = null;
             _seed = msg.Seed;
+            _hostCrew = CleanName(msg.Crew, MaxCrew);
             int id = _net.ClientManager.Connection != null ? _net.ClientManager.Connection.ClientId : 1;
             float angle = id * 90f * Mathf.Deg2Rad;
             _boot.spawnOffset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 2.5f;
@@ -454,6 +479,7 @@ namespace ProjectFossil.Net
             Match.FinalStandRequested += OnFinalStandRequested;
             Match.LiftedOff           += OnLiftedOff;
             Match.FlareDropped        += OnFlareDropped;
+            Match.MatchEnded          += OnMatchEnded;
             // A teammate still on their feet can get this player up, so going down isn't the end.
             Match.CanBeRevived  = () => IsOnline && Teammates().Any(a => a.IsStanding);
             Match.TeammatesNear = (point, radius) =>
@@ -625,6 +651,21 @@ namespace ProjectFossil.Net
 
         private readonly List<Vector3> _flares = new List<Vector3>(); // host: this island's flare pads, for late joiners
 
+        // Every finished run goes on this computer's leaderboard: under the player's name, and the crew's
+        // (the host's crew name for the whole team online).
+        private void OnMatchEnded(MatchStats stats)
+        {
+            if (stats == null) return;
+            string crew = _mode == Mode.Joined && !string.IsNullOrEmpty(_hostCrew) ? _hostCrew : CrewName;
+            int size = _mode == Mode.Hosting ? _avatars.Count : _mode == Mode.Joined ? NetAvatar.All.Count : 1;
+            stats.Crew = crew;
+            stats.BoardPlace = Leaderboard.Local.Record(new RunRecord
+            {
+                Player = PlayerName, Crew = crew, CrewSize = Mathf.Max(1, size), Score = stats.Score, Result = stats.Result,
+                Seconds = stats.TimeSurvived, Kills = stats.DinosKilled, Challenge = stats.Challenge, Seed = stats.Seed,
+            });
+        }
+
         private void OnFlareDropped(Vector3 pad)
         {
             if (_net != null && _net.ClientManager.Started && IsOnline)
@@ -647,7 +688,8 @@ namespace ProjectFossil.Net
         private static IslandMessage IslandFor(int seed, float elapsed)
         {
             var c = WorldConditions.Current;
-            return new IslandMessage { Seed = seed, Elapsed = elapsed, Time = (byte)c.Time, Weather = (byte)c.Weather, Wind = c.WindDegrees };
+            return new IslandMessage { Seed = seed, Elapsed = elapsed, Time = (byte)c.Time, Weather = (byte)c.Weather, Wind = c.WindDegrees,
+                                       Crew = Instance != null ? Instance.CrewName : null };
         }
 
         private int MyClientId => _net != null && _net.ClientManager.Started && _net.ClientManager.Connection != null
@@ -655,14 +697,16 @@ namespace ProjectFossil.Net
 
         // ── Names ──────────────────────────────────────────────────────────────
 
-        private static string CleanName(string name)
+        private static string CleanName(string name) => CleanName(name, MaxName);
+
+        private static string CleanName(string name, int max)
         {
             if (string.IsNullOrEmpty(name)) return "";
             var sb = new System.Text.StringBuilder();
             foreach (char c in name)
                 if (char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' || c == '.') sb.Append(c);
             string s = sb.ToString().Trim();
-            return s.Length > MaxName ? s.Substring(0, MaxName).Trim() : s;
+            return s.Length > max ? s.Substring(0, max).Trim() : s;
         }
 
         private void SaveName()
@@ -671,6 +715,10 @@ namespace ProjectFossil.Net
             if (string.IsNullOrEmpty(clean)) clean = Names[new System.Random().Next(Names.Length)];
             PlayerName = clean;
             PlayerPrefs.SetString(NameKey, clean);
+            CrewName = CleanName(CrewName, MaxCrew);
+            if (string.IsNullOrEmpty(CrewName)) CrewName = CrewNames.Random(new System.Random());
+            PlayerPrefs.SetString(CrewKey, CrewName);
+            _hostCrew = null;
             PlayerPrefs.Save();
             if (Match != null) Match.PlayerName = clean;
         }
@@ -704,7 +752,7 @@ namespace ProjectFossil.Net
         private void OnGUI()
         {
             EnsureStyles();
-            if (_mode == Mode.Menu || _mode == Mode.Joining || _mode == Mode.StartingHost) DrawMenu();
+            if (ShowingMenu) { if (TitleSequence.MenuReady) DrawMenu(); }
             else if (_mode == Mode.Hosting || _mode == Mode.Joined) DrawTeamLine();
         }
 
@@ -714,18 +762,23 @@ namespace ProjectFossil.Net
             Cursor.visible   = true;
             if (Match != null && Match.PlayerController != null) Match.PlayerController.InputBlocked = true;
 
-            GUI.color = new Color(0f, 0f, 0f, 0.55f);
+            GUI.color = new Color(0f, 0f, 0f, 0.3f); // a light veil: the island behind stays in view
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 250, 400, 500);
+            // The title itself is drawn above this box by the TitleSequence.
+            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - MenuTopOffset, 400, 480);
             if (_showSettings)
             {
-                if (SettingsPanel.Draw(area)) _showSettings = false;
+                if (SettingsPanel.Draw(area, onStartMenu: true)) _showSettings = false;
+                return;
+            }
+            if (_showBoard)
+            {
+                if (LeaderboardPanel.Draw(new Rect(Screen.width * 0.5f - 260, area.y, 520, area.height), PlayerName, CrewName)) _showBoard = false;
                 return;
             }
             GUILayout.BeginArea(area, GUI.skin.box);
-            GUILayout.Label(GameTitle, _title);
             GUILayout.Label("Survive together. Quietly.", _tagline);
             GUILayout.Space(6);
 
@@ -734,6 +787,11 @@ namespace ProjectFossil.Net
             GUILayout.BeginHorizontal();
             GUILayout.Label("Your name:", _label, GUILayout.Width(90), GUILayout.Height(30));
             PlayerName = GUILayout.TextField(PlayerName ?? "", MaxName, _field, GUILayout.Height(30));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Crew name:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            CrewName = GUILayout.TextField(CrewName ?? "", MaxCrew, _field, GUILayout.Height(30));
+            if (GUILayout.Button("New", GUILayout.Width(44), GUILayout.Height(30))) CrewName = CrewNames.Random(new System.Random());
             GUILayout.EndHorizontal();
             DrawConditionsChoice();
             GUILayout.Space(8);
@@ -771,14 +829,18 @@ namespace ProjectFossil.Net
             }
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Leaderboard", GUILayout.Height(28))) _showBoard = true;
             if (GUILayout.Button("Settings", GUILayout.Height(28))) _showSettings = true;
-            if (!Application.isEditor && GUILayout.Button("Quit", GUILayout.Height(28))) Application.Quit();
+            if (!Application.isEditor && GUILayout.Button("Quit to desktop", GUILayout.Height(28))) Application.Quit();
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 
         public const string GameTitle = "TETHER: PRIMAL";
+        public const float MenuTopOffset = 190f; // the menu box starts this far above the screen's middle
         private bool _showSettings;
+        public bool ShowingSettings => _showSettings || _showBoard;
+        private bool _showBoard;
 
         // Solo only: how hard the island fights. Co-op always plays it as tuned (Hard).
         private void DrawChallengeChoice()

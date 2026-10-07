@@ -27,9 +27,8 @@ page. It builds a player base and feedback without competing with the Steam laun
 ## Step by step
 
 1. **Make the builds** (on the Mac, in Unity):
-   - Windows: `Project Fossil > Co-op > Build for Windows` gives `Builds/Windows/TETHER Primal/`. Delete
-     `steam_appid.txt` from that folder for itch.
-   - Mac: File > Build Profiles > macOS > Build, into `Builds/Mac/TETHER Primal.app`.
+   - `Project Fossil > Release > Build for itch (Windows + Mac)` gives `Builds/itch/windows/` and
+     `Builds/itch/mac/TETHER Primal.app`, both without `steam_appid.txt`.
 2. **Create the itch page:** itch.io > Dashboard > Create new project.
    - Title: TETHER: Primal. Project URL: `tether-primal`. Kind of project: Downloadable.
    - Classification: Games. Release status: In development. Pricing: No payments (or Donate).
@@ -39,8 +38,8 @@ page. It builds a player base and feedback without competing with the Steam laun
 4. **Upload** (replace `vantward` with your itch username):
 
    ```
-   butler push "Builds/Windows/TETHER Primal" vantward/tether-primal:windows --userversion 0.1.0
-   butler push "Builds/Mac/TETHER Primal.app" vantward/tether-primal:mac --userversion 0.1.0
+   butler push "Builds/itch/windows" vantward/tether-primal:windows --userversion 0.1.0
+   butler push "Builds/itch/mac" vantward/tether-primal:mac --userversion 0.1.0
    ```
 
    Each later update: the same command with a higher `--userversion`. butler only uploads what changed.

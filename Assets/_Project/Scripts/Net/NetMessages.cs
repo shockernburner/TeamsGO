@@ -11,6 +11,7 @@ namespace ProjectFossil.Net
         public byte  Time;     // DayTime the host's island got (never Random)
         public byte  Weather;  // Weather likewise
         public float Wind;
+        public string Crew;    // the host's crew name: the whole team plays under it
     }
 
     // Joiner -> host: this island is built and my player is standing on it. Send my body.

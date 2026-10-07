@@ -32,7 +32,7 @@ namespace ProjectFossil.UI
         private bool _shopOpen;
         private bool _menuOpen;     // the Esc menu
         private bool _paused;       // ...and whether it stopped the game (solo only)
-        private bool _confirmLeave;
+        private bool _confirmLeave, _confirmQuit;
         private bool _showSettings; // the Esc menu's settings page
         private string _shopMessage;
         private Vector2 _shopScroll;
@@ -217,6 +217,7 @@ namespace ProjectFossil.UI
             if (open == _menuOpen) return;
             _menuOpen     = open;
             _confirmLeave = false;
+            _confirmQuit  = false;
             _showSettings = false;
             if (open && _shopOpen) { _shopOpen = false; _shopMessage = null; }
 
@@ -242,7 +243,7 @@ namespace ProjectFossil.UI
                 if (SettingsPanel.Draw(panel)) _showSettings = false;
                 return;
             }
-            var area = new Rect(Screen.width * 0.5f - 160, Screen.height * 0.5f - 140, 320, 280);
+            var area = new Rect(Screen.width * 0.5f - 160, Screen.height * 0.5f - 160, 320, 320);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(_paused ? "PAUSED" : "MENU", _big);
             GUILayout.Label(_paused ? "The island waits for you." : "Co-op can't pause: the island keeps going for your team.", _small);
@@ -251,16 +252,23 @@ namespace ProjectFossil.UI
             GUILayout.Space(6);
             if (GUILayout.Button("Settings", GUILayout.Height(30))) _showSettings = true;
             GUILayout.Space(6);
-            if (!_confirmLeave)
+            if (!_confirmLeave && !_confirmQuit)
             {
                 if (GUILayout.Button("Leave match", GUILayout.Height(34))) _confirmLeave = true;
+                GUILayout.Space(6);
+                // Back to wherever the game was started from: the itch app, Steam, or the desktop.
+                if (!Application.isEditor && GUILayout.Button("Quit to desktop", GUILayout.Height(30))) _confirmQuit = true;
             }
             else
             {
-                GUILayout.Label("Leave? This match won't count.", _small);
+                GUILayout.Label(_confirmQuit ? "Quit the game? This match won't count." : "Leave? This match won't count.", _small);
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Leave", GUILayout.Height(34))) LeaveMatch();
-                if (GUILayout.Button("Stay", GUILayout.Height(34))) _confirmLeave = false;
+                if (GUILayout.Button(_confirmQuit ? "Quit" : "Leave", GUILayout.Height(34)))
+                {
+                    if (_confirmQuit) Application.Quit();
+                    else LeaveMatch();
+                }
+                if (GUILayout.Button("Stay", GUILayout.Height(34))) _confirmLeave = _confirmQuit = false;
                 GUILayout.EndHorizontal();
             }
             GUILayout.EndArea();
@@ -432,6 +440,9 @@ namespace ProjectFossil.UI
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(Headline(stats.Result), _big);
             GUILayout.Label($"SCORE {stats.Score}" + (stats.NewBest ? "   NEW BEST!" : $"   (best {stats.BestScore})"), _big);
+            if (stats.BoardPlace > 0 || !string.IsNullOrEmpty(stats.Crew))
+                GUILayout.Label((string.IsNullOrEmpty(stats.Crew) ? "" : $"Crew: {stats.Crew}") +
+                                (stats.BoardPlace > 0 ? $"    #{stats.BoardPlace} on this computer's leaderboard" : ""), _small);
             GUILayout.Space(6);
             GUILayout.Label($"Survived {FormatTime(stats.TimeSurvived)}: {stats.SurvivalPoints}");
             GUILayout.Label($"Kills ({stats.DinosKilled}): {stats.KillPoints}");

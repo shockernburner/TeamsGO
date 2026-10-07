@@ -654,3 +654,30 @@ circles round each lake), so water was drawn over one ground, walked on over ano
   on "buffer too small" did that; voice decompression now uses one 2-second buffer and at most one retry.
 - Tested on this Mac: recording stays stable in a match, a whisper 25 m from Ironjaw is ignored and a shout
   brings it to within 7 m of the voice. Two-player voice playback still needs a second Steam account to test.
+
+## 2026-10-07 — Intro, crew names, leaderboard, quit, itch builds
+
+- Intro (`Net/TitleSequence`), following Docs/STORY.md: the Vantward Games logo on black, then ten story cards
+  (Resources/Story/Intro.txt: seconds | line | shot) over a live island the camera slowly circles, then the TETHER
+  logo wipes in left to right with its tether line, PRIMAL fades in under it, and both ease up above the start
+  menu. The first launch plays it all (about 55 s); later launches start at the logo. Any key, click or pad A
+  skips. Settings on the start menu has "Play intro".
+- The island behind the menu is a real generated island (`MatchBootstrap.BuildPreviewIsland`): terrain, water
+  and plants, no player or match, dusk under a clear sky, a new seed each time. Its fog is thinned while the
+  title camera flies, since the walking fog would hide it from up there. A match replaces it; leaving a match
+  (or losing the host) builds a fresh one behind the menu.
+- Crew names: the start menu has "Crew name" next to "Your name" (a generated two-word name to start, "New"
+  rolls another, up to 24 characters). Online the whole team plays under the host's crew name (sent with the
+  island message).
+- Leaderboard (`Match/Leaderboard`, `Net/LeaderboardPanel`): every finished run is recorded on this computer
+  (player, crew, crew size, score, result, time, kills, challenge, seed), best 200 kept in
+  `leaderboard.json` in the save folder. The start menu's Leaderboard shows the top 10 survivors (each player's
+  best) and crews (each crew's best); this player's and crew's rows are highlighted. The results screen shows
+  the crew and the run's place on this computer. Online boards (Steam leaderboards once there's an App ID, or
+  another service) are a later step on the same records.
+- Quit to desktop: in the Esc menu (with a confirm) and the start menu, in built games. It closes the game, so
+  the player is back in the itch app, Steam, or the desktop.
+- itch builds: `Project Fossil > Release > Build for itch` makes `Builds/itch/windows` and `Builds/itch/mac`
+  (one app for Apple silicon and Intel). No steam_appid.txt in either, so Steam stays off and co-op is LAN or
+  direct IP. The Steam test build (`Co-op > Build for Windows`) still ships it.
+- Each build is about 1.7 GB, mostly the bought packs' textures; the Mac had under 5 GB free when building.
