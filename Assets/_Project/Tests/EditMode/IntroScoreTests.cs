@@ -37,13 +37,16 @@ namespace ProjectFossil.Tests.EditMode
             Assert.AreEqual(hit + Ring, Score.Length / (float)SoundSynth.SampleRate, 0.01f);
         }
 
+        // The logo is the high point, but a swell rather than a jolt: louder than the story, not twice as loud.
         [Test]
-        public void TheHitIsTheLoudestMoment()
+        public void TheLogoIsTheHighPoint_WithoutAJolt()
         {
             float hit = Start(Cards.Length);
-            float atHit = Rms(hit, hit + 0.5f);
-            Assert.Greater(atHit, Rms(Start(1) + 2f, Start(1) + 4f) * 2f);
+            float atHit = Rms(hit, hit + 1f), story = Rms(Start(1) + 2f, Start(1) + 4f);
+            Assert.Greater(atHit, story);
+            Assert.Less(atHit, story * 3f);
             Assert.Greater(atHit, Rms(Start(7) + 5f, Start(8)));
+            Assert.Greater(Rms(hit - 0.5f, hit), Rms(Start(9) + 0.3f, Start(9) + 0.5f), "the music swells back before the logo");
         }
 
         [Test]

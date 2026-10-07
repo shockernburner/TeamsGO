@@ -2,15 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ProjectFossil.Match;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
 using Unity.Services.Leaderboards;
 using UnityEngine;
 
 namespace ProjectFossil.Net
 {
-    // The worldwide boards, on Unity Gaming Services (works on itch and Steam alike). Each player signs in
-    // anonymously, without an account; the service keeps one best score per player on each board:
+    // The worldwide boards, on Unity Gaming Services (works on itch and Steam alike), for signed-in accounts
+    // (Account) playing online; the service keeps one best score per player on each board:
     //   survivors: every player's best run.
     //   crews:     the best run of each crew, sent by whoever names it (the host online, the player solo), so a
     //              player's entry is their best crew run; the panel shows each crew name once.
@@ -35,50 +33,80 @@ namespace ProjectFossil.Net
             public float seconds;
         }
 
-        private static Task<bool> _signIn;
-
-        private static Task<bool> SignIn() => _signIn != null && !_signIn.IsFaulted && (!_signIn.IsCompleted || _signIn.Result)
-            ? _signIn : _signIn = SignInNow();
-
-        private static async Task<bool> SignInNow()
+        // The boards belong to signed-in accounts: without one there's nothing to send or show.
+        private static Task<bool> SignIn()
         {
-            try
-            {
-                if (UnityServices.State != ServicesInitializationState.Initialized) await UnityServices.InitializeAsync();
-                if (!AuthenticationService.Instance.IsSignedIn) await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                return true;
-            }
-            catch (Exception e)
-            {
-                Status = "Online boards are offline (no connection?).";
-                Debug.Log($"[OnlineLeaderboard] Sign-in failed: {e.Message}");
-                return false;
-            }
+            if (!Account.SignedIn) Status = "Sign in with Play Online to see and join the worldwide boards.";
+            return Task.FromResult(Account.SignedIn);
         }
 
+        // Runs waiting to go up: an online match whose result couldn't be sent at once (the connection dropped) is
+        // kept on this computer and sent the next time the boards are reachable. Offline practice never comes here.
+        [Serializable] private class Pending { public RunRecord Run; public bool ForCrew; }
+        [Serializable] private class PendingList { public List<Pending> Items = new List<Pending>(); }
+        private const string PendingKey = "ProjectFossil.PendingRuns";
+        private const int MaxPending = 50;
+        private static bool _flushing;
+
+        private static PendingList LoadPending()
+        {
+            try { return JsonUtility.FromJson<PendingList>(PlayerPrefs.GetString(PendingKey, "")) ?? new PendingList(); }
+            catch { return new PendingList(); }
+        }
+
+        private static void SavePending(PendingList list)
+        {
+            if (list.Items.Count > MaxPending) list.Items.RemoveRange(0, list.Items.Count - MaxPending);
+            PlayerPrefs.SetString(PendingKey, JsonUtility.ToJson(list));
+            PlayerPrefs.Save();
+        }
+
+        public static int PendingCount => LoadPending().Items.Count;
+
         // A finished run: on the survivors board always, on the crews board when this player names the crew.
-        public static async void Submit(RunRecord run, bool forCrew)
+        public static void Submit(RunRecord run, bool forCrew)
         {
             if (run == null || run.Score <= 0) return;
-            if (!await SignIn()) return;
-            var meta = new Meta
-            {
-                player = run.Player, crew = run.Crew, size = run.CrewSize, kills = run.Kills, seconds = run.Seconds,
-                result = run.Result.ToString(),
-            };
-            var options = new AddPlayerScoreOptions { Metadata = meta };
+            var list = LoadPending();
+            list.Items.Add(new Pending { Run = run, ForCrew = forCrew });
+            SavePending(list);
+            Flush();
+        }
+
+        // Sends every waiting run, oldest first; stops at the first failure and tries again later.
+        public static async void Flush()
+        {
+            if (_flushing) return;
+            var list = LoadPending();
+            if (list.Items.Count == 0) return;
+            _flushing = true;
             try
             {
-                await LeaderboardsService.Instance.AddPlayerScoreAsync(SurvivorsId, run.Score, options);
-                if (forCrew && !string.IsNullOrWhiteSpace(run.Crew))
-                    await LeaderboardsService.Instance.AddPlayerScoreAsync(CrewsId, run.Score, options);
-                Status = "Your run is on the online boards.";
+                if (!await SignIn()) return;
+                while (list.Items.Count > 0)
+                {
+                    var p = list.Items[0];
+                    var meta = new Meta
+                    {
+                        player = p.Run.Player, crew = p.Run.Crew, size = p.Run.CrewSize, kills = p.Run.Kills,
+                        seconds = p.Run.Seconds, result = p.Run.Result.ToString(),
+                    };
+                    var options = new AddPlayerScoreOptions { Metadata = meta };
+                    await LeaderboardsService.Instance.AddPlayerScoreAsync(SurvivorsId, p.Run.Score, options);
+                    if (p.ForCrew && !string.IsNullOrWhiteSpace(p.Run.Crew))
+                        await LeaderboardsService.Instance.AddPlayerScoreAsync(CrewsId, p.Run.Score, options);
+                    list.Items.RemoveAt(0);
+                    SavePending(list);
+                }
+                Status = "Your runs are on the online boards.";
+                _lastAttempt = DateTime.MinValue; // show them on the next look
             }
             catch (Exception e)
             {
-                Status = "Couldn't send the run to the online boards.";
+                Status = $"Offline: {list.Items.Count} run(s) will be sent when you're back online.";
                 Debug.Log($"[OnlineLeaderboard] Submit failed: {e.Message}");
             }
+            finally { _flushing = false; }
         }
 
         // Fetches both boards (the panel calls this when it opens, at most every 20 seconds).
@@ -87,6 +115,7 @@ namespace ProjectFossil.Net
             if (Busy || (DateTime.UtcNow - _lastAttempt).TotalSeconds < 20) return;
             _lastAttempt = DateTime.UtcNow;
             Busy = true;
+            Flush(); // anything played offline goes up first
             Status = "Loading the online boards...";
             try
             {

@@ -39,7 +39,7 @@ namespace ProjectFossil.Core
             Row("Show FPS", () => { fps = GUILayout.Toggle(fps, fps ? " On" : " Off"); });
             var voice = GameSettings.Voice;
             float voiceVol = GameSettings.VoiceVolume;
-            string voiceName = voice == VoiceMode.Off ? "Off (dinosaurs can't hear you)" : voice == VoiceMode.PushToTalk ? "Push to talk (V)" : "Open mic";
+            string voiceName = voice == VoiceMode.Off ? "Off (dinosaurs can't hear you)" : voice == VoiceMode.PushToTalk ? "Push to talk (T)" : "Open mic";
             Row("Voice chat", () => { if (GUILayout.Button(voiceName, _button)) voice = (VoiceMode)(((int)voice + 1) % 3); });
             Row($"Voice volume  {Mathf.RoundToInt(voiceVol * 100)}%", () => { voiceVol = GUILayout.HorizontalSlider(voiceVol, 0f, 1f); });
             if (voice != GameSettings.Voice || !Mathf.Approximately(voiceVol, GameSettings.VoiceVolume)) GameSettings.SetVoice(voice, voiceVol);

@@ -12,6 +12,7 @@ namespace ProjectFossil.Net
         public byte  Weather;  // Weather likewise
         public float Wind;
         public string Crew;    // the host's crew name: the whole team plays under it
+        public string Voice;   // the online match's join code, which names its voice channel (null offline)
     }
 
     // Joiner -> host: this island is built and my player is standing on it. Send my body.

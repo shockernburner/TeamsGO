@@ -10,14 +10,20 @@ using FishNet.Object;
 using FishNet.Transporting;
 using FishNet.Transporting.Tugboat;
 using FishNet.Transporting.Multipass;
+using FishNet.Transporting.UTP;
 using Steamworks;
+using Unity.Services.Relay;
+using Unity.Services.Relay.Models;
 using ProjectFossil.Core;
 using ProjectFossil.Dinosaurs;
 using ProjectFossil.Match;
 
 namespace ProjectFossil.Net
 {
-    // Online co-op, step 1: one player hosts, friends join by address (same Mac, same Wi-Fi, or a forwarded port).
+    // Co-op. Online (signed in, scores count): the host gets a short join code from Unity Relay and friends type
+    // it in; Unity's servers connect them, no ports to open, on itch and Steam alike, with Vivox voice. Steam
+    // builds also take Steam invites. Offline (practice, scores stay on this computer): friends on the same Wi-Fi
+    // join by the host's address.
     //
     // The host is the authority: it generates the island, runs the director, wildlife and every animal's brain,
     // and shares the animals with the team. A joiner is sent only the seed and the match clock and builds the
@@ -29,6 +35,7 @@ namespace ProjectFossil.Net
     public class NetSession : MonoBehaviour
     {
         public const ushort Port       = 7770;
+        private const int LanIndex = 0, RelayIndex = 1, SteamIndex = 2; // the transports' order in the Multipass
         public const int    MaxTeam    = 4;
         private const string AddressKey = "ProjectFossil.JoinAddress";
         private const string NameKey    = "ProjectFossil.PlayerName";
@@ -62,8 +69,14 @@ namespace ProjectFossil.Net
         private MatchBootstrap _boot;
         private GameObject     _soloDinosaur;
         private NetworkManager _net;
-        private Multipass _multipass;                      // LAN and Steam side by side (only when Steam runs)
+        private Multipass _multipass;                      // LAN, Relay and (with Steam running) Steam side by side
+        private Tugboat _tugboat;
+        private UnityTransport _relayNet;                  // Unity Relay: online play by join code
         private FishySteamworks.FishySteamworks _steamNet;
+        private int _primaryServer;                        // the transport whose start decides whether hosting worked
+        private bool _online;                              // this match is online: signed in, scores count
+        private string _joinCode;                          // online host: the code friends type; everyone: the voice channel
+        private string _codeInput = "";
         private CSteamID _steamHost = CSteamID.Nil;        // the friend we joined through Steam
         private PrefabObjects  _prefabs;
         private NetworkObject  _avatarPrefab, _dinosaurPrefab;
@@ -99,6 +112,8 @@ namespace ProjectFossil.Net
             _boot = GetComponent<MatchBootstrap>();
             _soloDinosaur = _boot != null ? _boot.dinosaurPrefab : null;
             _address = PlayerPrefs.GetString(AddressKey, "127.0.0.1");
+            Account.Restore();          // sign back in if this computer remembers an account
+            OnlineLeaderboard.Flush();  // an online result that couldn't be sent last time goes up now
             PlayerName = CleanName(PlayerPrefs.GetString(NameKey, ""));
             if (string.IsNullOrEmpty(PlayerName) && SteamService.Ready) PlayerName = CleanName(SteamService.PersonaName);
             if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
@@ -120,6 +135,8 @@ namespace ProjectFossil.Net
         private void LeaveMatch()
         {
             SteamService.LeaveLobby();
+            VivoxVoice.Leave();
+            _joinCode = null;
             bool online = IsOnline;
             _leaving = true;
             BackToMenu(null); // first, so the dropped connection doesn't read as "lost the host"
@@ -167,8 +184,12 @@ namespace ProjectFossil.Net
         public bool ShowingMenu => _mode == Mode.Menu || _mode == Mode.Joining || _mode == Mode.StartingHost;
 
         // The start menu's Play solo. Tools call it too (the island audit starts a solo match this way).
-        public void PlaySolo(ChallengeLevel level)
+        public void PlaySolo(ChallengeLevel level) => PlaySolo(level, online: false);
+
+        public void PlaySolo(ChallengeLevel level, bool online)
         {
+            _online = online && Account.SignedIn;
+            UseNames();
             _pickingChallenge = false;
             Challenge.Current = level;
             SaveName();
@@ -185,11 +206,33 @@ namespace ProjectFossil.Net
             _boot.StartSolo();
         }
 
-        private void Host()
+        private async void Host(bool online)
         {
+            _online = online && Account.SignedIn;
+            UseNames();
             SaveName();
             WorldConditions.ClearOverride();
             if (!EnsureNetwork()) return;
+            _joinCode = null;
+            _mode = Mode.StartingHost;
+            if (_online)
+            {
+                // A Relay allocation for the team, and the code that finds it.
+                _status = "Getting a join code...";
+                try
+                {
+                    var allocation = await RelayService.Instance.CreateAllocationAsync(MaxTeam - 1);
+                    _joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+                    _relayNet.SetRelayServerData(allocation.ToRelayServerData("dtls"));
+                }
+                catch (System.Exception e)
+                {
+                    Debug.Log($"[NetSession] Relay: {e.Message}");
+                    BackToMenu("Couldn't reach the online servers. Check the internet connection, or play offline.");
+                    return;
+                }
+                if (_mode != Mode.StartingHost) return; // cancelled meanwhile
+            }
             Challenge.Current = ChallengeLevel.Hard; // co-op plays the island as tuned
             NetRole.IsFollower = false;
             _boot.dinosaurPrefab = _dinosaurPrefab.gameObject;
@@ -197,13 +240,17 @@ namespace ProjectFossil.Net
             _boot.RestartNote = "A new island takes your whole team with you.";
             _boot.spawnOffset = Vector3.zero;
             _boot.playerSlot  = 0;
-            _mode = Mode.StartingHost;
             _status = "Starting the host...";
             _lanAddress = LocalAddress();
-            if (!_net.ServerManager.StartConnection(Port))
+            // LAN always (the host's own player joins through it); Relay when online; Steam online for invites.
+            _primaryServer = _online ? RelayIndex : LanIndex;
+            bool started = _multipass.StartConnection(true, LanIndex);
+            if (_online) started = _multipass.StartConnection(true, RelayIndex) && started;
+            if (_online && _steamNet != null) _multipass.StartConnection(true, SteamIndex);
+            if (!started)
             {
-                _status = $"Couldn't open port {Port}. Is another copy already hosting?";
-                _mode = Mode.Menu;
+                StopNetwork();
+                BackToMenu(_online ? "Couldn't start the online host." : $"Couldn't open port {Port}. Is another copy already hosting?");
             }
             // The island is generated once the server is up (OnServerState): an animal spawned before then
             // couldn't be shared.
@@ -215,6 +262,8 @@ namespace ProjectFossil.Net
             if (_mode == Mode.Solo) LeaveMatch();           // invited mid-solo-match: drop it and go
             else if (_mode != Mode.Menu) return;              // already in a team
             if (_titleSequence != null) _titleSequence.EndIntro();
+            _online = Account.SignedIn;
+            UseNames();
             SaveName();
             if (!EnsureNetwork() || _steamNet == null || _multipass == null)
             {
@@ -245,8 +294,11 @@ namespace ProjectFossil.Net
             if (_mode == Mode.Hosting) Match?.Announce("Steam lobby ready: press Esc and Invite friends, or Shift+Tab.");
         }
 
+        // Offline: a host on the same Wi-Fi, by address.
         private void Join()
         {
+            _online = false;
+            UseNames();
             SaveName();
             if (!EnsureNetwork()) return;
             Challenge.Current = ChallengeLevel.Hard;
@@ -259,12 +311,55 @@ namespace ProjectFossil.Net
             _status = $"Connecting to {_address}...";
             _clientLoaded = false;
             _readySeed = -1;
-            if (_multipass != null) _multipass.SetClientTransport<Tugboat>();
+            _multipass.SetClientTransport(_tugboat);
             if (!_net.ClientManager.StartConnection(_address, Port))
             {
                 _status = "Couldn't start connecting.";
                 BackToMenu(_status);
             }
+        }
+
+        // Online: a friend's join code, through Unity Relay.
+        private async void JoinCode()
+        {
+            string code = (_codeInput ?? "").Trim().ToUpperInvariant();
+            if (code.Length < 6) { _status = "Type the 6-character code from the host's screen."; return; }
+            _online = Account.SignedIn;
+            UseNames();
+            if (!EnsureNetwork()) return;
+            Challenge.Current = ChallengeLevel.Hard;
+            NetRole.IsFollower = true;
+            _boot.CanRestart = () => false;
+            _boot.RestartNote = "Waiting for the host to start the next island...";
+            _mode = Mode.Joining;
+            _address = code;
+            _status = $"Joining {code}...";
+            _clientLoaded = false;
+            _readySeed = -1;
+            try
+            {
+                var allocation = await RelayService.Instance.JoinAllocationAsync(code);
+                _relayNet.SetRelayServerData(allocation.ToRelayServerData("dtls"));
+            }
+            catch (System.Exception e)
+            {
+                Debug.Log($"[NetSession] Relay join: {e.Message}");
+                BackToMenu("No game with that code. Check it with the host (codes last while the host is playing).");
+                return;
+            }
+            if (_mode != Mode.Joining) return; // cancelled meanwhile
+            _joinCode = code;
+            _multipass.SetClientTransport(_relayNet);
+            if (!_net.ClientManager.StartConnection())
+                BackToMenu("Couldn't start connecting.");
+        }
+
+        // Online, the name is the account's (it can't be borrowed); offline, the one typed on the menu.
+        private void UseNames()
+        {
+            if (_online && Account.SignedIn) PlayerName = Account.Username;
+            else PlayerName = CleanName(PlayerPrefs.GetString(NameKey, PlayerName));
+            if (string.IsNullOrEmpty(PlayerName)) PlayerName = Names[new System.Random().Next(Names.Length)];
         }
 
         private void BackToMenu(string why)
@@ -312,12 +407,12 @@ namespace ProjectFossil.Net
             var go = new GameObject("Network");
             go.SetActive(false);
             DontDestroyOnLoad(go);
-            var tugboat = go.AddComponent<Tugboat>();
-            tugboat.SetPort(Port);
-            tugboat.SetMaximumClients(MaxTeam);
-            Transport transport = tugboat;
-            // With Steam running the host also listens on Steam (peer to peer through Valve's relay, no ports to
-            // open), and friends join from an invite. LAN keeps working beside it.
+            // Side by side through FishNet's Multipass: LAN (Tugboat), Unity Relay (online by join code) and, with
+            // Steam running, Steam (invites, peer to peer through Valve). Each match starts only the ones it needs.
+            _tugboat = go.AddComponent<Tugboat>();
+            _tugboat.SetPort(Port);
+            _tugboat.SetMaximumClients(MaxTeam);
+            _relayNet = go.AddComponent<UnityTransport>();
             if (SteamService.Ready)
             {
                 // Its settings live in private fields until it starts (its setters need a running server).
@@ -325,12 +420,15 @@ namespace ProjectFossil.Net
                 _steamNet = go.AddComponent<FishySteamworks.FishySteamworks>();
                 typeof(FishySteamworks.FishySteamworks).GetField("_peerToPeer", priv)?.SetValue(_steamNet, true);
                 typeof(FishySteamworks.FishySteamworks).GetField("_maximumClients", priv)?.SetValue(_steamNet, (ushort)MaxTeam);
-                _multipass = go.AddComponent<Multipass>();
-                var list = typeof(Multipass)
-                    .GetField("_transports", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                    ?.GetValue(_multipass) as List<Transport>;
-                if (list != null) { list.Add(tugboat); list.Add(_steamNet); transport = _multipass; }
             }
+            _multipass = go.AddComponent<Multipass>();
+            var list = typeof(Multipass)
+                .GetField("_transports", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(_multipass) as List<Transport>;
+            list.Add(_tugboat);
+            list.Add(_relayNet);
+            if (_steamNet != null) list.Add(_steamNet);
+            Transport transport = _multipass;
             // In the Editor, FishNet checks the prefab list the instant the component is added (before the next line
             // can give it one) and logs an error; that check never runs in a build, so it is muted for this one call.
             bool logs = Debug.unityLogger.logEnabled;
@@ -341,7 +439,7 @@ namespace ProjectFossil.Net
             var transports = go.GetComponent<FishNet.Managing.Transporting.TransportManager>();
             if (transports == null) transports = go.AddComponent<FishNet.Managing.Transporting.TransportManager>();
             transports.Transport = transport;
-            if (_multipass != null) _multipass.SetClientTransport<Tugboat>(); // the host's own player joins over LAN
+            _multipass.SetClientTransport(_tugboat); // the host's own player joins over LAN
             _net.SpawnablePrefabs = _prefabs;
             go.SetActive(true);
 
@@ -382,17 +480,21 @@ namespace ProjectFossil.Net
 
         private void OnServerState(ServerConnectionStateArgs args)
         {
+            // Several transports report in; the one this match depends on decides (Relay online, LAN offline).
+            if (args.TransportIndex != _primaryServer) return;
             if (args.ConnectionState == LocalConnectionState.Started && _mode == Mode.StartingHost)
             {
                 _mode = Mode.Hosting;
                 _status = null;
-                if (SteamService.Ready) SteamService.HostLobby(MaxTeam); // so Steam friends can be invited
+                if (_online && SteamService.Ready) SteamService.HostLobby(MaxTeam); // so Steam friends can be invited
+                _multipass.SetClientTransport(_tugboat);
                 _net.ClientManager.StartConnection("localhost", Port); // the host plays too
+                if (_joinCode != null) VivoxVoice.Join(_joinCode);
                 _boot.StartSolo(); // random island; OnGenerated shares it
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped && _mode == Mode.StartingHost)
             {
-                BackToMenu($"Couldn't host on port {Port}.");
+                BackToMenu(_online ? "Couldn't start the online host." : $"Couldn't host on port {Port}.");
             }
         }
 
@@ -460,6 +562,7 @@ namespace ProjectFossil.Net
             _status = null;
             _seed = msg.Seed;
             _hostCrew = CleanName(msg.Crew, MaxCrew);
+            if (!string.IsNullOrEmpty(msg.Voice)) { _joinCode = msg.Voice; VivoxVoice.Join(msg.Voice); } // the team's voice channel
             int id = _net.ClientManager.Connection != null ? _net.ClientManager.Connection.ClientId : 1;
             float angle = id * 90f * Mathf.Deg2Rad;
             _boot.spawnOffset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 2.5f;
@@ -666,7 +769,8 @@ namespace ProjectFossil.Net
             };
             stats.BoardPlace = Leaderboard.Local.Record(run);
             // Worldwide too; the crew's entry comes from whoever named the crew (the host, or a solo player).
-            OnlineLeaderboard.Submit(run, forCrew: _mode != Mode.Joined);
+            // Online matches only: offline is practice, and its scores stay on this computer.
+            if (_online && Account.SignedIn) OnlineLeaderboard.Submit(run, forCrew: _mode != Mode.Joined);
         }
 
         private void OnFlareDropped(Vector3 pad)
@@ -692,7 +796,8 @@ namespace ProjectFossil.Net
         {
             var c = WorldConditions.Current;
             return new IslandMessage { Seed = seed, Elapsed = elapsed, Time = (byte)c.Time, Weather = (byte)c.Weather, Wind = c.WindDegrees,
-                                       Crew = Instance != null ? Instance.CrewName : null };
+                                       Crew = Instance != null ? Instance.CrewName : null,
+                                       Voice = Instance != null ? Instance._joinCode : null };
         }
 
         private int MyClientId => _net != null && _net.ClientManager.Started && _net.ClientManager.Connection != null
@@ -785,59 +890,160 @@ namespace ProjectFossil.Net
             GUILayout.BeginArea(area, GUI.skin.box);
             GUILayout.Label("Survive together. Quietly.", _tagline);
             GUILayout.Space(6);
+            if (_mode != Mode.Menu) DrawConnecting();
+            else if (_page == Page.SignIn) DrawSignIn();
+            else if (_page == Page.Online) DrawOnline();
+            else if (_page == Page.Offline) DrawOffline();
+            else DrawMain();
+            GUILayout.EndArea();
+        }
 
-            bool busy = _mode != Mode.Menu;
-            GUI.enabled = !busy;
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Your name:", _label, GUILayout.Width(90), GUILayout.Height(30));
-            PlayerName = GUILayout.TextField(PlayerName ?? "", MaxName, _field, GUILayout.Height(30));
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Crew name:", _label, GUILayout.Width(90), GUILayout.Height(30));
-            CrewName = GUILayout.TextField(CrewName ?? "", MaxCrew, _field, GUILayout.Height(30));
-            if (GUILayout.Button("New", GUILayout.Width(44), GUILayout.Height(30))) CrewName = CrewNames.Random(new System.Random());
-            GUILayout.EndHorizontal();
-            DrawConditionsChoice();
-            GUILayout.Space(8);
-            if (_pickingChallenge)
+        // ── Menu pages ─────────────────────────────────────────────────────────
+
+        private enum Page { Main, SignIn, Online, Offline }
+        private Page _page = Page.Main;
+        private string _username, _password = "";
+        private bool _signingUp;
+
+        private void DrawMain()
+        {
+            if (GUILayout.Button("Play Online", _button, GUILayout.Height(46)))
             {
-                DrawChallengeChoice();
-                GUI.enabled = true;
-                GUILayout.EndArea();
-                return;
+                _status = null;
+                _page = Account.SignedIn ? Page.Online : Page.SignIn;
             }
-            if (GUILayout.Button("Play solo", _button, GUILayout.Height(40))) _pickingChallenge = true;
-            GUILayout.Space(6);
-            if (GUILayout.Button("Host a co-op game", _button, GUILayout.Height(40))) Host();
+            GUILayout.Label("Solo or co-op over the internet, voice chat, worldwide leaderboards. Needs an account.", _label);
+            GUILayout.Space(8);
+            if (GUILayout.Button("Play Offline", _button, GUILayout.Height(40))) { _status = null; _page = Page.Offline; }
+            GUILayout.Label("Practice: solo, or co-op on the same Wi-Fi. Scores are not submitted.", _label);
             GUILayout.Space(10);
-            GUILayout.Label("Join a friend (their address):", _label);
-            GUILayout.BeginHorizontal();
-            _address = GUILayout.TextField(_address ?? "", 64, _field, GUILayout.Height(32));
-            if (GUILayout.Button("Join", _button, GUILayout.Width(90), GUILayout.Height(32))) Join();
-            GUILayout.EndHorizontal();
-            GUI.enabled = true;
-
-            GUILayout.Space(8);
-            GUILayout.Label(SteamService.Ready
-                ? "Steam friends join from your invite, or from \"Join game\" in the Steam friends list. Same Wi-Fi: type the host's address above."
-                : "Same computer: 127.0.0.1. Same Wi-Fi: the address the host sees at the top of their screen. (Start Steam to play with friends online.)", _label);
-            if (!string.IsNullOrEmpty(_status))
+            if (Account.SignedIn)
             {
-                GUILayout.Space(6);
-                GUILayout.Label(_status, _label);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"Signed in as {Account.Username}", _label);
+                if (GUILayout.Button("Sign out", GUILayout.Width(80), GUILayout.Height(24))) Account.SignOut();
+                GUILayout.EndHorizontal();
             }
-            if (_mode == Mode.Joining && GUILayout.Button("Cancel", GUILayout.Height(26)))
-            {
-                StopNetwork();
-                BackToMenu(null);
-            }
+            DrawStatus();
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Leaderboard", GUILayout.Height(28))) _showBoard = true;
             if (GUILayout.Button("Settings", GUILayout.Height(28))) _showSettings = true;
             if (!Application.isEditor && GUILayout.Button("Quit to desktop", GUILayout.Height(28))) Application.Quit();
             GUILayout.EndHorizontal();
-            GUILayout.EndArea();
+        }
+
+        private void DrawSignIn()
+        {
+            if (_username == null) _username = Account.LastUsername;
+            GUILayout.Label(_signingUp ? "CREATE AN ACCOUNT" : "SIGN IN", _title);
+            GUILayout.Space(4);
+            GUI.enabled = !Account.Busy;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Username:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            _username = GUILayout.TextField(_username ?? "", 20, _field, GUILayout.Height(30));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Password:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            _password = GUILayout.PasswordField(_password ?? "", '*', 30, _field, GUILayout.Height(30));
+            GUILayout.EndHorizontal();
+            if (_signingUp)
+                GUILayout.Label($"Username: {Account.UsernameRules}. It's your name on the leaderboards.\nPassword: {Account.PasswordRules}.", _label);
+            GUILayout.Space(6);
+            System.Action signedIn = () => { _password = ""; _page = Page.Online; };
+            if (GUILayout.Button(_signingUp ? "Create account" : "Sign in", _button, GUILayout.Height(40)))
+            {
+                if (_signingUp) Account.SignUp(_username, _password, signedIn);
+                else Account.SignIn(_username, _password, signedIn);
+            }
+            if (GUILayout.Button(_signingUp ? "I have an account: sign in" : "New here? Create an account", GUILayout.Height(28)))
+                _signingUp = !_signingUp;
+            GUI.enabled = true;
+            if (!string.IsNullOrEmpty(Account.Status)) GUILayout.Label(Account.Status, _label);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Back", GUILayout.Height(28))) { _password = ""; _page = Page.Main; }
+        }
+
+        private void DrawOnline()
+        {
+            if (!Account.SignedIn) { _page = Page.SignIn; return; }
+            GUILayout.Label($"ONLINE  -  {Account.Username}", _title);
+            DrawCrewName();
+            DrawConditionsChoice();
+            GUILayout.Space(6);
+            if (_pickingChallenge) { DrawChallengeChoice(online: true); return; }
+            if (GUILayout.Button("Solo", _button, GUILayout.Height(40))) _pickingChallenge = true;
+            GUILayout.Space(4);
+            if (GUILayout.Button("Host a co-op game", _button, GUILayout.Height(40))) Host(online: true);
+            GUILayout.Label("You get a join code to give your friends.", _label);
+            GUILayout.Space(6);
+            GUILayout.Label("Join a friend (their join code):", _label);
+            GUILayout.BeginHorizontal();
+            _codeInput = GUILayout.TextField(_codeInput ?? "", 8, _field, GUILayout.Height(32)).ToUpperInvariant();
+            if (GUILayout.Button("Join", _button, GUILayout.Width(90), GUILayout.Height(32))) JoinCode();
+            GUILayout.EndHorizontal();
+            if (SteamService.Ready) GUILayout.Label("Steam friends can also join from your invite.", _label);
+            DrawStatus();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Back", GUILayout.Height(28))) { _pickingChallenge = false; _page = Page.Main; }
+        }
+
+        private void DrawOffline()
+        {
+            GUILayout.Label("OFFLINE PRACTICE", _title);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Your name:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            PlayerName = GUILayout.TextField(PlayerName ?? "", MaxName, _field, GUILayout.Height(30));
+            GUILayout.EndHorizontal();
+            DrawCrewName();
+            DrawConditionsChoice();
+            GUILayout.Space(6);
+            if (_pickingChallenge) { DrawChallengeChoice(online: false); return; }
+            if (GUILayout.Button("Solo", _button, GUILayout.Height(40))) _pickingChallenge = true;
+            GUILayout.Space(4);
+            if (GUILayout.Button("Host on this Wi-Fi", _button, GUILayout.Height(40))) Host(online: false);
+            GUILayout.Space(6);
+            GUILayout.Label("Join a friend on this Wi-Fi (their address):", _label);
+            GUILayout.BeginHorizontal();
+            _address = GUILayout.TextField(_address ?? "", 64, _field, GUILayout.Height(32));
+            if (GUILayout.Button("Join", _button, GUILayout.Width(90), GUILayout.Height(32))) Join();
+            GUILayout.EndHorizontal();
+            // 127.0.0.1 (two copies on one computer) is for testing, so only development builds mention it.
+            string hint = "The address is shown at the top of the host's screen. Practice: scores stay on this computer.";
+            if (Debug.isDebugBuild) hint += " Same computer: 127.0.0.1.";
+            GUILayout.Label(hint, _label);
+            DrawStatus();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Back", GUILayout.Height(28))) { _pickingChallenge = false; _page = Page.Main; }
+        }
+
+        private void DrawCrewName()
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Crew name:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            CrewName = GUILayout.TextField(CrewName ?? "", MaxCrew, _field, GUILayout.Height(30));
+            if (GUILayout.Button("New", GUILayout.Width(44), GUILayout.Height(30))) CrewName = CrewNames.Random(new System.Random());
+            GUILayout.EndHorizontal();
+        }
+
+        // Hosting is starting or a join is connecting: what's happening, and a way out.
+        private void DrawConnecting()
+        {
+            GUILayout.Label(_mode == Mode.StartingHost ? "STARTING" : "JOINING", _title);
+            DrawStatus();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Cancel", GUILayout.Height(30)))
+            {
+                StopNetwork();
+                BackToMenu(null);
+            }
+        }
+
+        private void DrawStatus()
+        {
+            if (string.IsNullOrEmpty(_status)) return;
+            GUILayout.Space(6);
+            GUILayout.Label(_status, _label);
         }
 
         public const string GameTitle = "TETHER: PRIMAL";
@@ -847,12 +1053,12 @@ namespace ProjectFossil.Net
         private bool _showBoard;
 
         // Solo only: how hard the island fights. Co-op always plays it as tuned (Hard).
-        private void DrawChallengeChoice()
+        private void DrawChallengeChoice(bool online)
         {
             GUILayout.Label("How hard?", _label);
             foreach (ChallengeLevel level in new[] { ChallengeLevel.Easy, ChallengeLevel.Medium, ChallengeLevel.Hard })
             {
-                if (GUILayout.Button(Challenge.Label(level), _button, GUILayout.Height(38))) PlaySolo(level);
+                if (GUILayout.Button(Challenge.Label(level), _button, GUILayout.Height(38))) PlaySolo(level, online);
                 GUILayout.Label(Challenge.Describe(level), _label);
                 GUILayout.Space(2);
             }
@@ -882,10 +1088,15 @@ namespace ProjectFossil.Net
         private void DrawTeamLine()
         {
             int team = _mode == Mode.Hosting ? _avatars.Count : NetAvatar.All.Count;
-            string text = _mode == Mode.Hosting
-                ? $"{PlayerName}  |  hosting{(SteamService.InLobby ? " on Steam" : "")} at {_lanAddress ?? "?"}  |  team of {Mathf.Max(1, team)}"
-                : $"{PlayerName}  |  co-op with {_address}  |  team of {Mathf.Max(1, team)}";
-            GUI.Label(new Rect(Screen.width * 0.5f - 200, 4, 400, 22), text, _hud);
+            string where = _mode != Mode.Hosting ? $"co-op with {_address}"
+                         : _joinCode != null ? $"join code {_joinCode}"
+                         : $"hosting on this Wi-Fi at {_lanAddress ?? "?"}";
+            string text = $"{PlayerName}  |  {where}  |  team of {Mathf.Max(1, team)}{(_online ? "" : "  |  practice")}";
+            GUI.Label(new Rect(Screen.width * 0.5f - 250, 4, 500, 22), text, _hud);
+            // The code, ready to paste into a chat, whenever the mouse is free.
+            if (_mode == Mode.Hosting && _joinCode != null && Cursor.visible &&
+                GUI.Button(new Rect(Screen.width * 0.5f + 90, 28, 130, 26), "Copy join code"))
+                GUIUtility.systemCopyBuffer = _joinCode;
             // The Steam invite, whenever the mouse is free (the Esc menu, the shop, the results).
             if (_mode == Mode.Hosting && SteamService.InLobby && Cursor.visible &&
                 GUI.Button(new Rect(Screen.width * 0.5f - 80, 28, 160, 26), "Invite Steam friends"))

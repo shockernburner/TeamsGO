@@ -23,9 +23,10 @@ namespace ProjectFossil.Net
         private const float MenuFog = 0.0016f;
         private const string SeenKey = "ProjectFossil.IntroSeen";
         private const float StudioSeconds = 3f, LogoSeconds = 4f, RiseSeconds = 1.2f, FadeSeconds = 1f;
+        private const float VoiceDelay = 0.5f;    // the narrator starts as the words fade in (Tools/voice/fit_voice.py)
         private const float VoiceBreath = 0.8f;   // a card holds this long after its line is spoken
         private const float RingSeconds = 9f;     // the logo hit rings on under the menu before the loop takes over
-        private const float MusicVolume = 0.85f, DuckedVolume = 0.5f, BedVolume = 0.5f;
+        private const float MusicVolume = 1f, DuckedVolume = 0.55f, BedVolume = 1f;
 
         private enum Phase { Building, Studio, Story, Title, Menu }
         private enum Shot { Flight, Space, Dark }
@@ -97,7 +98,7 @@ namespace ProjectFossil.Net
                 var cue = parts.Length > 3 && System.Enum.TryParse(parts[3].Trim(), true, out SoundSynth.Cue c) ? c
                         : shot == "space" ? SoundSynth.Cue.Stars : SoundSynth.Cue.Pad;
                 var voice = Resources.Load<AudioClip>($"Story/Voice/Line{_cards.Count + 1:00}");
-                if (voice != null) s = Mathf.Max(s, voice.length + VoiceBreath);
+                if (voice != null) s = Mathf.Max(s, VoiceDelay + voice.length + VoiceBreath);
                 _cards.Add((s, parts[1].Trim(), shot == "space" ? Shot.Space : shot == "dark" ? Shot.Dark : Shot.Flight, cue, voice));
             }
             _cardStart = new float[_cards.Count + 1];
@@ -210,7 +211,7 @@ namespace ProjectFossil.Net
             while (c < _cards.Count - 1 && _t >= _cardStart[c + 1]) c++;
             _card = c;
             _cardTime = _t - _cardStart[c];
-            if (_spoken != c)
+            if (_spoken != c && _cardTime >= VoiceDelay)
             {
                 _spoken = c;
                 if (_cards[c].voice != null) { _voice.Stop(); _voice.clip = _cards[c].voice; _voice.Play(); }
@@ -226,7 +227,7 @@ namespace ProjectFossil.Net
             _music.volume = MusicVolume;
             if (_hitPlayed) return;
             _hitPlayed = true;
-            if (_roar != null) _sting.PlayOneShot(_roar, 0.9f);
+            if (_roar != null) _sting.PlayOneShot(_roar, 0.55f); // distant, under the chord
         }
 
         // Any key: the story's music jumps to the hit, the narrator stops, and the menu comes up.
@@ -278,14 +279,15 @@ namespace ProjectFossil.Net
                 }
                 return;
             }
-            bool ringing = _music.isPlaying && _music.clip == _score && _music.time < _score.length - 2f;
+            // The loop fades in under the logo's chord while it rings, so there's no gap between them.
+            bool ringing = _music.isPlaying && _music.clip == _score && _music.time < _hitAt + 4f;
             if (!ringing && _bedClip != null && !_bed.isPlaying)
             {
                 _bed.clip = _bedClip;
                 _bed.volume = 0f;
                 _bed.Play();
             }
-            if (_bed.isPlaying) _bed.volume = Mathf.MoveTowards(_bed.volume, BedVolume, Time.unscaledDeltaTime * 0.25f);
+            if (_bed.isPlaying) _bed.volume = Mathf.MoveTowards(_bed.volume, BedVolume, Time.unscaledDeltaTime * 0.15f);
         }
 
         private bool IslandShown => _cam != null && _cam.gameObject.activeSelf && IslandWorld.Current != null;
@@ -313,7 +315,8 @@ namespace ProjectFossil.Net
                 var go = new GameObject("Title Camera") { tag = "MainCamera" };
                 _cam = go.AddComponent<Camera>();
                 _cam.fieldOfView = 50f;
-                _cam.farClipPlane = 4000f;
+                _cam.nearClipPlane = 1f;
+                _cam.farClipPlane = 120000f; // out to the sea's horizon
             }
             _cam.gameObject.SetActive(true);
             Orbit();

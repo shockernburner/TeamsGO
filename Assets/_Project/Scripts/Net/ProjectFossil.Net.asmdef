@@ -14,7 +14,11 @@
         "ProjectFossil.Audio",
         "Unity.Services.Core",
         "Unity.Services.Authentication",
-        "Unity.Services.Leaderboards"
+        "Unity.Services.Leaderboards",
+        "Unity.Services.Multiplayer",
+        "Unity.Services.Vivox",
+        "FishyUnityTransport",
+        "Unity.Networking.Transport"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

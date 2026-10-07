@@ -720,3 +720,75 @@ circles round each lake), so water was drawn over one ground, walked on over ano
 - Skipping jumps the music to the logo hit and goes to the menu.
 - Tests: `IntroScoreTests` check the score's length, that the hit is the loudest moment, the silence before the
   last line, the drop at the outposts, the build growing, determinism, and the seamless menu loop.
+
+## 2026-10-07 — Audible music, a sea to the horizon, push to talk on T, offline runs
+
+- The intro music played but was barely heard on a MacBook: about −28 dB and mostly under 150 Hz, which laptop
+  speakers don't reproduce. Re-voiced: strings doubled an octave up, the drone's octaves added, a soft bell
+  arpeggio over the story (quickening in the build), a click and a higher body on the drum, and the whole score
+  normalised louder. Measured in Play: most of the energy is now above 150 Hz.
+- The sea plane was 4 km across, so from the title flight (or a peak) its square edge showed against the sky. It
+  is now 20 km, and the title camera sees 15 km, so the sea meets the sky in a straight horizon.
+- Push to talk moved from V (the first/third-person view key) to T.
+- Worldwide boards: every finished run waits in a queue on this computer until it's sent, so solo or same-Wi-Fi
+  games played without internet go up the next time the game is online (at start, after a match, or when the
+  Leaderboard opens). Up to 50 runs are kept.
+- The join hint mentions 127.0.0.1 only in development builds; release builds explain same Wi-Fi and, without
+  Steam, port 7770 or a virtual LAN for internet play.
+
+## 2026-10-07 — Online and offline, accounts, join codes, Vivox voice
+
+Decided with Firdous: everything online comes from Unity Gaming Services (the same on itch and Steam), players
+sign in with a username and password, offline is practice only.
+
+- Start menu: **Play Online** (needs an account; Solo or Co-op; scores go to the worldwide boards) and **Play
+  Offline** (practice: Solo, or co-op on the same Wi-Fi by address; scores stay on this computer). The top line in
+  a match says "practice" for offline games.
+- Accounts (`Net/Account`): username and password on Unity Authentication, checked locally first (username 3-20
+  of letters, digits . - @ _ and not offensive; password 8-30 with upper, lower, digit and symbol). The session is
+  remembered, so a computer signs back in at start. Online, a player's name is the account's username.
+- Online co-op (`NetSession`): the host gets a Unity Relay allocation and a 6-character join code, shown at the
+  top of the screen with a "Copy join code" button; friends type the code. No ports to open. Networking is now
+  always a FishNet Multipass of LAN (Tugboat), Relay (FishyUnityTransport) and Steam (when running); each match
+  starts only the transports it needs, and the one it depends on (Relay online, LAN offline) decides whether
+  hosting worked. Steam builds still take Steam invites when hosting online.
+- Voice: Steam voice is gone. The dinosaurs' ears now use Unity's own microphone input (`Net/MicLevel`, loudness
+  only), so they hear you in every build, solo too. Teammates hear each other online through Vivox
+  (`Net/VivoxVoice`): one positional channel per match named after the join code (heard within 35 m, clear within
+  3 m, fading by distance), push to talk on T mutes the mic between presses, Off never joins. Offline (same
+  Wi-Fi) has no voice transport; players are in the same place anyway.
+- Joiners send only their loudness to the host (`VoiceLevelMessage`), where the dinosaurs live.
+- The worldwide boards take only online matches from signed-in accounts; an online result that couldn't be sent
+  waits on the computer and goes up later. Offline results never do.
+- macOS microphone permission text is set (Player Settings > Mac > Microphone Usage Description), so macOS asks
+  for the microphone instead of silently giving the game nothing.
+- Untested here: signing up, Relay hosting/joining and Vivox need a real account, which I can't create; offline
+  hosting, the menus and leaving were tested in Play mode.
+
+## 2026-10-07 — The narrator's voice in the intro
+
+- Firdous recorded the ten lines (`Tools/voice/source/Line01-10.mp3`). `Tools/voice/fit_voice.py` (ffmpeg) fits
+  each to its card: trims the silence at both ends, slows it with the pitch kept so the speech fills the card from
+  0.5 s in to 1.1 s before its end, but never faster than recorded and never more than 18% slower, normalises the
+  loudness (-16 LUFS), and writes `Resources/Story/Voice/LineNN.wav` (mono; Unity compresses it in builds).
+  Result: lines 2, 8 and 10 slowed (10, "They can hear you", the most), lines 3, 4, 6 and 9 a little longer
+  than their cards, so those cards stretch (the score is composed from the final card lengths, so the music
+  still lands with the words). Run it again after re-recording any line.
+- The narrator starts 0.5 s into each card, as the words fade in; the music ducks under the voice.
+
+## 2026-10-07 — Intro polish after Firdous's listen
+
+- Sea edge, again: the sea is see-through, so the island's square seabed showed through it and stopped at its edge.
+  A dark sea floor plane now sits 1.5 m under the surface everywhere (shallows above it stay clear, deeper water
+  looks the same inside and outside the island's square), the sea is 200 km across, and the title camera sees
+  120 km, so only a straight horizon is left.
+- The hiss is gone: the score's and the menu loop's filtered-noise wind read as TV static on speakers.
+- No drums: the build under "Now we send crews of four" came in as a sudden drum roll that ran into the next line.
+  It is now a swell of the strings and a quickening arpeggio; "Hold" keeps them steady.
+- Into the logo: the strings swell back in under "They can hear you", the logo lands on a soft low boom and the
+  full D minor chord (no crash), the roar sits quieter under it, and the menu loop fades in while the chord still
+  rings, so there's no gap.
+- Studio logo: Firdous's Vantward mark (`Docs/Brand/source/VantwardMark_original.png`). For the dark intro its
+  white background is made transparent and its navy circuit lines turned cream (the wordmark's colour), keeping
+  the cyan waves; `VantwardMark.png` and `VantwardGames.png` (mark beside the VANTWARD GAMES wordmark) are
+  rebuilt from it. `VantwardMark_light_bg.png` keeps the original colours on transparent for light backgrounds.
