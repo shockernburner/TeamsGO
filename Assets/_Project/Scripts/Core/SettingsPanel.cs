@@ -24,7 +24,7 @@ namespace ProjectFossil.Core
             GUILayout.Space(8);
 
             var names = QualitySettings.names;
-            Row("Graphics", () => { if (GUILayout.Button(names.Length > 0 ? names[Mathf.Clamp(quality, 0, names.Length - 1)] : "Default", _button)) quality = (quality + 1) % Mathf.Max(1, names.Length); });
+            Row("Graphics", () => { if (GUILayout.Button(GameSettings.QualityLabel(quality), _button)) quality = (quality + 1) % Mathf.Max(1, names.Length); });
             if (!Application.isEditor)
             {
                 var all = Screen.resolutions;

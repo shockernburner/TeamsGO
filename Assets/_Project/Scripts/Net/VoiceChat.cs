@@ -145,17 +145,18 @@ namespace ProjectFossil.Net
         private GUIStyle _style;
         private void OnGUI()
         {
+            Ui.Begin();
             if (!InMatch) return;
             if (_style == null) _style = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
             if (!string.IsNullOrEmpty(VivoxVoice.Status))
             {
                 _style.normal.textColor = new Color(1f, 0.75f, 0.3f);
-                GUI.Label(new Rect(14, Screen.height - 88, 520, 24), VivoxVoice.Status, _style);
+                GUI.Label(new Rect(14, Ui.H - 88, 520, 24), VivoxVoice.Status, _style);
             }
             if (!Speaking || Level < 0) return;
             float r = Radius(LevelStarts[Level] + 0.01f);
             _style.normal.textColor = Level >= 3 ? new Color(1f, 0.35f, 0.3f) : Level == 2 ? new Color(1f, 0.75f, 0.3f) : new Color(0.75f, 1f, 0.8f);
-            GUI.Label(new Rect(14, Screen.height - 64, 520, 24), $"Voice: {LevelNames[Level]}  -  dinosaurs within {r:0} m can hear you", _style);
+            GUI.Label(new Rect(14, Ui.H - 64, 520, 24), $"Voice: {LevelNames[Level]}  -  dinosaurs within {r:0} m can hear you", _style);
         }
     }
 }

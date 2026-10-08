@@ -172,7 +172,8 @@ namespace ProjectFossil.Net
                 if (_waited > 0.1f && !IslandShown) ShowBackdrop();
                 if (IslandShown && (_score != null || _waited > 6f))
                 {
-                    StartIntro(_after == Phase.Title ? _hitAt - 0.6f : 0f);
+                    // Seen it before: straight to the logo (with the roar), never a story card first.
+                    StartIntro(_after == Phase.Title ? _hitAt : 0f);
                     Enter(_after);
                 }
             }
@@ -181,6 +182,7 @@ namespace ProjectFossil.Net
                 // The intro's clock is the music's while it plays, so pictures, words and notes stay together.
                 if (_music.isPlaying && _music.clip == _score) _t = _music.time;
                 else _t += Time.unscaledDeltaTime;
+                if (_logoOnly && _t < _hitAt) _t = _hitAt; // the music's clock can read a sample early
 
                 if (_skip) Skip();
                 else if (_t < StudioSeconds) _phase = Phase.Studio;
@@ -198,10 +200,13 @@ namespace ProjectFossil.Net
 
         private void Enter(Phase phase) { _phase = phase; _skip = false; }
 
+        private bool _logoOnly;
+
         private void StartIntro(float at)
         {
+            _logoOnly = at >= _hitAt;
             _t = at;
-            _hitPlayed = at > _hitAt;
+            _hitPlayed = at > _hitAt + 0.01f;
             _spoken = -1;
             _card = 0;
             _cardTime = 0f;
@@ -317,7 +322,7 @@ namespace ProjectFossil.Net
             _radius = extent * 0.42f;   // out over the coast, the whole island in view
             _height = top + 30f;          // above the highest peak
             _lookHeight = top * 0.15f;
-            _angle  = Random.Range(0f, 360f);
+            _angle  = Random.Range(0f, 120f); // where in the sweep it starts
             if (_cam == null)
             {
                 var go = new GameObject("Title Camera") { tag = "MainCamera" };
@@ -347,8 +352,18 @@ namespace ProjectFossil.Net
         private void Orbit()
         {
             if (_cam == null || !_cam.gameObject.activeSelf) return;
-            _angle += Time.unscaledDeltaTime * 1.4f; // a full turn in about four minutes
-            var dir = Quaternion.Euler(0f, _angle, 0f) * Vector3.forward;
+            // Always on the far side of the island from the sun, looking into the sunset, swaying 50 degrees either
+            // way (a slow two-minute sweep). A full circle turned to face away from the sun half the time, dark and
+            // blue-grey, so the menu looked different from one launch to the next.
+            _angle += Time.unscaledDeltaTime;
+            float sunSide = 0f;
+            var sun = RenderSettings.sun;
+            if (sun != null)
+            {
+                var away = sun.transform.forward; away.y = 0f; // from the sun across the island
+                if (away.sqrMagnitude > 1e-4f) sunSide = Mathf.Atan2(away.x, away.z) * Mathf.Rad2Deg;
+            }
+            var dir = Quaternion.Euler(0f, sunSide + Mathf.Sin(_angle * 0.05f) * 50f, 0f) * Vector3.forward;
             var pos = _centre + dir * _radius + Vector3.up * _height;
             _cam.transform.position = pos;
             _cam.transform.rotation = Quaternion.LookRotation((_centre + Vector3.up * _lookHeight) - pos);
@@ -359,6 +374,7 @@ namespace ProjectFossil.Net
 
         private void OnGUI()
         {
+            Ui.Begin();
             EnsureStyles();
             GUI.depth = -10; // above the menu
             switch (_phase)
@@ -368,7 +384,7 @@ namespace ProjectFossil.Net
                     break;
                 case Phase.Studio:
                     Fill(Color.black, 1f);
-                    DrawLogo(_studio, "VANTWARD GAMES", 0.38f, Screen.height * 0.5f,
+                    DrawLogo(_studio, "VANTWARD GAMES", 0.38f, Ui.H * 0.5f,
                              Fade(_t, 0.2f, 0.2f + FadeSeconds * 0.8f, StudioSeconds - FadeSeconds * 0.8f, StudioSeconds), _bigText);
                     Hint();
                     break;
@@ -405,7 +421,7 @@ namespace ProjectFossil.Net
 
             float fade = Mathf.Min(FadeSeconds, seconds * 0.3f); // short cards (the last line) fade faster
             var c = GUI.color; GUI.color = new Color(1f, 1f, 1f, Fade(_cardTime, 0f, fade, seconds - fade, seconds));
-            GUI.Label(new Rect(Screen.width * 0.12f, Screen.height * 0.64f, Screen.width * 0.76f, 120f), text, _story);
+            GUI.Label(new Rect(Ui.W * 0.12f, Ui.H * 0.64f, Ui.W * 0.76f, 120f), text, _story);
             GUI.color = c;
         }
 
@@ -416,7 +432,7 @@ namespace ProjectFossil.Net
             for (int i = 0; i < _stars.Length; i++)
             {
                 GUI.color = new Color(1f, 1f, 1f, 0.25f + 0.25f * Mathf.Sin(Time.unscaledTime * 1.7f + i * 2.3f));
-                GUI.DrawTexture(new Rect(_stars[i].x * Screen.width, _stars[i].y * Screen.height * 0.6f, 2f, 2f), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(_stars[i].x * Ui.W, _stars[i].y * Ui.H * 0.6f, 2f, 2f), Texture2D.whiteTexture);
             }
             GUI.color = c;
         }
@@ -433,15 +449,15 @@ namespace ProjectFossil.Net
             float rise = Mathf.Clamp01((t - LogoSeconds) / RiseSeconds);
             rise = rise * rise * (3f - 2f * rise);
             var (menuY, menuW) = MenuTitlePlace();
-            DrawTitle(Mathf.Lerp(Screen.height * 0.45f, menuY, rise), Mathf.Lerp(0.55f, menuW, rise), scale, wipe, primal);
+            DrawTitle(Mathf.Lerp(Ui.H * 0.45f, menuY, rise), Mathf.Lerp(0.55f, menuW, rise), scale, wipe, primal);
         }
 
         // Where the title sits above the menu box: centred in the gap, sized to fit it.
         private static (float y, float widthShare) MenuTitlePlace()
         {
-            float gap = Mathf.Max(90f, Screen.height * 0.5f - NetSession.MenuTopOffset);
-            float w = Mathf.Min(0.36f * Screen.width, gap * 0.8f / 0.42f); // TETHER over PRIMAL is about 0.42 of its width tall
-            return (gap * 0.5f, w / Screen.width);
+            float gap = Mathf.Max(90f, Ui.H * 0.5f - NetSession.MenuTopOffset);
+            float w = Mathf.Min(0.36f * Ui.W, gap * 0.8f / 0.42f); // TETHER over PRIMAL is about 0.42 of its width tall
+            return (gap * 0.5f, w / Ui.W);
         }
 
         // TETHER with PRIMAL under it, centred at y, widthShare of the screen wide. wipe reveals TETHER left to right.
@@ -451,21 +467,21 @@ namespace ProjectFossil.Net
             if (_tether == null)
             {
                 GUI.color = new Color(1f, 0.85f, 0.45f, wipe);
-                GUI.Label(new Rect(0, y - 40f, Screen.width, 60f), "TETHER", _bigText);
+                GUI.Label(new Rect(0, y - 40f, Ui.W, 60f), "TETHER", _bigText);
                 GUI.color = new Color(1f, 1f, 1f, primalAlpha);
-                GUI.Label(new Rect(0, y + 18f, Screen.width, 30f), "P R I M A L", _tag);
+                GUI.Label(new Rect(0, y + 18f, Ui.W, 30f), "P R I M A L", _tag);
                 GUI.color = c;
                 return;
             }
-            float w = Screen.width * widthShare;
+            float w = Ui.W * widthShare;
             float tw = w * scale, th = tw * _tether.height / _tether.width;
             float pw = w * 0.47f, ph = _primal != null ? pw * _primal.height / _primal.width : 0f;
             float top = y - (th + ph * 0.9f) * 0.5f;
-            GUI.DrawTextureWithTexCoords(new Rect((Screen.width - tw) * 0.5f, top, tw * wipe, th), _tether, new Rect(0f, 0f, wipe, 1f));
+            GUI.DrawTextureWithTexCoords(new Rect((Ui.W - tw) * 0.5f, top, tw * wipe, th), _tether, new Rect(0f, 0f, wipe, 1f));
             if (_primal != null && primalAlpha > 0f)
             {
                 GUI.color = new Color(1f, 1f, 1f, primalAlpha);
-                GUI.DrawTexture(new Rect((Screen.width - pw) * 0.5f, top + th * 0.98f, pw, ph), _primal, ScaleMode.ScaleToFit, true);
+                GUI.DrawTexture(new Rect((Ui.W - pw) * 0.5f, top + th * 0.98f, pw, ph), _primal, ScaleMode.ScaleToFit, true);
                 GUI.color = c;
             }
         }
@@ -476,24 +492,24 @@ namespace ProjectFossil.Net
             var c = GUI.color; GUI.color = new Color(1f, 1f, 1f, alpha);
             if (tex != null)
             {
-                float w = Screen.width * widthShare, h = w * tex.height / tex.width;
-                GUI.DrawTexture(new Rect((Screen.width - w) * 0.5f, centreY - h * 0.5f, w, h), tex, ScaleMode.ScaleToFit, true);
+                float w = Ui.W * widthShare, h = w * tex.height / tex.width;
+                GUI.DrawTexture(new Rect((Ui.W - w) * 0.5f, centreY - h * 0.5f, w, h), tex, ScaleMode.ScaleToFit, true);
             }
-            else GUI.Label(new Rect(0, centreY - 30f, Screen.width, 60f), fallback, style);
+            else GUI.Label(new Rect(0, centreY - 30f, Ui.W, 60f), fallback, style);
             GUI.color = c;
         }
 
         private void Hint()
         {
             var c = GUI.color; GUI.color = new Color(1f, 1f, 1f, 0.45f);
-            GUI.Label(new Rect(0, Screen.height - 34f, Screen.width - 20f, 24f), "Press any key to skip", _hint);
+            GUI.Label(new Rect(0, Ui.H - 34f, Ui.W - 20f, 24f), "Press any key to skip", _hint);
             GUI.color = c;
         }
 
         private static void Fill(Color colour, float alpha)
         {
             var c = GUI.color; GUI.color = new Color(colour.r, colour.g, colour.b, alpha);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), Texture2D.whiteTexture);
             GUI.color = c;
         }
 
