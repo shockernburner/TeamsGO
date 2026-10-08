@@ -911,3 +911,22 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   the player whenever the pivot turned toward a step. It also turned 90 degrees for readings like 49 that were the
   pose, not the facing. The check now turns about the capsule's axis and only for readings near a quarter or half turn.
   EditMode tests: `PlayerVisualTests`.
+
+## 2026-10-09 — Scores reach the board after a death; flyers clear the hills; one ground for everything
+
+- **No score after an online death:** a solo death counted as a crew wipe, and a wipe cost the player 50 points.
+  From a total of 0 that wrote nothing, so the player never appeared (the menu said "Crew wiped: -50. Your total: 0").
+  Now every player banks the score they earned, got out or not (`CareerScore.PlayerDelta`; the match score already
+  takes a quarter off for dying, `ScoreModel.DiedMultiplier`). Only the crew board still counts a wipe (a quarter of
+  the crew's average match). Both scripts always write an entry, even 0, so finishing an online match puts you on the
+  board. `RecordRun` still accepts the old `wiped` input and ignores it.
+- **One ground for everything:** the island is generated first, as a height at every x, z (`IslandWorld`: the same
+  heights the terrain draws; measured within 0.17 m of the terrain everywhere, mean 0.001 m). Everything that moves
+  reads it: the player and dinosaurs stand on it, swimmers float on its water, the camera stays above it, and now
+  flyers too.
+- **Pterosaurs through mountains:** a flock's height was set once, over its centre, and the flock circled and drifted
+  into higher ground. `Core/FlightHeight` gives each bird its height every frame: at least 25 m over the highest
+  ground under it, beside it and 60 m ahead along its heading (climbing before a slope arrives), and never under 10 m
+  over the ground right below. `FlightHeightTests` flies 36 flocks for 40 s over six game-sized islands.
+- **Never below the ground:** if a frame ever leaves the player under the ground surface (more than 0.3 m), they're
+  put back on top (`PlayerController.KeepAboveGround`).

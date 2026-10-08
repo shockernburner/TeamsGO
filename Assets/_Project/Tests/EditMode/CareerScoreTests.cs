@@ -32,10 +32,12 @@ namespace ProjectFossil.Tests
         }
 
         [Test]
-        public void WipeTurnsEachPlayersMatchIntoAPenalty()
+        public void PlayersBankWhatTheyEarned_EvenWhenTheyDied()
         {
-            Assert.AreEqual(1200, CareerScore.PlayerDelta(1200, teamWiped: false));
-            Assert.AreEqual(-50,  CareerScore.PlayerDelta(1200, teamWiped: true));
+            // A death already costs a quarter of the match score (ScoreModel); the total adds what's left. A first
+            // online match that ended in death used to cost 50 from zero and never reached the board.
+            Assert.AreEqual(1200, CareerScore.PlayerDelta(1200));
+            Assert.AreEqual(0,    CareerScore.PlayerDelta(-5));
         }
 
         [Test]

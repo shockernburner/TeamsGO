@@ -64,18 +64,20 @@ const call = (fn, playerId, params) => fn({ params, context: { projectId: "p", p
     assert.strictEqual(r.ok, false, JSON.stringify(bad));
   }
 
-  // A wipe costs 50, but never takes a total below zero.
-  r = await call(run, "alice", { score: 0, seconds: 400, kills: 0, seed: 3, wiped: true });
-  assert.deepStrictEqual([r.ok, r.delta, r.total], [true, -50, 850]);
+  // Dying still banks what the player earned (the game's score already costs the death), and a first match
+  // with nothing earned still puts the player on the board.
+  r = await call(run, "alice", { score: 400, seconds: 400, kills: 0, seed: 3, wiped: true });
+  assert.deepStrictEqual([r.ok, r.delta, r.total], [true, 400, 1300]);
   clock += 3600 * 1000;
-  r = await call(run, "bob", { score: 0, seconds: 400, kills: 0, seed: 4, wiped: true });
-  assert.strictEqual(boards.survivors_total.bob === undefined || boards.survivors_total.bob.score === 0, true);
+  r = await call(run, "bob", { score: 0, seconds: 400, kills: 0, seed: 4 });
+  assert.deepStrictEqual([r.ok, r.total], [true, 0]);
+  assert.strictEqual(boards.survivors_total.bob.score, 0);
 
   // Test mode writes only to the test_ boards.
   clock += 3600 * 1000;
   r = await call(run, "alice", { score: 300, seconds: 400, kills: 0, seed: 5, test: true });
   assert.strictEqual(boards.test_survivors_total.alice.score, 300);
-  assert.strictEqual(boards.survivors_total.alice.score, 850);
+  assert.strictEqual(boards.survivors_total.alice.score, 1300);
 
   // Crews: scores times the escape bonus; a wipe takes a quarter of the crew's average match.
   r = await call(team, "alice", { crew: "Ash Line", scores: [400, 300, 200, 100], escaped: 4, seconds: 900, seed: 10 });
@@ -89,6 +91,10 @@ const call = (fn, playerId, params) => fn({ params, context: { projectId: "p", p
   assert.strictEqual(boards.teams_total["crew-ash-line"].score, 2546);
   r = await call(team, "alice", { crew: "Ash Line", scores: [999999], escaped: 1, seconds: 100, seed: 13 });
   assert.strictEqual(r.ok, false);                                      // impossible score
+  // A new crew whose first match is a wipe is still on the board, at 0.
+  r = await call(team, "bob", { crew: "Solo Bob", scores: [250], escaped: 0, seconds: 400, seed: 20 });
+  assert.deepStrictEqual([r.ok, r.delta], [true, 0]);
+  assert.strictEqual(boards.teams_total["crew-solo-bob"].score, 0);
 
   console.log("All Cloud Code script checks passed.");
 })().catch(e => { console.error("FAILED:", e.message); process.exit(1); });

@@ -7,12 +7,14 @@ namespace ProjectFossil.Match
     // The online scoring rules: what a finished match adds to a player's and a team's running totals.
     // Pure, so the game, the tests and the server-side check (Cloud Code) can all apply the same numbers.
     //
-    //   Survivors board: each player's own score adds up across matches (all-time and weekly).
+    //   Survivors board: each player's own match score adds up across matches (all-time and weekly), whether they
+    //                    got out or died. The match score already costs a death (ScoreModel.DiedMultiplier).
     //   Teams board:     each match adds the crew's combined score times a bonus for how many got out.
-    //   Wipe (nobody out): the team loses a quarter of its average match, and each player loses 50 points.
+    //   Wipe (nobody out): the team loses a quarter of its average match. Players lose nothing: a first online
+    //                    match that ended in death used to cost 50 from a total of zero, so the player never
+    //                    reached the board at all.
     public static class CareerScore
     {
-        public const int   WipePenaltyPerPlayer   = 50;
         public const float WipePenaltyTeamFraction = 0.25f;
 
         // Bonus for how many of the crew reached the helicopter. 0 is a wipe and has no multiplier.
@@ -27,9 +29,8 @@ namespace ProjectFossil.Match
             }
         }
 
-        // What one player's match adds to their own total: their score, or the wipe penalty if the whole crew died.
-        public static int PlayerDelta(int matchScore, bool teamWiped) =>
-            teamWiped ? -WipePenaltyPerPlayer : Math.Max(0, matchScore);
+        // What one player's match adds to their own total: the score they earned, never less than nothing.
+        public static int PlayerDelta(int matchScore) => Math.Max(0, matchScore);
 
         // What a match adds to the team's total. memberScores are each player's own match score; averageMatch is
         // the team's average match result so far (0 for a new team, so its first wipe costs nothing).
