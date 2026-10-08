@@ -22,12 +22,13 @@ module.exports = async ({ params, context, logger }) => {
   if (seconds > MAX_SECONDS) return { ok: false, reason: "match too long" };
   if (score > seconds * MAX_POINTS_PER_SECOND) return { ok: false, reason: "score too high for the time played" };
 
-  // One result per island, and no faster than matches can be played.
+  // One result per island, and no faster than matches can be played. Kept in protected player data, which only
+  // the server can write, so a player can't clear it to send an island again.
   const save = new DataApi(context);
   const key = test ? "test_lastRun" : "lastRun";
   const now = Math.floor(Date.now() / 1000);
   try {
-    const got = await save.getItems(context.projectId, context.playerId, [key]);
+    const got = await save.getProtectedItems(context.projectId, context.playerId, [key]);
     const last = got.data.results.length ? got.data.results[0].value : null;
     if (last && last.seed === seed) return { ok: false, reason: "this island's result is already in" };
     if (last && now - last.t < seconds * 0.8) return { ok: false, reason: "results are coming in faster than matches can be played" };
@@ -54,7 +55,7 @@ module.exports = async ({ params, context, logger }) => {
   if (!test && COUNTRIES.includes(country)) {
     try { await add("survivors_total_" + country); } catch (e) { logger.warning("country board", { "error.message": e.message }); }
   }
-  await save.setItem(context.projectId, context.playerId, { key: key, value: { t: now, seed: seed } });
+  await save.setProtectedItem(context.projectId, context.playerId, { key: key, value: { t: now, seed: seed } });
   return { ok: true, delta: delta, total: total };
 };
 

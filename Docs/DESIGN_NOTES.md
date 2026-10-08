@@ -886,4 +886,8 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
 - `Tools/cloudcode/test_scripts.js` runs both scripts locally against stand-ins for Leaderboards and Cloud Save
   (`node Tools/cloudcode/test_scripts.js`): all rules pass. Not yet tested end to end against the live service
   (needs a signed-in player in Play mode).
-- Still open: Access Control, so players can't write to the boards directly and only the scripts can.
+- Locked (Firdous: "Lock them"): `Data/Services/LeaderboardsLock.ac` (Access Control, deployed with the Services
+  Tooling package) denies players any write to the leaderboards (`urn:ugs:leaderboards:/*`); reads stay open. The
+  scripts write with the server's own credentials, so only they can add scores. SubmitRun keeps each player's last
+  run in protected Cloud Save data, which players can't write either, so the replay check can't be cleared.
+  Not yet verified end to end: needs a signed-in player to see a direct write refused and a script write pass.

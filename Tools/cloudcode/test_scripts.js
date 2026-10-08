@@ -24,11 +24,11 @@ const fakes = {
   },
   "@unity-services/cloud-save-1.4": {
     DataApi: class {
-      async getItems(projectId, playerId, keys) {
+      async getProtectedItems(projectId, playerId, keys) {
         const s = saves[playerId] || {};
         return { data: { results: keys.filter(k => k in s).map(k => ({ key: k, value: s[k] })) } };
       }
-      async setItem(projectId, playerId, item) { (saves[playerId] = saves[playerId] || {})[item.key] = item.value; }
+      async setProtectedItem(projectId, playerId, item) { (saves[playerId] = saves[playerId] || {})[item.key] = item.value; }
     },
   },
 };
