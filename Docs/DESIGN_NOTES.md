@@ -835,3 +835,14 @@ From Firdous's recording and screenshot of the Mac build beside the Editor:
 - Interface scale (`Core/Ui`): every OnGUI lays out for a 1080-pixel-tall screen and is scaled to the real one, so
   the menus and HUD keep their size on a Retina Mac build (which runs at twice its window's pixels). Labels over
   people and dinosaurs go through `Ui.FromScreen`.
+
+## 2026-10-08 — Fog ships in builds; bigger interface
+
+- The Mac build had no fog at all (clear, blue) while the Editor showed the golden haze. Fog is switched on from
+  code at runtime, and with Graphics > Fog Modes on "Automatic" Unity only keeps the fog variants that scenes in
+  the build use; Bootstrap has fog off, so they were stripped. Fog Modes is now Custom, keeping Exponential Squared
+  only (the one mode the game uses; keeping all three tripled the shader variants and a build ran over 40 minutes).
+- The interface reference is now 720 pixels tall (scale 1 to 4), so menus fill a window in the same proportion as
+  in the Editor's Game view.
+- Test launch option `-shot <file.png>`: the build saves a screenshot 6 s after the menu is up, then quits, so a
+  build can be checked without capturing the desktop.

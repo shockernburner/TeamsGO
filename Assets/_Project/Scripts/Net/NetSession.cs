@@ -155,17 +155,28 @@ namespace ProjectFossil.Net
         // Test launches, for checking a built game without clicking through it:
         //   -autosolo           an offline solo match (Easy) as soon as the menu is up
         //   -autojoin <address> join an offline (same Wi-Fi) host at that address
+        //   -shot <file.png>    save a screenshot 6 s after the menu is up, then quit
         private bool _autoDone;
         private void AutoLaunch()
         {
             if (_autoDone || !TitleSequence.MenuReady || _mode != Mode.Menu) return;
             _autoDone = true;
             var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i + 1 < args.Length; i++)
+                if (args[i] == "-shot") StartCoroutine(ShotAndQuit(args[i + 1]));
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "-autosolo") { Debug.Log("[NetSession] -autosolo"); PlaySolo(ChallengeLevel.Easy, online: false); return; }
                 if (args[i] == "-autojoin" && i + 1 < args.Length) { Debug.Log($"[NetSession] -autojoin {args[i + 1]}"); _address = args[i + 1]; Join(); return; }
             }
+        }
+
+        private System.Collections.IEnumerator ShotAndQuit(string path)
+        {
+            yield return new WaitForSecondsRealtime(6f);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSecondsRealtime(2f);
+            Application.Quit();
         }
 
         private void OnEnable()
