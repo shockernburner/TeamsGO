@@ -13,7 +13,7 @@ namespace ProjectFossil.Net
     // country), every crew's matches on the teams boards with the escape bonus or the wipe penalty.
     //
     // The game never writes a score itself: it sends each finished run to a Cloud Code script
-    // (Data/Services/CloudCode/SubmitRun.js, and SubmitTeam.js from the host for the crew), which checks it with
+    // (Data/Services/CloudCode/RecordRun.js, and RecordCrew.js from the host for the crew), which checks it with
     // the same rules as Match/ScoreCheck, refuses an island already counted or results faster than matches can be
     // played, and only then adds it. The boards are Data/Services/*.lb; scripts and boards are published from
     // Services > Deployment. Launched with -testboards, everything goes to the test_ boards instead.
@@ -179,7 +179,7 @@ namespace ProjectFossil.Net
                 { "wiped", p.Wiped }, { "test", TestBoards }, { "player", p.Run.Player ?? "" }, { "crew", p.Run.Crew ?? "" },
                 { "country", PlayerCountry },
             };
-            string json = await CloudCodeService.Instance.CallEndpointAsync("SubmitRun", args);
+            string json = await CloudCodeService.Instance.CallEndpointAsync("RecordRun", args);
             return JsonUtility.FromJson<Reply>(json);
         }
 
@@ -190,7 +190,7 @@ namespace ProjectFossil.Net
                 { "crew", p.Run.Crew }, { "scores", p.Scores }, { "escaped", p.Escaped }, { "seconds", p.Run.Seconds },
                 { "seed", p.Run.Seed }, { "test", TestBoards },
             };
-            string json = await CloudCodeService.Instance.CallEndpointAsync("SubmitTeam", args);
+            string json = await CloudCodeService.Instance.CallEndpointAsync("RecordCrew", args);
             return JsonUtility.FromJson<Reply>(json);
         }
 

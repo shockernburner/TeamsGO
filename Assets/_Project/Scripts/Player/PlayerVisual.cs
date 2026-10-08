@@ -35,6 +35,7 @@ namespace ProjectFossil.Player
         private int              _facingAgree;   // settled frames in a row that read the same wrong facing
         private int              _facingTries;   // settled frames read since the last state change
         private float            _facingOff;     // the wrong facing those frames agreed on, degrees
+        private float            _swimLift;      // metres the body is raised while swimming
 
         // Weapon in the right hand. The grip is worked out from the finger bones once, in the rest pose,
         // so it works whatever way the rig's hand bone happens to point.
@@ -320,6 +321,47 @@ namespace ProjectFossil.Player
 
         private void LateUpdate()
         {
+            UpdateSwimLift();
+            CheckFacing();
+        }
+
+        // The swim clips keep the body where their library animated it: hanging about 1.3 m below the feet, for a
+        // root at the water line. The controller floats the feet swimDepth under the surface, so the whole body,
+        // head included, was under water. Raise the body until the chest is just under the surface (treading water
+        // that leaves head and shoulders out; in the crawl, the back at the water line), measured from the animated
+        // chest so it holds whatever the clips do, and eased so the stroke's bob isn't followed.
+        public const float ChestUnderWater = 0.12f;
+
+        // How far to raise a swimmer whose chest (with no lift) is at unliftedChest.
+        public static float SwimLiftFor(float surface, float unliftedChest) =>
+            Mathf.Clamp(surface - ChestUnderWater - unliftedChest, 0f, 2.5f);
+
+        // The turn that corrects a body reading `off` degrees from the pivot's forward: a quarter or half turn,
+        // or none for a reading near forward or between quarters (that is the pose, not the facing).
+        public static bool FacingTurn(float off, out float turn)
+        {
+            turn = Mathf.Round(off / 90f) * 90f;
+            return Mathf.Abs(off) >= 30f && Mathf.Abs(Mathf.DeltaAngle(off, turn)) <= 20f;
+        }
+
+        // A facing correction turns the model about the capsule's axis, never away from it.
+        public static Vector3 TurnedOffset(Vector3 local, float turn) => Quaternion.Euler(0f, -turn, 0f) * local;
+        private const float SwimLiftSpeed = 2.5f; // metres per second
+        private void UpdateSwimLift()
+        {
+            if (_pivot == null) return;
+            float target = 0f;
+            var chest = _animator != null && _animator.isHuman ? _animator.GetBoneTransform(HumanBodyBones.Chest) : null;
+            if (_controller != null && _controller.IsSwimming && chest != null && !_dead)
+            {
+                target = SwimLiftFor(IslandWorld.SurfaceOver(transform.position), chest.position.y - _swimLift);
+            }
+            _swimLift = Mathf.MoveTowards(_swimLift, target, SwimLiftSpeed * Time.deltaTime);
+            _pivot.localPosition = new Vector3(0f, _swimLift, 0f);
+        }
+
+        private void CheckFacing()
+        {
             if (_facingChecks <= 0 || _animator == null || !_animator.isHuman || _model == null) return;
             if (--_facingChecks > 0) return;
             if (_animator.IsInTransition(0)) { _facingChecks = 1; return; } // wait until the new pose has settled
@@ -331,7 +373,9 @@ namespace ProjectFossil.Player
             if (right.sqrMagnitude < 1e-6f) return;
             Vector3 fwd = Vector3.Cross(right, Vector3.up);
             float off = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
-            if (Mathf.Abs(off) < 30f) { _facingAgree = 0; return; }
+            // A clip from another library is off by a quarter or a half turn. A reading in between (49 degrees, from
+            // a stroke or a twist) is the pose, not the facing: turning 90 for it swam the body sideways.
+            if (!FacingTurn(off, out _)) { _facingAgree = 0; return; }
             // One frame of a stride or a twist can read the shoulders far off (a 167 degree reading spun the
             // runner backwards). Turn only when several settled frames in a row agree.
             if (_facingAgree > 0 && Mathf.Abs(Mathf.DeltaAngle(off, _facingOff)) > 20f) _facingAgree = 0;
@@ -343,14 +387,12 @@ namespace ProjectFossil.Player
                 return;
             }
             _facingAgree = 0;
-            float turn = Mathf.Round(off / 90f) * 90f;
-            // Turn about the body's centre so it stays over the capsule.
-            Vector3 centre = _pivot.InverseTransformPoint(_animator.GetBoneTransform(HumanBodyBones.Hips) != null
-                ? _animator.GetBoneTransform(HumanBodyBones.Hips).position : _model.position);
-            centre.y = 0f;
-            var q = Quaternion.Euler(0f, -turn, 0f);
-            _model.localPosition = q * (_model.localPosition - centre) + centre;
-            _model.localRotation = q * _model.localRotation;
+            FacingTurn(off, out float turn);
+            // Turn about the capsule's own axis. Turning about the hips moved the model off the capsule whenever the
+            // hips were away from it (a metre out in the swim stroke): the body then sank into hillsides, hung past
+            // ledges, and swung round the player at every A, S or D as the pivot turned toward the step.
+            _model.localPosition = TurnedOffset(_model.localPosition, turn);
+            _model.localRotation = Quaternion.Euler(0f, -turn, 0f) * _model.localRotation;
             Debug.Log($"[PlayerVisual] {_model.name} faced {off:0} degrees off; turned it {-turn:0}.");
         }
 

@@ -29,7 +29,8 @@ namespace ProjectFossil.Net
             GUILayout.BeginHorizontal();
             ScopeButton(Scope.AllTime, "All time");
             ScopeButton(Scope.Week, "This week");
-            if (_tab == 0) ScopeButton(Scope.Country, OnlineLeaderboard.PlayerCountry == Country.Unknown ? "Country" : OnlineLeaderboard.PlayerCountry);
+            if (_tab == 0) ScopeButton(Scope.Country, OnlineLeaderboard.PlayerCountry == Country.Unknown ? "My country"
+                                                      : OnlineLeaderboard.CountryName(OnlineLeaderboard.PlayerCountry));
             ScopeButton(Scope.Local, "This computer");
             GUILayout.EndHorizontal();
             if (_tab == 1 && _scope == Scope.Country) _scope = Scope.AllTime;

@@ -1,3 +1,5 @@
+// Inputs: declared in this file's Unity import settings (the .meta), which is what deployment sends. The
+// module.exports.params at the bottom documents them; Unity would only read those in an initialised JS project.
 // TETHER: Primal — one finished online run, checked on the server and added to the worldwide totals.
 // The same rules as Match/CareerScore.cs and Match/ScoreCheck (keep them in step). Called by the game with the
 // player's own sign-in, so the run always goes to the player who sent it.
@@ -46,8 +48,8 @@ module.exports = async ({ params, context, logger }) => {
     catch (e) { /* no entry yet */ }
     const change = Math.max(delta, -current);
     if (change === 0 && delta <= 0) return current;
-    const res = await boards.addLeaderboardPlayerScore(context.projectId, boardId, context.playerId, { score: change, metadata: meta });
-    return res.data.score;
+    await boards.addLeaderboardPlayerScore(context.projectId, boardId, context.playerId, { score: change, metadata: meta });
+    return current + change;
   }
 
   const total = await add(pre + "survivors_total");
