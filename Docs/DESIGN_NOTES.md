@@ -802,3 +802,22 @@ Firdous's direction after listening: nothing under the story but the background 
   in all), the roar plays at its current, quieter level, and TETHER wipes in within 0.45 s. The background then
   comes back under the logo and carries into the menu loop, which starts on the same chord and has no bell.
 - Short cards fade their words faster (30% of the card), so the last line is readable.
+
+## 2026-10-08 — First online co-op test: three fixes
+
+Firdous hosted in the Editor and joined from a Mac build with a join code: the code and push-to-talk voice worked.
+Three bugs, all reproduced on this Mac with new test launch options and fixed:
+- White squares in builds: the terrain's built-in grass (Unity's grass shader) drew every grass card as a solid
+  white square in a build, fine in the Editor; the island's terrain exists only at runtime, so the build left that
+  shader's cut-out out. Grass is now two crossed cards per tuft drawn with our own cut-out material,
+  `Resources/Shaders/GrassCutout.mat` (URP Lit, alpha clip, both sides, instanced), tinted per biome. Being an
+  asset in Resources, its exact shader variant always ships. (It no longer sways with the wind.)
+- The host's own player never joined its own match: it started connecting and then built the island, which holds
+  the game for a few seconds, and the connection gave up ("ConnectionFailed"). So its own body showed as a grey
+  capsule in front of it, a friend's body was never sent, and both screens said "team of 1". The island is now
+  built first, then the host connects, to 127.0.0.1 ("localhost" can mean IPv6, which LAN hosting doesn't use).
+- One network per kind of match, rebuilt when the kind changes: offline is LAN only (Tugboat), online is Unity
+  Relay (plus Steam through a Multipass in Steam builds, Relay first so the host joins through it). Running LAN
+  and Relay side by side was what left the host half-connected in the first place.
+- Test launch options for built games: `-autosolo` (offline solo at once) and `-autojoin <address>` (join a
+  same-Wi-Fi host). With them the two-player test runs without clicking: Editor hosts, build joins.

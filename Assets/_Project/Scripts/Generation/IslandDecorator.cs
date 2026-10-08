@@ -158,11 +158,15 @@ namespace ProjectFossil.Generation
             for (int i = 0; i < n; i++)
             {
                 var tint = biomes[i] != null ? biomes[i].grassColor : Color.gray;
+                // Crossed cards drawn with our own cut-out material (Resources/Shaders/GrassCutout), tinted per biome.
+                // Unity's built-in grass drew as solid white squares in builds: the island's terrain only exists at
+                // runtime, so its grass shader's cut-out was left out of the build.
                 protos[i] = new DetailPrototype
                 {
-                    prototypeTexture = tex,
-                    usePrototypeMesh = false,
-                    renderMode   = DetailRenderMode.Grass,
+                    prototype        = GrassCard(tex, tint),
+                    usePrototypeMesh = true,
+                    useInstancing    = true,
+                    renderMode   = DetailRenderMode.VertexLit,
                     minWidth     = 0.5f, maxWidth  = 1.0f,
                     minHeight    = 0.3f, maxHeight = 0.7f,
                     noiseSpread  = 0.3f,
@@ -245,7 +249,50 @@ namespace ProjectFossil.Generation
             td.wavingGrassTint     = new Color(0.85f, 0.9f, 0.75f);
         }
 
-        // Grey blades on a clear background, tinted per biome by the detail colours. Drawn here, so no asset needed.
+        private static readonly Dictionary<Color, GameObject> _grassCards = new Dictionary<Color, GameObject>();
+        private static Mesh _grassMesh;
+
+        // One grass prototype per tint: two crossed 1 x 1 m cards standing on the ground, their normals pointing up so
+        // they light like the ground they grow from. Kept hidden for the whole session and reused by every island.
+        private static GameObject GrassCard(Texture2D tex, Color tint)
+        {
+            if (_grassCards.TryGetValue(tint, out var card) && card != null) return card;
+            if (_grassMesh == null)
+            {
+                _grassMesh = new Mesh { name = "GrassCards" };
+                var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+                for (int k = 0; k < 2; k++)
+                {
+                    var dir = Quaternion.Euler(0f, k * 90f + 45f, 0f) * Vector3.right * 0.5f;
+                    int o = v.Count;
+                    v.Add(-dir); v.Add(dir); v.Add(dir + Vector3.up); v.Add(-dir + Vector3.up);
+                    uv.Add(new Vector2(0, 0)); uv.Add(new Vector2(1, 0)); uv.Add(new Vector2(1, 1)); uv.Add(new Vector2(0, 1));
+                    tri.AddRange(new[] { o, o + 2, o + 1, o, o + 3, o + 2 });
+                }
+                _grassMesh.SetVertices(v);
+                _grassMesh.SetUVs(0, uv);
+                _grassMesh.SetTriangles(tri, 0);
+                var up = new Vector3[v.Count];
+                for (int i = 0; i < up.Length; i++) up[i] = Vector3.up;
+                _grassMesh.normals = up;
+                _grassMesh.RecalculateBounds();
+            }
+            card = new GameObject("GrassCard") { hideFlags = HideFlags.HideAndDontSave };
+            if (Application.isPlaying) Object.DontDestroyOnLoad(card);
+            card.AddComponent<MeshFilter>().sharedMesh = _grassMesh;
+            var r = card.AddComponent<MeshRenderer>();
+            var baseMat = Resources.Load<Material>("Shaders/GrassCutout");
+            var mat = baseMat != null ? new Material(baseMat) : new Material(Placeholder.LitBase);
+            mat.SetTexture("_BaseMap", tex);
+            mat.SetColor("_BaseColor", tint);
+            r.sharedMaterial = mat;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            card.SetActive(false);
+            _grassCards[tint] = card;
+            return card;
+        }
+
+        // Grey blades on a clear background, tinted per biome. Drawn here, so no asset needed.
         private static Texture2D _grassTexture;
 
         private static Texture2D GrassTexture()

@@ -35,7 +35,6 @@ namespace ProjectFossil.Net
     public class NetSession : MonoBehaviour
     {
         public const ushort Port       = 7770;
-        private const int LanIndex = 0, RelayIndex = 1, SteamIndex = 2; // the transports' order in the Multipass
         public const int    MaxTeam    = 4;
         private const string AddressKey = "ProjectFossil.JoinAddress";
         private const string NameKey    = "ProjectFossil.PlayerName";
@@ -69,11 +68,15 @@ namespace ProjectFossil.Net
         private MatchBootstrap _boot;
         private GameObject     _soloDinosaur;
         private NetworkManager _net;
-        private Multipass _multipass;                      // LAN, Relay and (with Steam running) Steam side by side
+        // One network per kind of match, rebuilt when the kind changes. Offline: LAN only (Tugboat). Online: Unity
+        // Relay (FishyUnityTransport), plus Steam beside it through a Multipass in Steam builds (Relay first, so the
+        // host's own player joins through it). Running LAN and Relay side by side left the host's own player
+        // half-connected: its body never hid and a friend's never arrived.
+        private bool _netOnline;
+        private Multipass _multipass;                      // online with Steam only
         private Tugboat _tugboat;
-        private UnityTransport _relayNet;                  // Unity Relay: online play by join code
+        private UnityTransport _relayNet;
         private FishySteamworks.FishySteamworks _steamNet;
-        private int _primaryServer;                        // the transport whose start decides whether hosting worked
         private bool _online;                              // this match is online: signed in, scores count
         private string _joinCode;                          // online host: the code friends type; everyone: the voice channel
         private string _codeInput = "";
@@ -149,6 +152,22 @@ namespace ProjectFossil.Net
         }
         private bool _leaving;
 
+        // Test launches, for checking a built game without clicking through it:
+        //   -autosolo           an offline solo match (Easy) as soon as the menu is up
+        //   -autojoin <address> join an offline (same Wi-Fi) host at that address
+        private bool _autoDone;
+        private void AutoLaunch()
+        {
+            if (_autoDone || !TitleSequence.MenuReady || _mode != Mode.Menu) return;
+            _autoDone = true;
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-autosolo") { Debug.Log("[NetSession] -autosolo"); PlaySolo(ChallengeLevel.Easy, online: false); return; }
+                if (args[i] == "-autojoin" && i + 1 < args.Length) { Debug.Log($"[NetSession] -autojoin {args[i + 1]}"); _address = args[i + 1]; Join(); return; }
+            }
+        }
+
         private void OnEnable()
         {
             DinosaurAI.Created += OnDinosaurCreated;
@@ -212,7 +231,7 @@ namespace ProjectFossil.Net
             UseNames();
             SaveName();
             WorldConditions.ClearOverride();
-            if (!EnsureNetwork()) return;
+            if (!EnsureNetwork(_online)) return;
             _joinCode = null;
             _mode = Mode.StartingHost;
             if (_online)
@@ -242,11 +261,9 @@ namespace ProjectFossil.Net
             _boot.playerSlot  = 0;
             _status = "Starting the host...";
             _lanAddress = LocalAddress();
-            // LAN always (the host's own player joins through it); Relay when online; Steam online for invites.
-            _primaryServer = _online ? RelayIndex : LanIndex;
-            bool started = _multipass.StartConnection(true, LanIndex);
-            if (_online) started = _multipass.StartConnection(true, RelayIndex) && started;
-            if (_online && _steamNet != null) _multipass.StartConnection(true, SteamIndex);
+            // Online: Relay, and Steam beside it for invites; offline: LAN.
+            bool started = _multipass != null ? _multipass.StartConnection(true, 0) : _net.ServerManager.StartConnection();
+            if (_multipass != null && _steamNet != null) _multipass.StartConnection(true, 1);
             if (!started)
             {
                 StopNetwork();
@@ -265,7 +282,7 @@ namespace ProjectFossil.Net
             _online = Account.SignedIn;
             UseNames();
             SaveName();
-            if (!EnsureNetwork() || _steamNet == null || _multipass == null)
+            if (!EnsureNetwork(true) || _steamNet == null || _multipass == null)
             {
                 _status = "Couldn't join over Steam.";
                 return;
@@ -300,7 +317,7 @@ namespace ProjectFossil.Net
             _online = false;
             UseNames();
             SaveName();
-            if (!EnsureNetwork()) return;
+            if (!EnsureNetwork(false)) return;
             Challenge.Current = ChallengeLevel.Hard;
             _address = string.IsNullOrWhiteSpace(_address) ? "127.0.0.1" : _address.Trim();
             PlayerPrefs.SetString(AddressKey, _address);
@@ -311,7 +328,6 @@ namespace ProjectFossil.Net
             _status = $"Connecting to {_address}...";
             _clientLoaded = false;
             _readySeed = -1;
-            _multipass.SetClientTransport(_tugboat);
             if (!_net.ClientManager.StartConnection(_address, Port))
             {
                 _status = "Couldn't start connecting.";
@@ -326,7 +342,7 @@ namespace ProjectFossil.Net
             if (code.Length < 6) { _status = "Type the 6-character code from the host's screen."; return; }
             _online = Account.SignedIn;
             UseNames();
-            if (!EnsureNetwork()) return;
+            if (!EnsureNetwork(true)) return;
             Challenge.Current = ChallengeLevel.Hard;
             NetRole.IsFollower = true;
             _boot.CanRestart = () => false;
@@ -349,7 +365,7 @@ namespace ProjectFossil.Net
             }
             if (_mode != Mode.Joining) return; // cancelled meanwhile
             _joinCode = code;
-            _multipass.SetClientTransport(_relayNet);
+            if (_multipass != null) _multipass.SetClientTransport(_relayNet);
             if (!_net.ClientManager.StartConnection())
                 BackToMenu("Couldn't start connecting.");
         }
@@ -380,9 +396,16 @@ namespace ProjectFossil.Net
 
         // ── Network setup ──────────────────────────────────────────────────────
 
-        private bool EnsureNetwork()
+        private bool EnsureNetwork(bool online)
         {
-            if (_net != null) return true;
+            if (_net != null && _netOnline == online) return true;
+            if (_net != null)
+            {
+                StopNetwork();
+                DestroyImmediate(_net.gameObject);
+                _net = null; _multipass = null; _tugboat = null; _relayNet = null; _steamNet = null;
+            }
+            _netOnline = online;
 
             _prefabs = Resources.Load<PrefabObjects>(PrefabsPath);
             if (_prefabs != null)
@@ -407,28 +430,34 @@ namespace ProjectFossil.Net
             var go = new GameObject("Network");
             go.SetActive(false);
             DontDestroyOnLoad(go);
-            // Side by side through FishNet's Multipass: LAN (Tugboat), Unity Relay (online by join code) and, with
-            // Steam running, Steam (invites, peer to peer through Valve). Each match starts only the ones it needs.
-            _tugboat = go.AddComponent<Tugboat>();
-            _tugboat.SetPort(Port);
-            _tugboat.SetMaximumClients(MaxTeam);
-            _relayNet = go.AddComponent<UnityTransport>();
-            if (SteamService.Ready)
+            Transport transport;
+            if (!online)
             {
-                // Its settings live in private fields until it starts (its setters need a running server).
-                const System.Reflection.BindingFlags priv = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
-                _steamNet = go.AddComponent<FishySteamworks.FishySteamworks>();
-                typeof(FishySteamworks.FishySteamworks).GetField("_peerToPeer", priv)?.SetValue(_steamNet, true);
-                typeof(FishySteamworks.FishySteamworks).GetField("_maximumClients", priv)?.SetValue(_steamNet, (ushort)MaxTeam);
+                _tugboat = go.AddComponent<Tugboat>();
+                _tugboat.SetPort(Port);
+                _tugboat.SetMaximumClients(MaxTeam);
+                transport = _tugboat;
             }
-            _multipass = go.AddComponent<Multipass>();
-            var list = typeof(Multipass)
-                .GetField("_transports", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(_multipass) as List<Transport>;
-            list.Add(_tugboat);
-            list.Add(_relayNet);
-            if (_steamNet != null) list.Add(_steamNet);
-            Transport transport = _multipass;
+            else
+            {
+                _relayNet = go.AddComponent<UnityTransport>();
+                transport = _relayNet;
+                if (SteamService.Ready)
+                {
+                    // Its settings live in private fields until it starts (its setters need a running server).
+                    const System.Reflection.BindingFlags priv = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                    _steamNet = go.AddComponent<FishySteamworks.FishySteamworks>();
+                    typeof(FishySteamworks.FishySteamworks).GetField("_peerToPeer", priv)?.SetValue(_steamNet, true);
+                    typeof(FishySteamworks.FishySteamworks).GetField("_maximumClients", priv)?.SetValue(_steamNet, (ushort)MaxTeam);
+                    _multipass = go.AddComponent<Multipass>();
+                    var list = typeof(Multipass)
+                        .GetField("_transports", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        ?.GetValue(_multipass) as List<Transport>;
+                    list.Add(_relayNet); // first: the host's own player joins through it
+                    list.Add(_steamNet);
+                    transport = _multipass;
+                }
+            }
             // In the Editor, FishNet checks the prefab list the instant the component is added (before the next line
             // can give it one) and logs an error; that check never runs in a build, so it is muted for this one call.
             bool logs = Debug.unityLogger.logEnabled;
@@ -439,7 +468,7 @@ namespace ProjectFossil.Net
             var transports = go.GetComponent<FishNet.Managing.Transporting.TransportManager>();
             if (transports == null) transports = go.AddComponent<FishNet.Managing.Transporting.TransportManager>();
             transports.Transport = transport;
-            _multipass.SetClientTransport(_tugboat); // the host's own player joins over LAN
+            if (_multipass != null) _multipass.SetClientTransport(_relayNet);
             _net.SpawnablePrefabs = _prefabs;
             go.SetActive(true);
 
@@ -480,17 +509,21 @@ namespace ProjectFossil.Net
 
         private void OnServerState(ServerConnectionStateArgs args)
         {
-            // Several transports report in; the one this match depends on decides (Relay online, LAN offline).
-            if (args.TransportIndex != _primaryServer) return;
+            // With Steam beside Relay, Relay (the first transport) decides.
+            if (_multipass != null && args.TransportIndex != 0) return;
             if (args.ConnectionState == LocalConnectionState.Started && _mode == Mode.StartingHost)
             {
                 _mode = Mode.Hosting;
                 _status = null;
                 if (_online && SteamService.Ready) SteamService.HostLobby(MaxTeam); // so Steam friends can be invited
-                _multipass.SetClientTransport(_tugboat);
-                _net.ClientManager.StartConnection("localhost", Port); // the host plays too
                 if (_joinCode != null) VivoxVoice.Join(_joinCode);
+                // The island first: building it holds the game for a few seconds, and a connection started before
+                // that gave up waiting ("ConnectionFailed"), which left the host's own player out of its match.
                 _boot.StartSolo(); // random island; OnGenerated shares it
+                // Then the host plays too: through its own Relay transport online, over LAN offline ("localhost" can
+                // resolve to IPv6, which LAN hosting doesn't listen on).
+                if (_netOnline) { if (_multipass != null) _multipass.SetClientTransport(_relayNet); _net.ClientManager.StartConnection(); }
+                else _net.ClientManager.StartConnection("127.0.0.1", Port);
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped && _mode == Mode.StartingHost)
             {
@@ -609,6 +642,7 @@ namespace ProjectFossil.Net
 
         private void Update()
         {
+            AutoLaunch();
             // Tell the host once this machine is standing on the current island (it then sends this player's body).
             if (_net == null || !_net.ClientManager.Started || !_clientLoaded) return;
             if (Match == null || Match.Player == null || _readySeed == _seed) return;
