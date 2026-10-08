@@ -894,6 +894,7 @@ namespace ProjectFossil.Net
 
         private void OnGUI()
         {
+            Ui.Begin();
             EnsureStyles();
             if (ShowingMenu) { if (TitleSequence.MenuReady) DrawMenu(); }
             else if (_mode == Mode.Hosting || _mode == Mode.Joined) DrawTeamLine();
@@ -906,11 +907,11 @@ namespace ProjectFossil.Net
             if (Match != null && Match.PlayerController != null) Match.PlayerController.InputBlocked = true;
 
             GUI.color = new Color(0f, 0f, 0f, 0.3f); // a light veil: the island behind stays in view
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
             // The title itself is drawn above this box by the TitleSequence.
-            var area = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - MenuTopOffset, 400, 480);
+            var area = new Rect(Ui.W * 0.5f - 200, Ui.H * 0.5f - MenuTopOffset, 400, 480);
             if (_showSettings)
             {
                 if (SettingsPanel.Draw(area, onStartMenu: true)) _showSettings = false;
@@ -918,7 +919,7 @@ namespace ProjectFossil.Net
             }
             if (_showBoard)
             {
-                if (LeaderboardPanel.Draw(new Rect(Screen.width * 0.5f - 260, area.y, 520, area.height), PlayerName, CrewName)) _showBoard = false;
+                if (LeaderboardPanel.Draw(new Rect(Ui.W * 0.5f - 260, area.y, 520, area.height), PlayerName, CrewName)) _showBoard = false;
                 return;
             }
             GUILayout.BeginArea(area, GUI.skin.box);
@@ -1126,14 +1127,14 @@ namespace ProjectFossil.Net
                          : _joinCode != null ? $"join code {_joinCode}"
                          : $"hosting on this Wi-Fi at {_lanAddress ?? "?"}";
             string text = $"{PlayerName}  |  {where}  |  team of {Mathf.Max(1, team)}{(_online ? "" : "  |  practice")}";
-            GUI.Label(new Rect(Screen.width * 0.5f - 250, 4, 500, 22), text, _hud);
+            GUI.Label(new Rect(Ui.W * 0.5f - 250, 4, 500, 22), text, _hud);
             // The code, ready to paste into a chat, whenever the mouse is free.
             if (_mode == Mode.Hosting && _joinCode != null && Cursor.visible &&
-                GUI.Button(new Rect(Screen.width * 0.5f + 90, 28, 130, 26), "Copy join code"))
+                GUI.Button(new Rect(Ui.W * 0.5f + 90, 28, 130, 26), "Copy join code"))
                 GUIUtility.systemCopyBuffer = _joinCode;
             // The Steam invite, whenever the mouse is free (the Esc menu, the shop, the results).
             if (_mode == Mode.Hosting && SteamService.InLobby && Cursor.visible &&
-                GUI.Button(new Rect(Screen.width * 0.5f - 80, 28, 160, 26), "Invite Steam friends"))
+                GUI.Button(new Rect(Ui.W * 0.5f - 80, 28, 160, 26), "Invite Steam friends"))
                 SteamService.InviteFriends();
         }
 

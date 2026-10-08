@@ -821,3 +821,17 @@ Three bugs, all reproduced on this Mac with new test launch options and fixed:
   and Relay side by side was what left the host half-connected in the first place.
 - Test launch options for built games: `-autosolo` (offline solo at once) and `-autojoin <address>` (join a
   same-Wi-Fi host). With them the two-player test runs without clicking: Editor hosts, build joins.
+
+## 2026-10-08 — Build looks like the Editor: quality, menu camera, interface scale
+
+From Firdous's recording and screenshot of the Mac build beside the Editor:
+- The build ran on the "Mobile" quality level (no renderer features, softer shadows, 0.8 render scale) because
+  Unity had remembered level 0 and the game only had its own saved choice once a player picked one. Now the
+  highest level is the default unless the player chooses; Settings shows the levels as Low and High.
+- The menu camera circled the island from a random angle, so half the launches looked away from the sunset, dark
+  and blue-grey. It now stays on the far side from the sun, looking into the sunset, swaying 50 degrees either way.
+- Returning launches (intro seen) start exactly at the logo: the music's clock could read a sample early and show
+  "They can hear you" for a moment first.
+- Interface scale (`Core/Ui`): every OnGUI lays out for a 1080-pixel-tall screen and is scaled to the real one, so
+  the menus and HUD keep their size on a Retina Mac build (which runs at twice its window's pixels). Labels over
+  people and dinosaurs go through `Ui.FromScreen`.

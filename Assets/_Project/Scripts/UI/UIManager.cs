@@ -234,16 +234,16 @@ namespace ProjectFossil.UI
         private void DrawMenu()
         {
             GUI.color = new Color(0f, 0f, 0f, 0.5f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
             if (_showSettings)
             {
-                var panel = new Rect(Screen.width * 0.5f - 200, Screen.height * 0.5f - 230, 400, 460);
+                var panel = new Rect(Ui.W * 0.5f - 200, Ui.H * 0.5f - 230, 400, 460);
                 if (SettingsPanel.Draw(panel)) _showSettings = false;
                 return;
             }
-            var area = new Rect(Screen.width * 0.5f - 160, Screen.height * 0.5f - 160, 320, 320);
+            var area = new Rect(Ui.W * 0.5f - 160, Ui.H * 0.5f - 160, 320, 320);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(_paused ? "PAUSED" : "MENU", _big);
             GUILayout.Label(_paused ? "The island waits for you." : "Co-op can't pause: the island keeps going for your team.", _small);
@@ -292,6 +292,7 @@ namespace ProjectFossil.UI
 
         private void OnGUI()
         {
+            Ui.Begin();
             if (_match == null || _match.State == null) return;
             EnsureStyles();
 
@@ -365,7 +366,7 @@ namespace ProjectFossil.UI
             {
                 const string hints = "[Shift] Run on/off  [C] Crouch  [Space] Jump/stand  " +
                                      "[LMB/F] Attack  [E] Interact  [Q] Heal  [Tab] Shop  [Esc] Menu";
-                GUI.Label(new Rect(0, Screen.height - 110, Screen.width, 22), hints, _hint);
+                GUI.Label(new Rect(0, Ui.H - 110, Ui.W, 22), hints, _hint);
             }
 
             if (inv != null) DrawInventory(inv.Inventory);
@@ -375,8 +376,8 @@ namespace ProjectFossil.UI
         {
             const float slot = 64f;
             float width = inventory.SlotCount * (slot + 4f);
-            float x = (Screen.width - width) * 0.5f;
-            float y = Screen.height - slot - 12f;
+            float x = (Ui.W - width) * 0.5f;
+            float y = Ui.H - slot - 12f;
 
             for (int i = 0; i < inventory.SlotCount; i++)
             {
@@ -396,7 +397,7 @@ namespace ProjectFossil.UI
             if (_shopOpen || _interactor == null) return;
             string prompt = _interactor.CurrentPrompt;
             if (string.IsNullOrEmpty(prompt)) return;
-            GUI.Label(new Rect(0, Screen.height * 0.6f, Screen.width, 30), $"[E] {prompt}", _center);
+            GUI.Label(new Rect(0, Ui.H * 0.6f, Ui.W, 30), $"[E] {prompt}", _center);
         }
 
         private void DrawShop()
@@ -405,7 +406,7 @@ namespace ProjectFossil.UI
             var catalog = _match.Content != null ? _match.Content.shopCatalog : null;
             if (inv == null || catalog == null) return;
 
-            var area = new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f - 200, 440, 400);
+            var area = new Rect(Ui.W * 0.5f - 220, Ui.H * 0.5f - 200, 440, 400);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label($"SHOP    Coins: {inv.Wallet.Balance}    Slots: {inv.Inventory.SlotCount}/{inv.Inventory.MaxSlotCount}", _big);
 
@@ -436,7 +437,7 @@ namespace ProjectFossil.UI
         {
             if (stats == null) return;
 
-            var area = new Rect(Screen.width * 0.5f - 210, Screen.height * 0.5f - 245, 420, 490);
+            var area = new Rect(Ui.W * 0.5f - 210, Ui.H * 0.5f - 245, 420, 490);
             GUILayout.BeginArea(area, _box);
             GUILayout.Label(Headline(stats.Result), _big);
             GUILayout.Label($"SCORE {stats.Score}" + (stats.NewBest ? "   NEW BEST!" : $"   (best {stats.BestScore})"), _big);
@@ -484,7 +485,7 @@ namespace ProjectFossil.UI
                 // Tall enough for however many lines the text wraps to; a fixed height cut two-line messages.
                 var content = new GUIContent(_messages[i].text);
                 float h = Mathf.Max(24f, _box.CalcHeight(content, 320f));
-                GUI.Label(new Rect(Screen.width - 330, y, 320, h), content, _box);
+                GUI.Label(new Rect(Ui.W - 330, y, 320, h), content, _box);
                 y += h + 3f;
             }
         }
@@ -511,7 +512,7 @@ namespace ProjectFossil.UI
 
         private void DrawCrosshair()
         {
-            float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
+            float cx = Ui.W * 0.5f, cy = Ui.H * 0.5f;
             var old = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, 0.8f);
             GUI.DrawTexture(new Rect(cx - 1f, cy - 7f, 2f, 14f), Texture2D.whiteTexture);
@@ -528,12 +529,12 @@ namespace ProjectFossil.UI
             float a = 0.5f * _damageFlash;
             var tex = VignetteTexture();
             GUI.color = new Color(0.55f, 0f, 0f, a);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), tex, ScaleMode.StretchToFill);
+            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), tex, ScaleMode.StretchToFill);
             if (_damageSide != 0f)
             {
                 // A sideways fade from the hit edge, so it has no hard inner edge (a stretched vignette left one).
-                float w = Screen.width * 0.35f;
-                var side = _damageSide < 0f ? new Rect(0, 0, w, Screen.height) : new Rect(Screen.width - w, 0, w, Screen.height);
+                float w = Ui.W * 0.35f;
+                var side = _damageSide < 0f ? new Rect(0, 0, w, Ui.H) : new Rect(Ui.W - w, 0, w, Ui.H);
                 GUI.color = new Color(0.55f, 0f, 0f, a * 0.6f);
                 GUI.DrawTextureWithTexCoords(side, SideFadeTexture(),
                                              _damageSide < 0f ? new Rect(0, 0, 1, 1) : new Rect(1, 0, -1, 1));
@@ -560,15 +561,15 @@ namespace ProjectFossil.UI
             }
             if (nearest == null) return;
 
-            Vector3 sp = cam.WorldToScreenPoint(nearest.transform.position + Vector3.up * 3f);
-            Vector2 at = ScreenMarker.Place(sp, Screen.width, Screen.height, 48f, out bool onScreen);
-            float gx = at.x, gy = Screen.height - at.y; // GUI space: origin top-left
+            Vector3 sp = Ui.FromScreen(cam.WorldToScreenPoint(nearest.transform.position + Vector3.up * 3f));
+            Vector2 at = ScreenMarker.Place(sp, Ui.W, Ui.H, 48f, out bool onScreen);
+            float gx = at.x, gy = Ui.H - at.y; // GUI space: origin top-left
 
             var old = GUI.color;
             var green = new Color(0.35f, 1f, 0.45f);
             if (!onScreen)
             {
-                Vector2 dir = at - new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                Vector2 dir = at - new Vector2(Ui.W * 0.5f, Ui.H * 0.5f);
                 float angle = Mathf.Atan2(-dir.y, dir.x) * Mathf.Rad2Deg + 90f; // arrow texture points up
                 var m = GUI.matrix;
                 GUIUtility.RotateAroundPivot(angle, new Vector2(gx, gy));
@@ -596,7 +597,7 @@ namespace ProjectFossil.UI
             float pulse = _danger > 0.6f ? 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * Mathf.Lerp(7f, 15f, _danger)) : 1f;
             var old = GUI.color;
             GUI.color = new Color(0.2f, 0f, 0f, Mathf.Clamp01(_danger * 0.2f * pulse)); // darkness at the edges, not a red wash
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), VignetteTexture(), ScaleMode.StretchToFill);
+            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), VignetteTexture(), ScaleMode.StretchToFill);
             GUI.color = old;
         }
 
@@ -604,12 +605,12 @@ namespace ProjectFossil.UI
         private void DrawAlerts()
         {
             var state = _match.State;
-            float y = Screen.height * 0.18f;
+            float y = Ui.H * 0.18f;
 
             if (_match.PlayerHealth != null && _match.PlayerHealth.IsDown)
             {
                 float t = Mathf.Max(0f, _match.BleedOutLeft);
-                GUI.Label(new Rect(0f, y - 34f, Screen.width, 32f),
+                GUI.Label(new Rect(0f, y - 34f, Ui.W, 32f),
                           $"YOU'RE DOWN  {Mathf.CeilToInt(t)}s   Crawl to cover. A teammate can get you up.", _banner);
                 y += 40f;
             }
@@ -617,14 +618,14 @@ namespace ProjectFossil.UI
             // The pilot's call, as a subtitle, for a few seconds after the helicopter arrives.
             float sinceOpen = state.Elapsed - state.ExtractionOpensAt;
             if (state.IsExtractionOpen && sinceOpen >= 0f && sinceOpen < 7f && !state.IsExtracting)
-                GUI.Label(new Rect(0f, Screen.height * 0.74f, Screen.width, 32f),
+                GUI.Label(new Rect(0f, Ui.H * 0.74f, Ui.W, 32f),
                           "PILOT: Your escape helicopter has arrived. Go to the extraction zone.", _banner);
 
             if (state.IsExtracting)
             {
                 float left = state.ExtractionHoldTime - state.ExtractionProgress;
-                float w = Mathf.Min(460f, Screen.width - 40f);
-                var r = new Rect((Screen.width - w) * 0.5f, y, w, 34f);
+                float w = Mathf.Min(460f, Ui.W - 40f);
+                var r = new Rect((Ui.W - w) * 0.5f, y, w, 34f);
                 GUI.Label(new Rect(r.x, r.y - 34f, r.width, 32f), $"BOARDING: HOLD THE PAD  {Mathf.CeilToInt(left)}s", _banner);
                 var old = GUI.color;
                 GUI.color = new Color(0f, 0f, 0f, 0.55f);
@@ -637,7 +638,7 @@ namespace ProjectFossil.UI
             }
             if (_match.IsFinalStand)
             {
-                GUI.Label(new Rect(0, y, Screen.width, 32f), "GET BACK TO THE HELICOPTER", _banner);
+                GUI.Label(new Rect(0, y, Ui.W, 32f), "GET BACK TO THE HELICOPTER", _banner);
                 return;
             }
 
@@ -648,7 +649,7 @@ namespace ProjectFossil.UI
                 float a = 0.6f + 0.4f * Mathf.Sin(Time.unscaledTime * 4f);
                 var old = _alert.normal.textColor;
                 _alert.normal.textColor = new Color(1f, 0.35f, 0.25f, a);
-                GUI.Label(new Rect(0, y, Screen.width, 26f),
+                GUI.Label(new Rect(0, y, Ui.W, 26f),
                           hidden ? "It's sniffing around. STAY LOW. DON'T MOVE." : "SOMETHING HAS YOUR SCENT", _alert);
                 _alert.normal.textColor = old;
             }
@@ -658,7 +659,7 @@ namespace ProjectFossil.UI
         private void DrawEndFade(float vignette, float black)
         {
             var old = GUI.color;
-            var full = new Rect(0, 0, Screen.width, Screen.height);
+            var full = new Rect(0, 0, Ui.W, Ui.H);
             if (vignette > 0f)
             {
                 GUI.color = new Color(0f, 0f, 0f, vignette);
@@ -678,21 +679,21 @@ namespace ProjectFossil.UI
             var old = GUI.color;
             float fadeIn = Mathf.Clamp01(t / 0.4f);
             GUI.color = new Color(1f, 0.95f, 0.7f, 0.18f * (1f - Mathf.Clamp01(t / 1.2f))); // flash
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), Texture2D.whiteTexture);
             GUI.color = new Color(1f, 1f, 1f, fadeIn);
 
             float scale = 1f + 0.25f * Mathf.Exp(-t * 4f) + 0.03f * Mathf.Sin(t * 6f);
             var matrix = GUI.matrix;
-            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.3f);
+            var centre = new Vector2(Ui.W * 0.5f, Ui.H * 0.3f);
             GUIUtility.ScaleAroundPivot(new Vector2(scale, scale), centre);
             int size = _banner.fontSize;
-            _banner.fontSize = Mathf.RoundToInt(Mathf.Clamp(Screen.width / 14f, 36f, 96f));
-            GUI.Label(new Rect(0, centre.y - 60f, Screen.width, 120f), "YOU MADE IT OUT!", _banner);
+            _banner.fontSize = Mathf.RoundToInt(Mathf.Clamp(Ui.W / 14f, 36f, 96f));
+            GUI.Label(new Rect(0, centre.y - 60f, Ui.W, 120f), "YOU MADE IT OUT!", _banner);
             _banner.fontSize = size;
             GUI.matrix = matrix;
 
             var s = _match.Stats;
-            GUI.Label(new Rect(0, centre.y + 70f, Screen.width, 30f),
+            GUI.Label(new Rect(0, centre.y + 70f, Ui.W, 30f),
                       $"SCORE {s.Score}" + (s.NewBest ? "   NEW BEST!" : "") + $"    {s.DinosKilled} kills    survived {FormatTime(s.TimeSurvived)}",
                       _center);
             GUI.color = old;
@@ -769,11 +770,11 @@ namespace ProjectFossil.UI
                 var col = dino.GetComponent<Collider>();
                 Vector3 top = col != null ? new Vector3(col.bounds.center.x, col.bounds.max.y + 0.4f, col.bounds.center.z)
                                           : dino.transform.position + Vector3.up * 2f;
-                Vector3 sp = cam.WorldToScreenPoint(top);
+                Vector3 sp = Ui.FromScreen(cam.WorldToScreenPoint(top));
                 if (sp.z <= 0f) continue;
 
                 float w = Mathf.Clamp(900f / sp.z, 36f, 90f);
-                var r = new Rect(sp.x - w * 0.5f, Screen.height - sp.y - 6f, w, 6f);
+                var r = new Rect(sp.x - w * 0.5f, Ui.H - sp.y - 6f, w, 6f);
                 GUI.color = new Color(0f, 0f, 0f, 0.6f);
                 GUI.DrawTexture(r, Texture2D.whiteTexture);
                 GUI.color = new Color(0.9f, 0.25f, 0.2f);

@@ -313,6 +313,7 @@ namespace ProjectFossil.Net
 
         private void OnGUI()
         {
+            Ui.Begin();
             if (IsOwner || !IsClientInitialized) return;
             var cam = Camera.main;
             if (cam == null) return;
@@ -320,8 +321,8 @@ namespace ProjectFossil.Net
             if (match == null || !match.IsRunning) return;
 
             Vector3 head = transform.position + Vector3.up * 2.2f;
-            Vector3 screen = cam.WorldToScreenPoint(head);
-            Vector2 p = ScreenMarker.Place(screen, Screen.width, Screen.height, 40f, out bool onScreen);
+            Vector3 screen = Ui.FromScreen(cam.WorldToScreenPoint(head));
+            Vector2 p = ScreenMarker.Place(screen, Ui.W, Ui.H, 40f, out bool onScreen);
             float metres = match.Player != null ? Vector3.Distance(match.Player.transform.position, transform.position) : 0f;
 
             if (_tag == null)
@@ -337,17 +338,17 @@ namespace ProjectFossil.Net
             if (!onScreen && _alive.Value)
             {
                 // Off screen: an arrow on the edge toward them.
-                float gx = p.x, gy = Screen.height - p.y;
+                float gx = p.x, gy = Ui.H - p.y;
                 if (gx < 60f) text = "◀ " + text;
-                else if (gx > Screen.width - 60f) text = text + " ▶";
+                else if (gx > Ui.W - 60f) text = text + " ▶";
                 else if (gy < 60f) text = "▲ " + text;
                 else text = "▼ " + text;
             }
 
             // Kept whole on screen, even pinned to an edge.
             const float w = 300f;
-            float x = Mathf.Clamp(p.x - w * 0.5f, 4f, Screen.width - w - 4f);
-            float y = Mathf.Clamp(Screen.height - p.y - 12f, 30f, Screen.height - 40f);
+            float x = Mathf.Clamp(p.x - w * 0.5f, 4f, Ui.W - w - 4f);
+            float y = Mathf.Clamp(Ui.H - p.y - 12f, 30f, Ui.H - 40f);
             var rect = new Rect(x, y, w, 24f);
             var shadow = rect; shadow.x += 1f; shadow.y += 1f;
             var c = _tag.normal.textColor;
@@ -369,7 +370,7 @@ namespace ProjectFossil.Net
             if (_reviveProgress >= 0f)
             {
                 float t = Mathf.Clamp01(_reviveProgress / ReviveSeconds);
-                var back = new Rect(Screen.width * 0.5f - 120f, Screen.height * 0.62f, 240f, 14f);
+                var back = new Rect(Ui.W * 0.5f - 120f, Ui.H * 0.62f, 240f, 14f);
                 GUI.color = new Color(0f, 0f, 0f, 0.65f);
                 GUI.DrawTexture(back, Texture2D.whiteTexture);
                 GUI.color = new Color(1f, 0.85f, 0.4f);

@@ -391,6 +391,7 @@ namespace ProjectFossil.Player
 
         private void OnGUI()
         {
+            Ui.Begin();
             DrawFrameRate();
             if (_controller != null && _controller.InputBlocked) return;
             DrawHitDirection();
@@ -404,7 +405,7 @@ namespace ProjectFossil.Player
         {
             if (!Application.isEditor && !Debug.isDebugBuild && !GameSettings.ShowFps) return;
             GUI.color = _fps >= 45f ? new Color(0.6f, 1f, 0.6f, 0.8f) : _fps >= 25f ? new Color(1f, 0.9f, 0.4f, 0.9f) : new Color(1f, 0.4f, 0.35f, 0.95f);
-            GUI.Label(new Rect(Screen.width - 70f, Screen.height - 24f, 66f, 20f), $"{Mathf.RoundToInt(_fps)} fps");
+            GUI.Label(new Rect(Ui.W - 70f, Ui.H - 24f, 66f, 20f), $"{Mathf.RoundToInt(_fps)} fps");
             GUI.color = Color.white;
         }
 
@@ -416,8 +417,8 @@ namespace ProjectFossil.Player
             float angle = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg; // 0 = ahead, 90 = right, 180 = behind
             if (_wedge == null) _wedge = MakeWedge();
 
-            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-            float radius = Mathf.Min(Screen.width, Screen.height) * 0.22f;
+            var centre = new Vector2(Ui.W * 0.5f, Ui.H * 0.5f);
+            float radius = Mathf.Min(Ui.W, Ui.H) * 0.22f;
             var rect = new Rect(centre.x - 60f, centre.y - radius - 22f, 120f, 30f);
             var saved = GUI.matrix;
             GUIUtility.RotateAroundPivot(angle, centre);
@@ -450,7 +451,7 @@ namespace ProjectFossil.Player
         // A small dot in the middle of the screen, so you know where a swing goes.
         private void DrawDot()
         {
-            float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
+            float cx = Ui.W * 0.5f, cy = Ui.H * 0.5f;
             GUI.color = new Color(0f, 0f, 0f, 0.5f);
             GUI.DrawTexture(new Rect(cx - 3f, cy - 3f, 6f, 6f), Texture2D.whiteTexture);
             GUI.color = new Color(1f, 1f, 1f, 0.85f);

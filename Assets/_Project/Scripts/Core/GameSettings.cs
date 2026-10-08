@@ -23,6 +23,17 @@ namespace ProjectFossil.Core
         public static float VoiceVolume  { get; private set; } = 1f; // teammates' voices, 0..1
 
         public const float MinFov = 50f, MaxFov = 90f, DefaultFov = 60f;
+
+        // What a quality level is called on screen: the levels are named for their platforms (Mobile, PC), which
+        // reads oddly on a computer, so they show as Low and High.
+        public static string QualityLabel(int level)
+        {
+            int n = QualitySettings.names.Length;
+            if (n <= 1) return "Default";
+            if (level >= n - 1) return "High";
+            if (level <= 0) return "Low";
+            return QualitySettings.names[level];
+        }
         public const float MinSensitivity = 0.25f, MaxSensitivity = 3f;
 
         private static bool _loaded;
@@ -38,7 +49,9 @@ namespace ProjectFossil.Core
         {
             if (_loaded) return;
             _loaded = true;
-            Quality      = Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "Quality", QualitySettings.GetQualityLevel()), 0, QualitySettings.names.Length - 1);
+            // The best look unless the player chose otherwise. Unity's own remembered level isn't used: a Mac build
+            // came up on "Mobile" that way, cold and blue-grey beside the Editor's "PC".
+            Quality      = Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "Quality", QualitySettings.names.Length - 1), 0, QualitySettings.names.Length - 1);
             Fullscreen   = PlayerPrefs.GetInt(Prefix + "Fullscreen", Screen.fullScreen ? 1 : 0) == 1;
             ResolutionIx = PlayerPrefs.GetInt(Prefix + "Resolution", -1);
             MasterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix + "Volume", 1f));

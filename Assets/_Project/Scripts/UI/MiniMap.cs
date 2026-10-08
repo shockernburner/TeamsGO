@@ -38,7 +38,7 @@ namespace ProjectFossil.UI
             if (_map == null || _seed != data.Seed) { Build(data, terrain); _seed = data.Seed; }
 
             Vector3 origin = terrain.transform.position, extent = terrain.terrainData.size;
-            var box = new Rect(Screen.width - size - margin, Screen.height - size - margin - 26f, size, size);
+            var box = new Rect(Ui.W - size - margin, Ui.H - size - margin - 26f, size, size);
 
             var old = GUI.color;
             GUI.color = new Color(0f, 0f, 0f, 0.55f);
