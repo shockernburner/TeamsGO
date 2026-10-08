@@ -15,6 +15,14 @@ namespace ProjectFossil.Net
         public string Voice;   // the online match's join code, which names its voice channel (null offline)
     }
 
+    // Joiner -> host: this player's match is over (online), for the crew's result on the teams boards.
+    public struct RunResultMessage : IBroadcast
+    {
+        public int  Seed;
+        public int  Score;
+        public bool Extracted;
+    }
+
     // Joiner -> host: this island is built and my player is standing on it. Send my body.
     public struct ReadyMessage : IBroadcast
     {

@@ -137,6 +137,7 @@ namespace ProjectFossil.Net
         // From the in-match menu or the results: drop the island and the connection, back to the start menu.
         private void LeaveMatch()
         {
+            TrySubmitCrew(true);
             SteamService.LeaveLobby();
             VivoxVoice.Leave();
             _joinCode = null;
@@ -155,17 +156,28 @@ namespace ProjectFossil.Net
         // Test launches, for checking a built game without clicking through it:
         //   -autosolo           an offline solo match (Easy) as soon as the menu is up
         //   -autojoin <address> join an offline (same Wi-Fi) host at that address
+        //   -shot <file.png>    save a screenshot 6 s after the menu is up, then quit
         private bool _autoDone;
         private void AutoLaunch()
         {
             if (_autoDone || !TitleSequence.MenuReady || _mode != Mode.Menu) return;
             _autoDone = true;
             var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i + 1 < args.Length; i++)
+                if (args[i] == "-shot") StartCoroutine(ShotAndQuit(args[i + 1]));
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "-autosolo") { Debug.Log("[NetSession] -autosolo"); PlaySolo(ChallengeLevel.Easy, online: false); return; }
                 if (args[i] == "-autojoin" && i + 1 < args.Length) { Debug.Log($"[NetSession] -autojoin {args[i + 1]}"); _address = args[i + 1]; Join(); return; }
             }
+        }
+
+        private System.Collections.IEnumerator ShotAndQuit(string path)
+        {
+            yield return new WaitForSecondsRealtime(6f);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSecondsRealtime(2f);
+            Application.Quit();
         }
 
         private void OnEnable()
@@ -478,6 +490,7 @@ namespace ProjectFossil.Net
             _net.ServerManager.OnRemoteConnectionState  += OnRemoteState;
 
             _net.ServerManager.RegisterBroadcast<ReadyMessage>(OnReady);
+            _net.ServerManager.RegisterBroadcast<RunResultMessage>(OnRunResult);
             _net.ServerManager.RegisterBroadcast<FinalStandMessage>(OnFinalStandRequest);
             _net.ServerManager.RegisterBroadcast<TeamMessage>(OnTeamMessage);
             _net.ServerManager.RegisterBroadcast<LiftOffMessage>(OnLiftOffRequest);
@@ -573,6 +586,7 @@ namespace ProjectFossil.Net
         // Host: every new island (the first one and each restart) goes to the whole team.
         private void OnGenerated(int seed)
         {
+            TrySubmitCrew(true); // a new island: the last one's crew result goes now with what came in
             _seed = seed;
             _flares.Clear();
             HookMatch();
@@ -643,6 +657,7 @@ namespace ProjectFossil.Net
         private void Update()
         {
             AutoLaunch();
+            if (_crewRun != null) TrySubmitCrew(false); // the wait for teammates can run out
             // Tell the host once this machine is standing on the current island (it then sends this player's body).
             if (_net == null || !_net.ClientManager.Started || !_clientLoaded) return;
             if (Match == null || Match.Player == null || _readySeed == _seed) return;
@@ -802,9 +817,52 @@ namespace ProjectFossil.Net
                 Seconds = stats.TimeSurvived, Kills = stats.DinosKilled, Challenge = stats.Challenge, Seed = stats.Seed,
             };
             stats.BoardPlace = Leaderboard.Local.Record(run);
-            // Worldwide too; the crew's entry comes from whoever named the crew (the host, or a solo player).
-            // Online matches only: offline is practice, and its scores stay on this computer.
-            if (_online && Account.SignedIn) OnlineLeaderboard.Submit(run, forCrew: _mode != Mode.Joined);
+            // Worldwide too, online only (offline is practice and stays on this computer). A wipe (nobody from the
+            // crew got out) costs points instead of adding them (Match/CareerScore).
+            if (!_online || !Account.SignedIn) return;
+            bool extracted = stats.Result == MatchResult.Extracted;
+            bool wiped = !extracted && stats.MatesAboard == 0 && !Teammates().Any(a => a.IsStanding);
+            OnlineLeaderboard.Submit(run, wiped);
+            // The crew's match: solo, straight away (a crew of one); online co-op, the host gathers everyone's.
+            if (_mode == Mode.Solo) OnlineLeaderboard.SubmitTeam(run, new List<int> { stats.Score }, extracted ? 1 : 0);
+            else if (_mode == Mode.Joined && _net != null && _net.ClientManager.Started)
+                _net.ClientManager.Broadcast(new RunResultMessage { Seed = stats.Seed, Score = stats.Score, Extracted = extracted });
+            else if (_mode == Mode.Hosting)
+            {
+                _crewRun = run;
+                _crewWaitUntil = Time.unscaledTime + CrewWaitSeconds;
+                _crewResults[-1] = (stats.Score, extracted); // -1: the host itself
+                TrySubmitCrew(false);
+            }
+        }
+
+        // ── Host: the crew's match ─────────────────────────────────────────────
+
+        private const float CrewWaitSeconds = 300f;     // teammates still playing get this long to finish
+        private RunRecord _crewRun;                     // the host's run: crew name, seed and length for the crew's entry
+        private float _crewWaitUntil;
+        private readonly Dictionary<int, (int score, bool extracted)> _crewResults = new Dictionary<int, (int, bool)>();
+
+        private void OnRunResult(NetworkConnection conn, RunResultMessage msg, Channel channel)
+        {
+            if (IsHostsOwn(conn) || msg.Seed != _seed) return;
+            _crewResults[conn.ClientId] = (Mathf.Max(0, msg.Score), msg.Extracted);
+            TrySubmitCrew(false);
+        }
+
+        // Once every teammate has reported (or the wait is over, or the host leaves or starts a new island), the
+        // crew's match goes to the teams boards: everyone's score and how many got out.
+        private void TrySubmitCrew(bool now)
+        {
+            if (_crewRun == null) return;
+            int expected = Mathf.Max(1, _avatars.Count);
+            if (!now && _crewResults.Count < expected && Time.unscaledTime < _crewWaitUntil) return;
+            var scores = new List<int>();
+            int escaped = 0;
+            foreach (var r in _crewResults.Values) { scores.Add(r.score); if (r.extracted) escaped++; }
+            OnlineLeaderboard.SubmitTeam(_crewRun, scores, escaped);
+            _crewRun = null;
+            _crewResults.Clear();
         }
 
         private void OnFlareDropped(Vector3 pad)
@@ -1004,6 +1062,7 @@ namespace ProjectFossil.Net
             if (!Account.SignedIn) { _page = Page.SignIn; return; }
             GUILayout.Label($"ONLINE  -  {Account.Username}", _title);
             DrawCrewName();
+            DrawCountry();
             DrawConditionsChoice();
             GUILayout.Space(6);
             if (_pickingChallenge) { DrawChallengeChoice(online: true); return; }
@@ -1050,6 +1109,26 @@ namespace ProjectFossil.Net
             DrawStatus();
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Back", GUILayout.Height(28))) { _pickingChallenge = false; _page = Page.Main; }
+        }
+
+        // The country board this player counts on: a two-letter code, the computer's region to start with.
+        private string _countryInput;
+        private void DrawCountry()
+        {
+            if (_countryInput == null) _countryInput = OnlineLeaderboard.PlayerCountry == Country.Unknown ? "" : OnlineLeaderboard.PlayerCountry;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Country:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            string typed = GUILayout.TextField(_countryInput, 2, _field, GUILayout.Width(44), GUILayout.Height(30)).ToUpperInvariant();
+            if (typed != _countryInput)
+            {
+                _countryInput = typed;
+                if (typed.Length == 2 || typed.Length == 0) OnlineLeaderboard.PlayerCountry = typed;
+            }
+            string code = OnlineLeaderboard.PlayerCountry;
+            GUILayout.Label(code == Country.Unknown ? "two letters, e.g. SG, PK, US"
+                            : OnlineLeaderboard.CountryName(code) + (OnlineLeaderboard.HasCountryBoard(code) ? "" : " (on the world boards)"),
+                            _label, GUILayout.Height(30));
+            GUILayout.EndHorizontal();
         }
 
         private void DrawCrewName()

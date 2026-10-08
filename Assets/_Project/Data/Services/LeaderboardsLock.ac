@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ugs-config-schemas.unity3d.com/v1/project-access-policy.schema.json",
+  "Statements": [
+    {
+      "Sid": "deny-player-leaderboard-writes",
+      "Action": [
+        "Write"
+      ],
+      "Effect": "Deny",
+      "Principal": "Player",
+      "Resource": "urn:ugs:leaderboards:/*",
+      "Version": "1.0.0"
+    }
+  ]
+}

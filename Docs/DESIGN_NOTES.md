@@ -835,3 +835,59 @@ From Firdous's recording and screenshot of the Mac build beside the Editor:
 - Interface scale (`Core/Ui`): every OnGUI lays out for a 1080-pixel-tall screen and is scaled to the real one, so
   the menus and HUD keep their size on a Retina Mac build (which runs at twice its window's pixels). Labels over
   people and dinosaurs go through `Ui.FromScreen`.
+
+## 2026-10-08 — Fog ships in builds; bigger interface
+
+- The Mac build had no fog at all (clear, blue) while the Editor showed the golden haze. Fog is switched on from
+  code at runtime, and with Graphics > Fog Modes on "Automatic" Unity only keeps the fog variants that scenes in
+  the build use; Bootstrap has fog off, so they were stripped. Fog Modes is now Custom, keeping Exponential Squared
+  only (the one mode the game uses; keeping all three tripled the shader variants and a build ran over 40 minutes).
+- The interface reference is now 720 pixels tall (scale 1 to 4), so menus fill a window in the same proportion as
+  in the Editor's Game view.
+- Test launch option `-shot <file.png>`: the build saves a screenshot 6 s after the menu is up, then quits, so a
+  build can be checked without capturing the desktop.
+
+## 2026-10-08 — Online scoring rules (parts B and C, logic only)
+
+`Match/CareerScore.cs` holds the scoring rules Firdous approved, as pure code that the game and a later Cloud Code check can share:
+- **Survivors board:** each player's match score adds to a running total (all-time and weekly, keyed by ISO week such as `2026-W41`). Totals never drop below zero.
+- **Teams board:** each match adds the crew's combined score times an escape bonus: 4 out ×2.0, 3 ×1.6, 2 ×1.3, 1 ×1.0.
+- **Wipe (nobody out):** the team loses 25% of its average match, and each player's match counts −50 instead of their score.
+- **Country boards:** a two-letter ISO country code, starting from the computer's region; board ids are `survivors` and `survivors_PK`, and unknown codes fall back to the global board.
+- **Score checks:** reject matches under 30 s or over 45 min, scores above 60 points a second (a generous ceiling to tune from real data), and crew reports with different seeds or lengths more than 10 s apart.
+
+Not wired into the game or the online boards yet; that needs the Mac to test in Unity.
+
+## 2026-10-08 — Scores that add up, checked on the server
+
+The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live for online matches:
+- Boards (`Data/Services/*.lb`, all "aggregate", so each result adds to a running total): `survivors_total`,
+  `survivors_week` and `teams_total`, `teams_week` (reset every Monday 00:00 UTC from 2026-10-12), and
+  `survivors_total_XX` for 45 countries (`OnlineLeaderboard.Countries`). The old best-run boards (`survivors`,
+  `crews`) are left as they were. `test_` copies of the main four are for testing.
+- The game no longer writes scores itself. `OnlineLeaderboard` sends each finished online run to the Cloud Code
+  script `SubmitRun` (`Data/Services/CloudCode/SubmitRun.js`), which repeats ScoreCheck (30 s to 45 min, at most
+  60 points a second, nothing negative), refuses an island it has already counted for that player and results
+  coming in faster than matches can be played (last run kept in Cloud Save), then adds the score (or the wipe
+  penalty, 50, never below zero) to the player's all-time, weekly and country totals.
+- Crews: in co-op every joiner sends its score and whether it got out to the host (`RunResultMessage`); once all
+  have reported (or after 5 minutes, or when the host leaves or starts the next island) the host sends the crew's
+  match to `SubmitTeam`, which applies the escape bonus (1: x1.0, 2: x1.3, 3: x1.6, 4: x2.0) or the wipe penalty
+  (a quarter of the crew's average match) to the crew's total. A crew's entry is keyed by its name
+  ("crew-ash-line"). Solo online counts as a crew of one.
+- A player is "wiped" when they didn't get out, no teammate left on the same helicopter, and no teammate is still
+  standing.
+- Play Online page: Country (two letters, the computer's region to start). Leaderboard: Survivors or Crews; All
+  time, This week, the player's country, or This computer (best single runs, offline included).
+- Launch with `-testboards` to send and read the `test_` boards only.
+- Deploying the scripts needs Node.js: Unity's Cloud Code preference points at the nvm install
+  (`NodeJsPath`/`NpmPath` in EditorPrefs). Script names can't contain underscores; board names can't contain
+  brackets; a weekly reset's start must be in the future.
+- `Tools/cloudcode/test_scripts.js` runs both scripts locally against stand-ins for Leaderboards and Cloud Save
+  (`node Tools/cloudcode/test_scripts.js`): all rules pass. Not yet tested end to end against the live service
+  (needs a signed-in player in Play mode).
+- Locked (Firdous: "Lock them"): `Data/Services/LeaderboardsLock.ac` (Access Control, deployed with the Services
+  Tooling package) denies players any write to the leaderboards (`urn:ugs:leaderboards:/*`); reads stay open. The
+  scripts write with the server's own credentials, so only they can add scores. SubmitRun keeps each player's last
+  run in protected Cloud Save data, which players can't write either, so the replay check can't be cleared.
+  Not yet verified end to end: needs a signed-in player to see a direct write refused and a script write pass.

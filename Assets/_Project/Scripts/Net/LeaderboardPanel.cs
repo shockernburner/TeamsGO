@@ -4,13 +4,15 @@ using UnityEngine;
 
 namespace ProjectFossil.Net
 {
-    // The start menu's leaderboard: the best survivors and the best crews, worldwide (OnlineLeaderboard) or on
-    // this computer (Leaderboard.Local).
+    // The start menu's leaderboard. Survivors (each player's points, added up over every online match) or Crews
+    // (each crew's points with the escape bonus), shown All time, This week or for the player's country, worldwide
+    // (OnlineLeaderboard); or This computer, the best single runs played here, offline included (Leaderboard.Local).
     public static class LeaderboardPanel
     {
         private const int Shown = 10;
-        private static int _tab;            // 0 survivors, 1 crews
-        private static bool _online = true; // worldwide, or this computer
+        private enum Scope { AllTime, Week, Country, Local }
+        private static int _tab;                    // 0 survivors, 1 crews
+        private static Scope _scope = Scope.AllTime;
         private static GUIStyle _title, _head, _row, _mine, _small;
 
         // Returns true when the player presses Back. Rows for this player and crew are highlighted.
@@ -25,23 +27,71 @@ namespace ProjectFossil.Net
             if (GUILayout.Toggle(_tab == 1, "Crews", GUI.skin.button, GUILayout.Height(30))) _tab = 1;
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            if (GUILayout.Toggle(_online, "Worldwide", GUI.skin.button, GUILayout.Height(24))) _online = true;
-            if (GUILayout.Toggle(!_online, "This computer", GUI.skin.button, GUILayout.Height(24))) _online = false;
+            ScopeButton(Scope.AllTime, "All time");
+            ScopeButton(Scope.Week, "This week");
+            if (_tab == 0) ScopeButton(Scope.Country, OnlineLeaderboard.PlayerCountry == Country.Unknown ? "Country" : OnlineLeaderboard.PlayerCountry);
+            ScopeButton(Scope.Local, "This computer");
             GUILayout.EndHorizontal();
+            if (_tab == 1 && _scope == Scope.Country) _scope = Scope.AllTime;
             GUILayout.Space(6);
 
-            List<RunRecord> rows;
-            if (_online)
+            if (_scope == Scope.Local) DrawLocal(player, crew);
+            else DrawOnline(player, crew);
+
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(_scope == Scope.Local ? "Best single runs played on this computer, offline included."
+                            : _scope == Scope.Country && !OnlineLeaderboard.HasCountryBoard(OnlineLeaderboard.PlayerCountry)
+                                ? "No board for your country yet: set it on the Play Online page, or see All time."
+                                : OnlineLeaderboard.Status, _small);
+            if (GUILayout.Button("Back", GUILayout.Height(32))) back = true;
+            GUILayout.EndArea();
+            return back;
+        }
+
+        private static void ScopeButton(Scope s, string label)
+        {
+            if (GUILayout.Toggle(_scope == s, label, GUI.skin.button, GUILayout.Height(24))) _scope = s;
+        }
+
+        private static void DrawOnline(string player, string crew)
+        {
+            OnlineLeaderboard.Refresh(); // at most every 20 seconds
+            var board = _tab == 1
+                ? (_scope == Scope.Week ? OnlineLeaderboard.Board.CrewsWeek : OnlineLeaderboard.Board.Crews)
+                : _scope == Scope.Week ? OnlineLeaderboard.Board.SurvivorsWeek
+                : _scope == Scope.Country ? OnlineLeaderboard.Board.SurvivorsCountry
+                : OnlineLeaderboard.Board.Survivors;
+            var rows = OnlineLeaderboard.Get(board);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("#", _head, GUILayout.Width(34));
+            GUILayout.Label(_tab == 0 ? "Survivor" : "Crew", _head, GUILayout.Width(170));
+            GUILayout.Label(_tab == 0 ? "Crew" : "", _head, GUILayout.Width(150));
+            GUILayout.Label("Points", _head);
+            GUILayout.EndHorizontal();
+            if (rows.Count == 0)
             {
-                OnlineLeaderboard.Refresh(); // at most every 20 seconds
-                var all = _tab == 0 ? OnlineLeaderboard.Survivors : OnlineLeaderboard.Crews;
-                rows = all.GetRange(0, Mathf.Min(Shown, all.Count));
+                GUILayout.Space(20);
+                GUILayout.Label(OnlineLeaderboard.Busy ? "Loading..." : "No one here yet. Finish an online match to get on the board.", _small);
             }
-            else
+            for (int i = 0; i < rows.Count && i < Shown; i++)
             {
-                var board = Leaderboard.Local;
-                rows = _tab == 0 ? board.TopSurvivors(Shown) : board.TopCrews(Shown);
+                var r = rows[i];
+                var style = (_tab == 0 ? Same(r.Name, player) : Same(r.Crew, crew)) ? _mine : _row;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(r.Rank.ToString(), style, GUILayout.Width(34));
+                GUILayout.Label(r.Name, style, GUILayout.Width(170));
+                GUILayout.Label(_tab == 0 ? r.Crew : "", style, GUILayout.Width(150));
+                GUILayout.Label(r.Score.ToString("N0"), style);
+                GUILayout.EndHorizontal();
             }
+            if (!string.IsNullOrEmpty(OnlineLeaderboard.LastResult)) GUILayout.Label("Last match: " + OnlineLeaderboard.LastResult, _small);
+        }
+
+        private static void DrawLocal(string player, string crew)
+        {
+            var board = Leaderboard.Local;
+            var rows = _tab == 0 ? board.TopSurvivors(Shown) : board.TopCrews(Shown);
             GUILayout.BeginHorizontal();
             GUILayout.Label("#", _head, GUILayout.Width(28));
             GUILayout.Label(_tab == 0 ? "Survivor" : "Crew", _head, GUILayout.Width(_tab == 0 ? 130 : 170));
@@ -49,11 +99,10 @@ namespace ProjectFossil.Net
             GUILayout.Label("Score", _head, GUILayout.Width(70));
             GUILayout.Label("Result", _head);
             GUILayout.EndHorizontal();
-
             if (rows.Count == 0)
             {
                 GUILayout.Space(20);
-                GUILayout.Label(_online && OnlineLeaderboard.Busy ? "Loading..." : "No runs yet. Finish a match to get on the board.", _small);
+                GUILayout.Label("No runs yet. Finish a match to get on the board.", _small);
             }
             for (int i = 0; i < rows.Count; i++)
             {
@@ -68,12 +117,6 @@ namespace ProjectFossil.Net
                 GUILayout.Label(Outcome(r), style);
                 GUILayout.EndHorizontal();
             }
-
-            GUILayout.FlexibleSpace();
-            GUILayout.Label(_online ? OnlineLeaderboard.Status : "Runs played on this computer.", _small);
-            if (GUILayout.Button("Back", GUILayout.Height(32))) back = true;
-            GUILayout.EndArea();
-            return back;
         }
 
         private static string Outcome(RunRecord r)
