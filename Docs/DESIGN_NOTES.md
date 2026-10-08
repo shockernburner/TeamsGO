@@ -857,3 +857,33 @@ From Firdous's recording and screenshot of the Mac build beside the Editor:
 - **Score checks:** reject matches under 30 s or over 45 min, scores above 60 points a second (a generous ceiling to tune from real data), and crew reports with different seeds or lengths more than 10 s apart.
 
 Not wired into the game or the online boards yet; that needs the Mac to test in Unity.
+
+## 2026-10-08 — Scores that add up, checked on the server
+
+The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live for online matches:
+- Boards (`Data/Services/*.lb`, all "aggregate", so each result adds to a running total): `survivors_total`,
+  `survivors_week` and `teams_total`, `teams_week` (reset every Monday 00:00 UTC from 2026-10-12), and
+  `survivors_total_XX` for 45 countries (`OnlineLeaderboard.Countries`). The old best-run boards (`survivors`,
+  `crews`) are left as they were. `test_` copies of the main four are for testing.
+- The game no longer writes scores itself. `OnlineLeaderboard` sends each finished online run to the Cloud Code
+  script `SubmitRun` (`Data/Services/CloudCode/SubmitRun.js`), which repeats ScoreCheck (30 s to 45 min, at most
+  60 points a second, nothing negative), refuses an island it has already counted for that player and results
+  coming in faster than matches can be played (last run kept in Cloud Save), then adds the score (or the wipe
+  penalty, 50, never below zero) to the player's all-time, weekly and country totals.
+- Crews: in co-op every joiner sends its score and whether it got out to the host (`RunResultMessage`); once all
+  have reported (or after 5 minutes, or when the host leaves or starts the next island) the host sends the crew's
+  match to `SubmitTeam`, which applies the escape bonus (1: x1.0, 2: x1.3, 3: x1.6, 4: x2.0) or the wipe penalty
+  (a quarter of the crew's average match) to the crew's total. A crew's entry is keyed by its name
+  ("crew-ash-line"). Solo online counts as a crew of one.
+- A player is "wiped" when they didn't get out, no teammate left on the same helicopter, and no teammate is still
+  standing.
+- Play Online page: Country (two letters, the computer's region to start). Leaderboard: Survivors or Crews; All
+  time, This week, the player's country, or This computer (best single runs, offline included).
+- Launch with `-testboards` to send and read the `test_` boards only.
+- Deploying the scripts needs Node.js: Unity's Cloud Code preference points at the nvm install
+  (`NodeJsPath`/`NpmPath` in EditorPrefs). Script names can't contain underscores; board names can't contain
+  brackets; a weekly reset's start must be in the future.
+- `Tools/cloudcode/test_scripts.js` runs both scripts locally against stand-ins for Leaderboards and Cloud Save
+  (`node Tools/cloudcode/test_scripts.js`): all rules pass. Not yet tested end to end against the live service
+  (needs a signed-in player in Play mode).
+- Still open: Access Control, so players can't write to the boards directly and only the scripts can.

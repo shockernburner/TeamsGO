@@ -18,7 +18,8 @@
         "Unity.Services.Multiplayer",
         "Unity.Services.Vivox",
         "FishyUnityTransport",
-        "Unity.Networking.Transport"
+        "Unity.Networking.Transport",
+        "Unity.Services.CloudCode"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
