@@ -846,3 +846,14 @@ From Firdous's recording and screenshot of the Mac build beside the Editor:
   in the Editor's Game view.
 - Test launch option `-shot <file.png>`: the build saves a screenshot 6 s after the menu is up, then quits, so a
   build can be checked without capturing the desktop.
+
+## 2026-10-08 — Online scoring rules (parts B and C, logic only)
+
+`Match/CareerScore.cs` holds the scoring rules Firdous approved, as pure code that the game and a later Cloud Code check can share:
+- **Survivors board:** each player's match score adds to a running total (all-time and weekly, keyed by ISO week such as `2026-W41`). Totals never drop below zero.
+- **Teams board:** each match adds the crew's combined score times an escape bonus: 4 out ×2.0, 3 ×1.6, 2 ×1.3, 1 ×1.0.
+- **Wipe (nobody out):** the team loses 25% of its average match, and each player's match counts −50 instead of their score.
+- **Country boards:** a two-letter ISO country code, starting from the computer's region; board ids are `survivors` and `survivors_PK`, and unknown codes fall back to the global board.
+- **Score checks:** reject matches under 30 s or over 45 min, scores above 60 points a second (a generous ceiling to tune from real data), and crew reports with different seeds or lengths more than 10 s apart.
+
+Not wired into the game or the online boards yet; that needs the Mac to test in Unity.
