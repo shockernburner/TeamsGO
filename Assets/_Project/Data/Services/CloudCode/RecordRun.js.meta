@@ -1,0 +1,39 @@
+fileFormatVersion: 2
+guid: 28b58a0201fc549378929e6d56a90f94
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: fbc33bd6a5704c0881dc7a9ead54089b, type: 3}
+  Parameters:
+  - Name: score
+    ParameterType: 1
+    Required: 0
+  - Name: seconds
+    ParameterType: 1
+    Required: 0
+  - Name: kills
+    ParameterType: 1
+    Required: 0
+  - Name: seed
+    ParameterType: 1
+    Required: 0
+  - Name: wiped
+    ParameterType: 2
+    Required: 0
+  - Name: test
+    ParameterType: 2
+    Required: 0
+  - Name: player
+    ParameterType: 0
+    Required: 0
+  - Name: crew
+    ParameterType: 0
+    Required: 0
+  - Name: country
+    ParameterType: 0
+    Required: 0
+  Source: 0

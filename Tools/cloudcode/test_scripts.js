@@ -36,8 +36,8 @@ const realLoad = Module._load;
 Module._load = (req, parent, isMain) => fakes[req] || realLoad(req, parent, isMain);
 
 const dir = path.join(__dirname, "../../Assets/_Project/Data/Services/CloudCode");
-const run = require(path.join(dir, "SubmitRun.js"));
-const team = require(path.join(dir, "SubmitTeam.js"));
+const run = require(path.join(dir, "RecordRun.js"));
+const team = require(path.join(dir, "RecordCrew.js"));
 const logger = { warning() {}, error() {} };
 let clock = 1_800_000_000_000;
 Date.now = () => clock;

@@ -1,3 +1,5 @@
+// Inputs: declared in this file's Unity import settings (the .meta), which is what deployment sends. The
+// module.exports.params at the bottom documents them; Unity would only read those in an initialised JS project.
 // TETHER: Primal — a crew's finished online match, sent by its host, checked and added to the crew's totals.
 // The same rules as Match/CareerScore.TeamDelta: the crew's scores times a bonus for how many got out
 // (1: x1.0, 2: x1.3, 3: x1.6, 4: x2.0); a wipe (nobody out) takes a quarter of the crew's average match.

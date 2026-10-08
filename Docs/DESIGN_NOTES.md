@@ -891,3 +891,23 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   scripts write with the server's own credentials, so only they can add scores. SubmitRun keeps each player's last
   run in protected Cloud Save data, which players can't write either, so the replay check can't be cleared.
   Not yet verified end to end: needs a signed-in player to see a direct write refused and a script write pass.
+
+## 2026-10-09 — Online boards fixed; swimmer above water; body stays on the capsule
+
+- **Online boards stayed empty:** the Cloud Code scripts were published without declared inputs (in-script
+  `module.exports.params` is only read when the folder is a Cloud Code JS project), so the server received no
+  `seconds` and refused every run as "match too short". The inputs are now declared in each script's `.meta`
+  (`Parameters:`), and the scripts were renamed `RecordRun` / `RecordCrew` to publish fresh. `RecordRun` now returns the
+  new total. Players still can't write to the boards themselves (`LeaderboardsLock.ac`).
+- **"SG" on the leaderboard** was the country board's button showing the country code; it now shows the name
+  ("Singapore").
+- **Swimming under water:** the Quaternius swim clips keep the body where their library animated it, hanging about
+  1.3 m under the root, and the controller floats the feet 1.3 m down, so the head was a metre under the surface.
+  `PlayerVisual` now raises the body while swimming until the animated chest is just under the surface (head and
+  shoulders out when treading water, the back at the water line in the crawl).
+- **Body under the ground, in the air, and swinging on A/S/D:** the facing check (which turns a body whose clip faces
+  the other way) turned the model about the hips. When the hips were away from the capsule (a metre out in the swim
+  stroke) that moved the whole body off the capsule; afterwards it sank into slopes, hung past ledges, and swung round
+  the player whenever the pivot turned toward a step. It also turned 90 degrees for readings like 49 that were the
+  pose, not the facing. The check now turns about the capsule's axis and only for readings near a quarter or half turn.
+  EditMode tests: `PlayerVisualTests`.

@@ -1,0 +1,30 @@
+fileFormatVersion: 2
+guid: f46b32bd6f4604eaf8d311e25074cc5d
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: fbc33bd6a5704c0881dc7a9ead54089b, type: 3}
+  Parameters:
+  - Name: crew
+    ParameterType: 0
+    Required: 0
+  - Name: scores
+    ParameterType: 3
+    Required: 0
+  - Name: escaped
+    ParameterType: 1
+    Required: 0
+  - Name: seconds
+    ParameterType: 1
+    Required: 0
+  - Name: seed
+    ParameterType: 1
+    Required: 0
+  - Name: test
+    ParameterType: 2
+    Required: 0
+  Source: 0
