@@ -868,13 +868,41 @@ namespace ProjectFossil.Generation
 
             Place(POIType.ExtractionZone, _settings.extractionZoneCount,  0.08f, 0.55f, gridSpacing,     heightmap, landMask, res, result);
             Place(POIType.LootCache,      _settings.lootCacheCount,        0.05f, 0.90f, gridSpacing / 2, heightmap, landMask, res, result);
-            Place(POIType.Ruins,          _settings.ruinsCount,            0.05f, 0.80f, gridSpacing / 2, heightmap, landMask, res, result);
+            // A ruin stash is a chest between two standing columns; on a steep hillside its pieces sat at odd heights
+            // and the columns read as toppling. Only flat enough ground takes one; any left over are supply caches.
+            float cellMetres = _settings.worldSize / Mathf.Max(1, res - 1);
+            int ruins = Place(POIType.Ruins, _settings.ruinsCount, 0.05f, 0.80f, gridSpacing / 2, heightmap, landMask, res, result,
+                              (x, y) => SlopeDegrees(heightmap, x, y, cellMetres, _settings.maxHeight) <= _settings.ruinsMaxSlope);
+            if (ruins < _settings.ruinsCount)
+                Place(POIType.LootCache, _settings.ruinsCount - ruins, 0.05f, 0.90f, gridSpacing / 2, heightmap, landMask, res, result);
 
             return result;
         }
 
-        private void Place(POIType type, int count, float minH, float maxH, int minGrid,
-            float[,] heightmap, bool[,] landMask, int res, List<PointOfInterest> results)
+        // Steepest ground around a heightmap cell, in degrees: the largest rise across the footprint of a prop
+        // (StashReach metres to each side, along both axes and both diagonals).
+        public const float StashReach = 6f;
+        public static float SlopeDegrees(float[,] heightmap, int gx, int gy, float cellMetres, float maxHeight)
+        {
+            int res = heightmap.GetLength(0);
+            int k = Mathf.Max(1, Mathf.RoundToInt(StashReach / Mathf.Max(0.01f, cellMetres)));
+            float H(int x, int y) => heightmap[Mathf.Clamp(y, 0, res - 1), Mathf.Clamp(x, 0, res - 1)] * maxHeight;
+            float steepest = 0f;
+            int[,] dirs = { { 1, 0 }, { 0, 1 }, { 1, 1 }, { 1, -1 } };
+            for (int d = 0; d < 4; d++)
+            {
+                int dx = dirs[d, 0] * k, dy = dirs[d, 1] * k;
+                float run = 2f * k * cellMetres * (dirs[d, 0] != 0 && dirs[d, 1] != 0 ? 1.41421f : 1f);
+                float rise = Mathf.Abs(H(gx + dx, gy + dy) - H(gx - dx, gy - dy));
+                steepest = Mathf.Max(steepest, rise / run);
+            }
+            return Mathf.Atan(steepest) * Mathf.Rad2Deg;
+        }
+
+        // Places up to count POIs and returns how many it placed. accept, when given, must also approve the cell.
+        private int Place(POIType type, int count, float minH, float maxH, int minGrid,
+            float[,] heightmap, bool[,] landMask, int res, List<PointOfInterest> results,
+            System.Func<int, int, bool> accept = null)
         {
             int attempts = count * 80;
             int placed   = 0;
@@ -894,6 +922,7 @@ namespace ProjectFossil.Generation
                     if (dx * dx + dy * dy < minGrid * minGrid) { tooClose = true; break; }
                 }
                 if (tooClose) continue;
+                if (accept != null && !accept(gx, gy)) continue;
 
                 float worldX = ((float)gx / (res - 1)) * _settings.worldSize;
                 float worldZ = ((float)gy / (res - 1)) * _settings.worldSize;
@@ -907,6 +936,7 @@ namespace ProjectFossil.Generation
                 });
                 placed++;
             }
+            return placed;
         }
 
         // ── Spawn zone placement ──────────────────────────────────────────────

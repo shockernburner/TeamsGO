@@ -74,6 +74,9 @@ namespace ProjectFossil.Generation
         public int lootCacheCount = 8;
         public int ruinsCount = 4;
         public float minPOISpacing = 120f;
+        [Tooltip("Ruin stashes (a chest between standing columns) only go where the ground is this flat, in degrees; " +
+                 "one that finds no such spot becomes a supply cache instead, so the loot total stays the same.")]
+        public float ruinsMaxSlope = 15f;
 
         [Header("Spawning")]
         public int spawnZoneCount = 6;
