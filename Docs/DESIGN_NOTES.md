@@ -944,3 +944,29 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   the arch's modelled moss; the yellow pole is the loot beacon (gone once the stash is searched); the small pots are
   the pack's broken pots.
 - **Hotbar:** slots draw a dark fill and a light frame, so empty ones read as slots over leaf litter.
+
+## 2026-10-09 — Ruin stash as a shrine; escape fades to black; escape fanfare
+
+- **Ruin stash:** the broken arch and fallen wall settled on slopes into loose steps of grey blocks that read as a
+  rendering glitch. The stash is now the chest between two standing columns with broken pots beside it, scaled so the
+  chest matches a supply cache (`CacheModelSetup`, Build Cache Models).
+- **Escape:** the picture goes to black within 0.8 s of the escape and "YOU MADE IT OUT!" shows on the black, so the
+  helicopter carrying the body up the ladder is never seen as running in the sky. While carried (controller off) the
+  body no longer plays the run cycle either.
+- **Escape sound:** `Victory` from the local sound library (mixkit-achievement-win-drums-555, Mixkit licence, not in
+  git; see Docs/ASSET_LICENSES.md); the synthesized fanfare plays where the file isn't present.
+
+## 2026-10-09 — Teams replace crews
+
+- A player is in at most one team online. They found one (name, emblem, their country), join one, or leave to join
+  or found another; up to 8 members. Kept on the server (`CloudCode/Teams.js`, Cloud Save game data written only by
+  that script; the player's own team in protected player data).
+- Online matches count for the host's team as the server has it: `RecordCrew.js` reads the host's team on the server
+  and ignores any name the game sends, so nobody can post points for a team they aren't in. A player without a team
+  still banks their own points; there's no team match to send.
+- Team ids are `crew-<slug>`, the same keys the crews used, so a team named like an old crew inherits its points.
+- Boards: Teams all time, this week, and per country (`teams_total_XX`, 45 boards). Entries carry the team's name,
+  country, emblem and member count, which is also how the Teams page finds teams: your country's board, the top of
+  the world board, or names among the top 200.
+- Emblems: twelve badges (six shapes, twelve colours) drawn in code (`Net/TeamEmblem`).
+- Offline practice keeps a free team name for this computer's leaderboard; the word "crew" is gone from the game.

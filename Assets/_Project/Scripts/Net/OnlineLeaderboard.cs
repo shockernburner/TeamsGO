@@ -11,7 +11,8 @@ namespace ProjectFossil.Net
 {
     // The worldwide boards, on Unity Gaming Services (itch and Steam alike), for signed-in accounts playing online.
     // Scores add up (Match/CareerScore): every player's runs on the survivors boards (all time, this week, their
-    // country), every crew's matches on the teams boards with the escape bonus or the wipe penalty.
+    // country), every team's matches on the teams boards (all time, this week, its country) with the escape bonus or
+    // the wipe penalty.
     //
     // The game never writes a score itself: it sends each finished run to a Cloud Code script
     // (Data/Services/CloudCode/RecordRun.js, and RecordCrew.js from the host for the crew), which checks it with
@@ -20,13 +21,14 @@ namespace ProjectFossil.Net
     // Services > Deployment. Launched with -testboards, everything goes to the test_ boards instead.
     public static class OnlineLeaderboard
     {
-        public enum Board { Survivors, SurvivorsWeek, SurvivorsCountry, Crews, CrewsWeek }
+        public enum Board { Survivors, SurvivorsWeek, SurvivorsCountry, Teams, TeamsWeek, TeamsCountry }
 
         public class Entry
         {
             public int    Rank;
             public string Name, Crew, Country;
             public long   Score;
+            public int    Avatar, Members; // teams: emblem and how many are in it
         }
 
         private const int Fetch = 50;
@@ -40,6 +42,9 @@ namespace ProjectFossil.Net
         public static string LastResult { get; private set; } // what the last finished run did to the totals
         private static readonly Dictionary<Board, List<Entry>> _boards = new Dictionary<Board, List<Entry>>();
         private static DateTime _lastAttempt = DateTime.MinValue;
+
+        // Look again at the next Refresh (a team changed, a result went up).
+        public static void ForgetBoards() => _lastAttempt = DateTime.MinValue;
 
         public static List<Entry> Get(Board b) => _boards.TryGetValue(b, out var l) ? l : new List<Entry>();
 
@@ -71,7 +76,8 @@ namespace ProjectFossil.Net
             Board.Survivors        => Pre + "survivors_total",
             Board.SurvivorsWeek    => Pre + "survivors_week",
             Board.SurvivorsCountry => "survivors_total_" + PlayerCountry,
-            Board.Crews            => Pre + "teams_total",
+            Board.Teams            => Pre + "teams_total",
+            Board.TeamsCountry     => "teams_total_" + PlayerCountry,
             _                      => Pre + "teams_week",
         };
 
@@ -126,7 +132,7 @@ namespace ProjectFossil.Net
         public static void SubmitTeam(RunRecord run, List<int> scores, int escaped)
         {
             if (run == null || scores == null || scores.Count == 0 || string.IsNullOrWhiteSpace(run.Crew)) return;
-            Queue(new Pending { Team = true, Run = run, Scores = scores, Escaped = escaped });
+            Queue(new Pending { Team = true, Run = run, Scores = scores, Escaped = escaped }); // for the host's team (server-side)
         }
 
         private static void Queue(Pending p)
@@ -149,7 +155,7 @@ namespace ProjectFossil.Net
                     var reply = p.Team ? await SendTeam(p) : await SendRun(p);
                     if (reply != null && !reply.ok) Debug.Log($"[OnlineLeaderboard] The server refused a result: {reply.reason}");
                     else if (reply != null && !p.Team) LastResult = $"+{reply.delta:N0} points. Your total: {reply.total:N0}";
-                    else if (reply != null) Debug.Log($"[OnlineLeaderboard] Crew result in: {reply.delta} points, crew total {reply.total:N0}.");
+                    else if (reply != null) Debug.Log($"[OnlineLeaderboard] Team result in: {reply.delta} points, team total {reply.total:N0}.");
                 });
                 Status = "Your results are on the worldwide boards.";
                 _lastAttempt = DateTime.MinValue; // show them on the next look
@@ -199,9 +205,10 @@ namespace ProjectFossil.Net
             {
                 foreach (Board b in Enum.GetValues(typeof(Board)))
                 {
-                    if (b == Board.SurvivorsCountry && !HasCountryBoard(PlayerCountry)) { _boards[b] = new List<Entry>(); continue; }
+                    bool country = b == Board.SurvivorsCountry || b == Board.TeamsCountry;
+                    if (country && (!HasCountryBoard(PlayerCountry) || TestBoards)) { _boards[b] = new List<Entry>(); continue; }
                     var page = await LeaderboardsService.Instance.GetScoresAsync(BoardId(b), new GetScoresOptions { Limit = Fetch, IncludeMetadata = true });
-                    _boards[b] = ToEntries(page.Results, b == Board.Crews || b == Board.CrewsWeek);
+                    _boards[b] = ToEntries(page.Results, b == Board.Teams || b == Board.TeamsWeek || b == Board.TeamsCountry);
                 }
                 Status = TestBoards ? "Test boards." : "Worldwide.";
             }
@@ -213,7 +220,7 @@ namespace ProjectFossil.Net
             finally { Busy = false; }
         }
 
-        [Serializable] private class Meta { public string player, crew, country; }
+        [Serializable] private class Meta { public string player, crew, country; public int avatar, members; }
 
         private static List<Entry> ToEntries(List<Unity.Services.Leaderboards.Models.LeaderboardEntry> results, bool crews)
         {
@@ -224,7 +231,7 @@ namespace ProjectFossil.Net
                 Meta meta = null;
                 try { if (e.Metadata != null) meta = JsonUtility.FromJson<Meta>(e.Metadata.ToString()); }
                 catch { /* an entry without readable details still shows its score */ }
-                string crew = string.IsNullOrWhiteSpace(meta?.crew) ? "" : NameFilter.Clean(meta.crew, "Unnamed crew");
+                string crew = string.IsNullOrWhiteSpace(meta?.crew) ? "" : NameFilter.Clean(meta.crew, "Unnamed team");
                 list.Add(new Entry
                 {
                     Rank = e.Rank + 1,
@@ -232,6 +239,8 @@ namespace ProjectFossil.Net
                     Crew = crew,
                     Country = Country.Normalize(meta?.country),
                     Score = (long)e.Score,
+                    Avatar = meta != null ? meta.avatar : 0,
+                    Members = meta != null ? meta.members : 0,
                 });
             }
             return list;

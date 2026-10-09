@@ -6,6 +6,7 @@ const assert = require("assert");
 
 const boards = {};   // boardId -> { playerId -> { score, metadata } }
 const saves = {};    // playerId -> { key -> value }
+const custom = {};   // customId -> { key -> { value, writeLock } }
 const fakes = {
   "@unity-services/leaderboards-1.1": {
     LeaderboardsApi: class {
@@ -29,6 +30,15 @@ const fakes = {
         return { data: { results: keys.filter(k => k in s).map(k => ({ key: k, value: s[k] })) } };
       }
       async setProtectedItem(projectId, playerId, item) { (saves[playerId] = saves[playerId] || {})[item.key] = item.value; }
+      async getCustomItems(projectId, customId, keys) {
+        const c = custom[customId] || {};
+        return { data: { results: keys.filter(k => k in c).map(k => ({ key: k, value: JSON.parse(JSON.stringify(c[k].value)), writeLock: c[k].writeLock })) } };
+      }
+      async setCustomItem(projectId, customId, item) {
+        const c = custom[customId] = custom[customId] || {};
+        if (item.writeLock && c[item.key] && c[item.key].writeLock !== item.writeLock) throw new Error("conflict");
+        c[item.key] = { value: item.value, writeLock: String(Math.random()) };
+      }
     },
   },
 };
@@ -38,6 +48,7 @@ Module._load = (req, parent, isMain) => fakes[req] || realLoad(req, parent, isMa
 const dir = path.join(__dirname, "../../Assets/_Project/Data/Services/CloudCode");
 const run = require(path.join(dir, "RecordRun.js"));
 const team = require(path.join(dir, "RecordCrew.js"));
+const teams = require(path.join(dir, "Teams.js"));
 const logger = { warning() {}, error() {} };
 let clock = 1_800_000_000_000;
 Date.now = () => clock;
@@ -79,22 +90,50 @@ const call = (fn, playerId, params) => fn({ params, context: { projectId: "p", p
   assert.strictEqual(boards.test_survivors_total.alice.score, 300);
   assert.strictEqual(boards.survivors_total.alice.score, 1300);
 
-  // Crews: scores times the escape bonus; a wipe takes a quarter of the crew's average match.
-  r = await call(team, "alice", { crew: "Ash Line", scores: [400, 300, 200, 100], escaped: 4, seconds: 900, seed: 10 });
-  assert.deepStrictEqual([r.ok, r.delta], [true, 2000]);                // 1000 x 2.0
-  r = await call(team, "alice", { crew: "Ash Line", scores: [400, 300], escaped: 2, seconds: 900, seed: 11 });
+  // Teams: create, find yourself in it, join, leave; names are unique; teams are capped at 8.
+  r = await call(teams, "alice", { action: "create", name: "Ash Line!", country: "SG", avatar: 3, player: "alice" });
+  assert.deepStrictEqual([r.ok, r.team.name, r.team.id, r.team.members.length], [true, "Ash Line", "crew-ash-line", 1]);
+  r = await call(teams, "bob", { action: "create", name: "ash  line", country: "PK", player: "bob" });
+  assert.strictEqual(r.ok, false);                                      // taken
+  r = await call(teams, "bob", { action: "join", id: "crew-ash-line", player: "bob" });
+  assert.deepStrictEqual([r.ok, r.team.members.length], [true, 2]);
+  r = await call(teams, "bob", { action: "mine" });
+  assert.strictEqual(r.team.name, "Ash Line");
+  assert.strictEqual(boards.teams_total["crew-ash-line"].metadata.members, 2);
+  assert.strictEqual(boards.teams_total_SG["crew-ash-line"].score, 0);  // on its country's board from the start
+  for (let i = 0; i < 6; i++) await call(teams, "p" + i, { action: "join", id: "crew-ash-line", player: "p" + i });
+  r = await call(teams, "late", { action: "join", id: "crew-ash-line", player: "late" });
+  assert.strictEqual(r.ok, false);                                      // full at 8
+  r = await call(teams, "bob", { action: "create", name: "Fern Gully", country: "PK", player: "bob" });
+  assert.strictEqual(r.ok, true);                                       // founding a team leaves the old one
+  assert.strictEqual(boards.teams_total["crew-ash-line"].metadata.members, 7);
+  r = await call(teams, "late", { action: "join", id: "crew-ash-line", player: "late" });
+  assert.strictEqual(r.ok, true);
+  r = await call(teams, "late", { action: "leave" });
+  r = await call(teams, "late", { action: "mine" });
+  assert.strictEqual(r.team, null);
+
+  // Team matches: the players' scores times the escape bonus, for the host's own team on the server; a wipe takes a
+  // quarter of the team's average match. Without a team nothing is written.
+  r = await call(team, "alice", { crew: "Anything", scores: [400, 300, 200, 100], escaped: 4, seconds: 900, seed: 10 });
+  assert.deepStrictEqual([r.ok, r.delta, r.team], [true, 2000, "Ash Line"]);    // 1000 x 2.0, whatever name was sent
+  r = await call(team, "alice", { scores: [400, 300], escaped: 2, seconds: 900, seed: 11 });
   assert.deepStrictEqual([r.ok, r.delta], [true, 910]);                 // 700 x 1.3
-  r = await call(team, "alice", { crew: "Ash Line", scores: [0, 0], escaped: 0, seconds: 900, seed: 12 });
+  r = await call(team, "alice", { scores: [0, 0], escaped: 0, seconds: 900, seed: 12 });
   assert.deepStrictEqual([r.ok, r.delta], [true, -364]);                // average (2910 / 2) x 0.25
-  r = await call(team, "alice", { crew: "Ash Line", scores: [10], escaped: 1, seconds: 900, seed: 12 });
+  r = await call(team, "alice", { scores: [10], escaped: 1, seconds: 900, seed: 12 });
   assert.strictEqual(r.ok, false);                                      // same island twice
   assert.strictEqual(boards.teams_total["crew-ash-line"].score, 2546);
-  r = await call(team, "alice", { crew: "Ash Line", scores: [999999], escaped: 1, seconds: 100, seed: 13 });
+  assert.strictEqual(boards.teams_total_SG["crew-ash-line"].score, 2546);
+  assert.strictEqual(boards.teams_total["crew-ash-line"].metadata.members, 7);  // details kept with the score
+  r = await call(team, "alice", { scores: [999999], escaped: 1, seconds: 100, seed: 13 });
   assert.strictEqual(r.ok, false);                                      // impossible score
-  // A new crew whose first match is a wipe is still on the board, at 0.
-  r = await call(team, "bob", { crew: "Solo Bob", scores: [250], escaped: 0, seconds: 400, seed: 20 });
+  r = await call(team, "nobody", { scores: [250], escaped: 1, seconds: 400, seed: 20 });
+  assert.deepStrictEqual([r.ok, r.reason], [false, "no team"]);
+  // A new team whose first match is a wipe is still on the board, at 0.
+  r = await call(team, "bob", { scores: [250], escaped: 0, seconds: 400, seed: 21 });
   assert.deepStrictEqual([r.ok, r.delta], [true, 0]);
-  assert.strictEqual(boards.teams_total["crew-solo-bob"].score, 0);
+  assert.strictEqual(boards.teams_total["crew-fern-gully"].score, 0);
 
   console.log("All Cloud Code script checks passed.");
 })().catch(e => { console.error("FAILED:", e.message); process.exit(1); });

@@ -281,6 +281,8 @@ namespace ProjectFossil.Player
             d.y = 0f;
             float speed = Time.deltaTime > 0f ? d.magnitude / Time.deltaTime : 0f;
             if (speed > 30f) speed = 0f; // teleported (respawn/rescue), not running
+            // Carried (hanging on the helicopter's ladder: the controller is off): the body is moved, it doesn't run.
+            if (_controller != null && !_controller.enabled) { speed = 0f; d = Vector3.zero; }
 
             TurnTowards(d, speed);
             UpdateHeldWeapon();

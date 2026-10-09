@@ -1,0 +1,33 @@
+fileFormatVersion: 2
+guid: 57835fa64b2054a56b822454da403f39
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: fbc33bd6a5704c0881dc7a9ead54089b, type: 3}
+  Parameters:
+  - Name: action
+    ParameterType: 0
+    Required: 0
+  - Name: name
+    ParameterType: 0
+    Required: 0
+  - Name: country
+    ParameterType: 0
+    Required: 0
+  - Name: avatar
+    ParameterType: 1
+    Required: 0
+  - Name: id
+    ParameterType: 0
+    Required: 0
+  - Name: player
+    ParameterType: 0
+    Required: 0
+  - Name: test
+    ParameterType: 2
+    Required: 0
+  Source: 0

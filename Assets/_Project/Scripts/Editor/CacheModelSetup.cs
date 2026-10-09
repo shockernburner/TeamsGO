@@ -5,8 +5,9 @@ using ProjectFossil.Core;
 namespace ProjectFossil.Editor
 {
     // Looks for the loot caches, from Quaternius' Ultimate Modular Ruins Pack (CC0, see Docs/ASSET_LICENSES.md):
-    // a closed chest for supply caches, and for ruin stashes the same chest in front of a broken, overgrown arch
-    // with a column, a fallen wall and broken pots. The prefab and both model definitions are committed, so this
+    // a closed chest for supply caches, and for ruin stashes the same chest set between two standing columns with
+    // broken pots beside it: a small shrine. (A broken arch and a fallen wall stood behind it before; on slopes the
+    // pieces settled into loose steps of grey blocks that players took for a rendering glitch.) The prefab and both model definitions are committed, so this
     // only needs running again after changing the layout.
     public static class CacheModelSetup
     {
@@ -23,8 +24,8 @@ namespace ProjectFossil.Editor
 
             Assign("Model_SupplyCache", chest, 0.9f);
             var stash = BuildStash();
-            // The stash's crate is 1.6 units wide; this makes the arch about 3.5 m tall around a full-size chest.
-            if (stash != null) Assign("Model_RuinStash", stash, 2.2f);
+            // Scaled so its chest is as big as a supply cache's (0.9 m tall); the columns stand about twice that.
+            if (stash != null) Assign("Model_RuinStash", stash, 0.9f * Height(stash) / Mathf.Max(0.01f, Height(chest)));
             AssetDatabase.SaveAssets();
             Debug.Log("[CacheModelSetup] Supply cache: closed chest. Ruin stash: chest before a broken arch.");
         }
@@ -35,11 +36,10 @@ namespace ProjectFossil.Editor
             try
             {
                 // Stone first, chest last, laid out round the chest so the stash centres on it.
-                Place(root, "Ruins_WallArchOvergrownBroken", new Vector3(0f, 0f, 1.5f),    0f,  solid: true);
-                Place(root, "Ruins_ColumnShort",             new Vector3(-2.3f, 0f, 0.4f), 0f,  solid: true);
-                Place(root, "Ruins_WallBroken",              new Vector3(2.4f, 0f, 0.9f), -25f, solid: true);
-                Place(root, "Ruins_Pot2Broken",              new Vector3(1.4f, 0f, -0.7f), 30f, solid: false);
-                Place(root, "Ruins_Pot3Broken",              new Vector3(1.9f, 0f, -0.1f), 75f, solid: false);
+                Place(root, "Ruins_ColumnShort",             new Vector3(-1.7f, 0f, 0.5f), 0f,  solid: true);
+                Place(root, "Ruins_ColumnShort",             new Vector3(1.7f, 0f, 0.5f),  0f,  solid: true);
+                Place(root, "Ruins_Pot2Broken",              new Vector3(1.2f, 0f, -0.8f), 30f, solid: false);
+                Place(root, "Ruins_Pot3Broken",              new Vector3(-1.1f, 0f, -0.9f), 75f, solid: false);
                 Place(root, "Ruins_Chest",                   Vector3.zero,                 0f,  solid: false);
 
                 root.AddComponent<GroundedParts>(); // each piece settles on the slope where it lands
@@ -127,6 +127,22 @@ namespace ProjectFossil.Editor
             }
             AssetDatabase.SaveAssets();
             Debug.Log("[CacheModelSetup] Ruin pieces use their authored colours (matte).");
+        }
+
+        private static float Height(GameObject model)
+        {
+            bool any = false;
+            var b = new Bounds();
+            foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                var mb = mf.sharedMesh.bounds;
+                var lo = mf.transform.TransformPoint(mb.min) - model.transform.position;
+                var hi = mf.transform.TransformPoint(mb.max) - model.transform.position;
+                if (!any) { b = new Bounds(lo, Vector3.zero); any = true; } else b.Encapsulate(lo);
+                b.Encapsulate(hi);
+            }
+            return any ? b.size.y : 1f;
         }
 
         private static GameObject Piece(string name) => AssetDatabase.LoadAssetAtPath<GameObject>($"{Ruins}/{name}.obj");

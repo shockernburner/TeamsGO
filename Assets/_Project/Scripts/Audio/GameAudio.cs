@@ -114,7 +114,7 @@ namespace ProjectFossil.Audio
             _sniffs    = Make("Sniff",    SoundSynth.Sniff);
             _heartbeat = Clip("Heartbeat", SoundSynth.Heartbeat());
             _rotor     = SoundLibrary.One("Rotor") ?? Clip("Rotor", SoundSynth.Rotor());
-            _victory   = Clip("Victory",  SoundSynth.Victory());
+            _victory   = SoundLibrary.One("Victory") ?? Clip("Victory", SoundSynth.Victory());
             _nightAmbience = SoundLibrary.One("NightAmbience") ?? Clip("NightAmbience", SoundSynth.NightAmbience());
             _rainLoop  = SoundLibrary.One("RainLoop") ?? Clip("Rain", SoundSynth.Rain());
             _stormLoop = SoundLibrary.One("StormLoop") ?? _rainLoop;
