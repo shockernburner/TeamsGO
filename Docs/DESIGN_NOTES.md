@@ -970,3 +970,10 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   the world board, or names among the top 200.
 - Emblems: twelve badges (six shapes, twelve colours) drawn in code (`Net/TeamEmblem`).
 - Offline practice keeps a free team name for this computer's leaderboard; the word "crew" is gone from the game.
+
+## 2026-10-09 — Ruin stashes on flat ground
+
+- A ruin stash (chest between two columns, broken pots) only goes where the ground across its footprint (6 m each
+  way) is at most `IslandSettings.ruinsMaxSlope` (15 degrees). One that finds no such spot becomes a supply cache,
+  so the number of loot spots never drops. Deterministic per seed. `StashPlacementTests`: 24 islands, all 96 stashes
+  at 15 degrees or less (16 on the drawn ground), none had to fall back.
