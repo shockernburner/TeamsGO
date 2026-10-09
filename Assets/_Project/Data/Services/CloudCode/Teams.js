@@ -1,6 +1,6 @@
 // Inputs: declared in this file's Unity import settings (the .meta), which is what deployment sends. The
 // module.exports.params at the bottom documents them; Unity would only read those in an initialised JS project.
-// TETHER: Primal — teams. A player is in at most one team: they create one, join one, or leave to join another.
+// Hushclaw — teams. A player is in at most one team: they create one, join one, or leave to join another.
 // A team keeps its name, country, emblem and members in Cloud Save (game data, written only here), and its points
 // on the teams boards (all time, this week, its country), keyed by its id so the totals follow the team.
 //

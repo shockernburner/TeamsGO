@@ -1192,7 +1192,7 @@ namespace ProjectFossil.Net
             GUILayout.Label(_status, _label);
         }
 
-        public const string GameTitle = "TETHER: PRIMAL";
+        public const string GameTitle = "HUSHCLAW";
         public const float MenuTopOffset = 190f; // the menu box starts this far above the screen's middle
         private bool _showSettings;
         public bool ShowingSettings => _showSettings || _showBoard;

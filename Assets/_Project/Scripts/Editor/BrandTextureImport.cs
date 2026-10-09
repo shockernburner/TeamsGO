@@ -3,7 +3,7 @@ using UnityEditor;
 namespace ProjectFossil.EditorTools
 {
     // The studio and game logos (Art/Brand) are drawn on screen as they are: full size, no mipmaps (they'd blur
-    // the edges), clamped, uncompressed so the thin tether line keeps its colour.
+    // the edges), clamped, uncompressed so the thin amber rule keeps its colour.
     public class BrandTextureImport : AssetPostprocessor
     {
         private void OnPreprocessTexture()

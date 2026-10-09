@@ -10,7 +10,7 @@ namespace ProjectFossil.Net
 {
     // What a player sees from launch to the menu (Docs/STORY.md): the studio logo on black, the story told in short
     // cards over a live island the camera slowly circles, read aloud by a narrator when the voice clips exist, then
-    // the TETHER logo slams in on a roar and a music hit, PRIMAL under it, and the two ease up to the top of the
+    // the HUSHCLAW logo slams in on a roar and a music hit, the tagline under it, and the two ease up to the top of the
     // screen as the menu appears. Music runs under all of it (SoundSynth.IntroScore) and the visuals follow the
     // music's clock, so they never drift apart. A quiet loop plays behind the menu, and stops in a match. The first
     // launch plays it all; later launches start at the logo. Any key or click skips to the logo hit and the menu.
@@ -56,7 +56,7 @@ namespace ProjectFossil.Net
         private Task<float[]> _scoreJob, _bedJob;
         private bool _hitPlayed;
 
-        private Texture2D _studio, _tether, _primal;
+        private Texture2D _studio, _logo, _tagline;
         private GUIStyle _bigText, _story, _hint, _tag;
         private Vector2[] _stars;
 
@@ -65,8 +65,8 @@ namespace ProjectFossil.Net
             Instance = this;
             _boot = GetComponent<MatchBootstrap>();
             _studio = Resources.Load<Texture2D>("Brand/VantwardGames");
-            _tether = Resources.Load<Texture2D>("Brand/Tether");
-            _primal = Resources.Load<Texture2D>("Brand/Primal");
+            _logo = Resources.Load<Texture2D>("Brand/Hushclaw");
+            _tagline = Resources.Load<Texture2D>("Brand/Tagline");
             LoadStory();
             var rng = new System.Random(66);
             _stars = new Vector2[140];
@@ -234,7 +234,7 @@ namespace ProjectFossil.Net
             _music.volume = Mathf.MoveTowards(_music.volume, target, Time.unscaledDeltaTime * 1.5f);
         }
 
-        // The roar with the music's hit, as TETHER slams in.
+        // The roar with the music's hit, as HUSHCLAW slams in.
         private void Hit()
         {
             _music.volume = MusicVolume;
@@ -437,7 +437,7 @@ namespace ProjectFossil.Net
             GUI.color = c;
         }
 
-        // TETHER slams in as its line draws left to right, PRIMAL fades in under it, then both ease up to the menu.
+        // HUSHCLAW slams in as it draws left to right, the tagline fades in under it, then both ease up to the menu.
         private void DrawLogoReveal()
         {
             float t = _t - _hitAt;
@@ -445,43 +445,43 @@ namespace ProjectFossil.Net
             float slam = Mathf.Clamp01(t / 0.35f);
             float scale = Mathf.Lerp(1.18f, 1f, 1f - (1f - slam) * (1f - slam));
             float wipe = Mathf.Clamp01(t / 0.45f); // the logo is there at once, with the roar
-            float primal = Mathf.Clamp01((t - 1.3f) / 1f);
+            float tagline = Mathf.Clamp01((t - 1.3f) / 1f);
             float rise = Mathf.Clamp01((t - LogoSeconds) / RiseSeconds);
             rise = rise * rise * (3f - 2f * rise);
             var (menuY, menuW) = MenuTitlePlace();
-            DrawTitle(Mathf.Lerp(Ui.H * 0.45f, menuY, rise), Mathf.Lerp(0.55f, menuW, rise), scale, wipe, primal);
+            DrawTitle(Mathf.Lerp(Ui.H * 0.45f, menuY, rise), Mathf.Lerp(0.55f, menuW, rise), scale, wipe, tagline);
         }
 
         // Where the title sits above the menu box: centred in the gap, sized to fit it.
         private static (float y, float widthShare) MenuTitlePlace()
         {
             float gap = Mathf.Max(90f, Ui.H * 0.5f - NetSession.MenuTopOffset);
-            float w = Mathf.Min(0.36f * Ui.W, gap * 0.8f / 0.42f); // TETHER over PRIMAL is about 0.42 of its width tall
+            float w = Mathf.Min(0.36f * Ui.W, gap * 0.8f / 0.42f); // the logo over the tagline is under 0.42 of its width tall
             return (gap * 0.5f, w / Ui.W);
         }
 
-        // TETHER with PRIMAL under it, centred at y, widthShare of the screen wide. wipe reveals TETHER left to right.
-        private void DrawTitle(float y, float widthShare, float scale, float wipe, float primalAlpha)
+        // HUSHCLAW with the tagline under it, centred at y, widthShare of the screen wide. wipe reveals the logo left to right.
+        private void DrawTitle(float y, float widthShare, float scale, float wipe, float taglineAlpha)
         {
             var c = GUI.color;
-            if (_tether == null)
+            if (_logo == null)
             {
                 GUI.color = new Color(1f, 0.85f, 0.45f, wipe);
-                GUI.Label(new Rect(0, y - 40f, Ui.W, 60f), "TETHER", _bigText);
-                GUI.color = new Color(1f, 1f, 1f, primalAlpha);
-                GUI.Label(new Rect(0, y + 18f, Ui.W, 30f), "P R I M A L", _tag);
+                GUI.Label(new Rect(0, y - 40f, Ui.W, 60f), "HUSHCLAW", _bigText);
+                GUI.color = new Color(1f, 1f, 1f, taglineAlpha);
+                GUI.Label(new Rect(0, y + 18f, Ui.W, 30f), "STAY QUIET. STAY CLOSE.", _tag);
                 GUI.color = c;
                 return;
             }
             float w = Ui.W * widthShare;
-            float tw = w * scale, th = tw * _tether.height / _tether.width;
-            float pw = w * 0.47f, ph = _primal != null ? pw * _primal.height / _primal.width : 0f;
+            float tw = w * scale, th = tw * _logo.height / _logo.width;
+            float pw = w * 0.6f, ph = _tagline != null ? pw * _tagline.height / _tagline.width : 0f;
             float top = y - (th + ph * 0.9f) * 0.5f;
-            GUI.DrawTextureWithTexCoords(new Rect((Ui.W - tw) * 0.5f, top, tw * wipe, th), _tether, new Rect(0f, 0f, wipe, 1f));
-            if (_primal != null && primalAlpha > 0f)
+            GUI.DrawTextureWithTexCoords(new Rect((Ui.W - tw) * 0.5f, top, tw * wipe, th), _logo, new Rect(0f, 0f, wipe, 1f));
+            if (_tagline != null && taglineAlpha > 0f)
             {
-                GUI.color = new Color(1f, 1f, 1f, primalAlpha);
-                GUI.DrawTexture(new Rect((Ui.W - pw) * 0.5f, top + th * 0.98f, pw, ph), _primal, ScaleMode.ScaleToFit, true);
+                GUI.color = new Color(1f, 1f, 1f, taglineAlpha);
+                GUI.DrawTexture(new Rect((Ui.W - pw) * 0.5f, top + th * 0.98f, pw, ph), _tagline, ScaleMode.ScaleToFit, true);
                 GUI.color = c;
             }
         }

@@ -47,7 +47,7 @@ namespace ProjectFossil.Audio
                 bool story = card >= 0 && card < n;
 
                 // Fades in under the studio logo, steady through the story, steps back under the last line, and comes
-                // back gently under the TETHER logo.
+                // back gently under the HUSHCLAW logo.
                 float target = card < 0 ? Ramp(t, studio * 0.3f, studio) : story && cues[card] == Cue.Silence ? SilenceLevel : 1f;
                 float tau = card >= n ? 2.5f : 1.2f; // seconds
                 level += (target - level) / (tau * SampleRate);

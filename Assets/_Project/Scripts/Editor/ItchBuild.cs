@@ -12,7 +12,7 @@ namespace ProjectFossil.EditorTools
     {
         public const string WindowsFolder = "Builds/itch/windows";
         public const string MacFolder     = "Builds/itch/mac";
-        private const string GameName     = "TETHER Primal";
+        private const string GameName     = "Hushclaw";
 
         [MenuItem("Project Fossil/Release/Build for itch (Windows + Mac)")]
         public static void BuildBoth()

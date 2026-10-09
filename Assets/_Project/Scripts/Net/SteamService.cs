@@ -10,7 +10,7 @@ namespace ProjectFossil.Net
     // or from the friends list's "Join game", even when the game was not running yet.
     public class SteamService : MonoBehaviour
     {
-        // Valve's public test app (Spacewar) until TETHER: Primal has its own App ID from Steamworks.
+        // Valve's public test app (Spacewar) until Hushclaw has its own App ID from Steamworks.
         public const uint AppId = 480;
         private const string HostKey = "host";
 

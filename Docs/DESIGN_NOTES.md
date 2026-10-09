@@ -977,3 +977,18 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   way) is at most `IslandSettings.ruinsMaxSlope` (15 degrees). One that finds no such spot becomes a supply cache,
   so the number of loot spots never drops. Deterministic per seed. `StashPlacementTests`: 24 islands, all 96 stashes
   at 15 degrees or less (16 on the drawn ground), none had to fall back.
+
+## 2026-10-09 — Renamed to Hushclaw
+
+- The game is now **Hushclaw** (was TETHER: Primal). Firdous chose it on 2026-10-09: "Tether" alone has hundreds of
+  itch projects and "Primal" sits next to Primal Carnage, a known multiplayer dinosaur game. Web searches found no game
+  called Hushclaw; an unrelated AI software project uses the name (hushclaw.ai). A trademark register check (USPTO,
+  EUIPO, IPOS) is still to do before the Steam page goes public.
+- TETHER stays inside the story as the salvage outfit the players work for; only the title changed.
+- Logo: HUSHCLAW in Oswald 700, three claw slashes cut through the C, an amber rule under it, and the tagline
+  "Stay quiet. Stay close." (`Brand/Hushclaw.png`, `Brand/Tagline.png`, `Brand/HushclawLogo.png` for the store cover).
+  App icon: a bone H with amber claw slashes. All drawn by `Tools/brand/make.py`.
+- `productName` is now Hushclaw, so builds are `Hushclaw.app` / `Hushclaw.exe`. Unity keeps PlayerPrefs and
+  `persistentDataPath` per product name, so on a computer that ran the old name the local-only data (best score,
+  survivor rank, this computer's leaderboard, saved sign-in) starts fresh. Online accounts, teams and boards are on the
+  server and are unaffected.

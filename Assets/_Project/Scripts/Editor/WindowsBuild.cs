@@ -10,8 +10,8 @@ namespace ProjectFossil.EditorTools
     // target is left as it was.
     public static class WindowsBuild
     {
-        private const string Folder = "Builds/Windows/TETHER Primal";
-        private const string Zip    = "Builds/TETHER-Primal-Windows.zip";
+        private const string Folder = "Builds/Windows/Hushclaw";
+        private const string Zip    = "Builds/Hushclaw-Windows.zip";
 
         [MenuItem("Project Fossil/Co-op/Build for Windows")]
         public static void Build()
@@ -31,7 +31,7 @@ namespace ProjectFossil.EditorTools
             var options = new BuildPlayerOptions
             {
                 scenes = scenes.ToArray(),
-                locationPathName = $"{Folder}/TETHER Primal.exe",
+                locationPathName = $"{Folder}/Hushclaw.exe",
                 target = BuildTarget.StandaloneWindows64,
                 targetGroup = BuildTargetGroup.Standalone,
                 options = BuildOptions.None,
@@ -47,7 +47,7 @@ namespace ProjectFossil.EditorTools
             if (File.Exists(Zip)) File.Delete(Zip);
             System.IO.Compression.ZipFile.CreateFromDirectory(Folder, Zip, System.IO.Compression.CompressionLevel.Optimal, true);
             string full = Path.GetFullPath(Zip);
-            Debug.Log($"[WindowsBuild] Done: {full} ({new FileInfo(Zip).Length / (1024 * 1024)} MB). Send the zip, unzip it on the Windows PC, start Steam there, then run TETHER Primal.exe.");
+            Debug.Log($"[WindowsBuild] Done: {full} ({new FileInfo(Zip).Length / (1024 * 1024)} MB). Send the zip, unzip it on the Windows PC, start Steam there, then run Hushclaw.exe.");
             if (!Application.isBatchMode) EditorUtility.RevealInFinder(full);
         }
     }
