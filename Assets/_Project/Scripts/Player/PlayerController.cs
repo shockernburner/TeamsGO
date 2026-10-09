@@ -299,6 +299,24 @@ namespace ProjectFossil.Player
             }
             _cc.Move((walk + slide + Vector3.up * _verticalVelocity) * Time.deltaTime);
             StayInShallowWater(before);
+            KeepAboveGround();
+        }
+
+        // The island's ground is known at every x, z (IslandWorld: the heights the terrain draws). The controller
+        // stands on the terrain's collider; if a frame ever leaves it under the surface (a hitch, a spawn, a shove),
+        // it goes back on top instead of walking on inside the hill.
+        private const float BuriedBy = 0.3f;
+        private void KeepAboveGround()
+        {
+            var world = IslandWorld.Current;
+            if (world == null) return;
+            Vector3 p = transform.position;
+            float ground = world.GroundAt(p);
+            if (p.y >= ground - BuriedBy) return;
+            _cc.enabled = false;
+            transform.position = new Vector3(p.x, ground + 0.05f, p.z);
+            _cc.enabled = true;
+            if (_verticalVelocity < 0f) _verticalVelocity = 0f;
         }
 
         // On ground steeper than the controller's slope limit the CharacterController neither climbs nor slides:

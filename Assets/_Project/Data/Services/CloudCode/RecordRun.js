@@ -6,7 +6,7 @@
 const { LeaderboardsApi } = require("@unity-services/leaderboards-1.1");
 const { DataApi } = require("@unity-services/cloud-save-1.4");
 
-const MIN_SECONDS = 30, MAX_SECONDS = 45 * 60, MAX_POINTS_PER_SECOND = 60, WIPE_PENALTY = 50;
+const MIN_SECONDS = 30, MAX_SECONDS = 45 * 60, MAX_POINTS_PER_SECOND = 60;
 const COUNTRIES = ["US","GB","CA","AU","NZ","IE","DE","FR","ES","IT","NL","BE","SE","NO","DK","FI","PL","PT","BR","MX",
   "AR","CL","RU","UA","TR","IN","PK","BD","LK","SG","MY","ID","PH","TH","VN","JP","KR","TW","HK","CN","SA","AE","EG",
   "NG","ZA"];
@@ -14,7 +14,7 @@ const COUNTRIES = ["US","GB","CA","AU","NZ","IE","DE","FR","ES","IT","NL","BE","
 module.exports = async ({ params, context, logger }) => {
   const score = Math.floor(Number(params.score) || 0), seconds = Number(params.seconds) || 0;
   const kills = Math.floor(Number(params.kills) || 0), seed = Math.floor(Number(params.seed) || 0);
-  const wiped = params.wiped === true, test = params.test === true;
+  const test = params.test === true;
   const name = String(params.player || "").slice(0, 20), crew = String(params.crew || "").slice(0, 24);
   const country = String(params.country || "").toUpperCase();
 
@@ -36,20 +36,19 @@ module.exports = async ({ params, context, logger }) => {
     if (last && now - last.t < seconds * 0.8) return { ok: false, reason: "results are coming in faster than matches can be played" };
   } catch (e) { logger.warning("lastRun read failed", { "error.message": e.message }); }
 
-  const delta = wiped ? -WIPE_PENALTY : score;
+  // The player banks the score they earned, got out or not (the game's score already costs a death).
+  const delta = score;
   const boards = new LeaderboardsApi(context);
   const pre = test ? "test_" : "";
   const meta = { player: name, crew: crew, country: country };
 
-  // Totals never drop below zero: a penalty takes away at most what's there.
+  // Always written, even 0 points, so a player who finished an online match is on the board.
   async function add(boardId) {
     let current = 0;
     try { current = (await boards.getLeaderboardPlayerScore(context.projectId, boardId, context.playerId)).data.score || 0; }
     catch (e) { /* no entry yet */ }
-    const change = Math.max(delta, -current);
-    if (change === 0 && delta <= 0) return current;
-    await boards.addLeaderboardPlayerScore(context.projectId, boardId, context.playerId, { score: change, metadata: meta });
-    return current + change;
+    await boards.addLeaderboardPlayerScore(context.projectId, boardId, context.playerId, { score: delta, metadata: meta });
+    return current + delta;
   }
 
   const total = await add(pre + "survivors_total");

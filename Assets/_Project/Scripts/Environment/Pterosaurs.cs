@@ -15,6 +15,7 @@ namespace ProjectFossil.Environment
         {
             public Transform Root, LeftWing, RightWing;
             public float Phase, Radius, Height, FlapRate;
+            public float Y = float.NaN; // flown height, kept clear of the ground (Core/FlightHeight)
         }
 
         private class Flock
@@ -65,8 +66,13 @@ namespace ProjectFossil.Environment
                     if (b.Root == null) continue;
                     float a = f.Angle + b.Phase;
                     float r = f.Radius + b.Radius;
-                    Vector3 pos = f.Centre + new Vector3(Mathf.Cos(a) * r, f.Altitude + b.Height + Mathf.Sin(t * 0.4f + b.Phase) * 2f, Mathf.Sin(a) * r);
+                    Vector3 pos = f.Centre + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
                     Vector3 heading = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a)); // counter-clockwise tangent
+                    // The flock's chosen height was set once, over its centre, and the flock circled and drifted
+                    // into hills higher than that. Each bird now reads the island's ground under it and ahead.
+                    float wanted = f.Altitude + b.Height + Mathf.Sin(t * 0.4f + b.Phase) * 2f;
+                    b.Y = FlightHeight.Step(IslandWorld.Current, pos, heading + f.Drift / Mathf.Max(1f, f.Speed), b.Y, wanted, Time.deltaTime);
+                    pos.y = b.Y;
                     b.Root.position = pos;
                     b.Root.rotation = Quaternion.LookRotation(heading) * Quaternion.Euler(0f, 0f, 18f); // bank into the turn
 
@@ -108,8 +114,21 @@ namespace ProjectFossil.Environment
             Vector3 around = _cam != null ? _cam.position : Vector3.zero;
             float a = Range(0f, Mathf.PI * 2f), d = Range(80f, 300f);
             f.Centre = new Vector3(around.x + Mathf.Cos(a) * d, 0f, around.z + Mathf.Sin(a) * d);
-            float ground = IslandWorld.Current != null ? IslandWorld.Current.GroundAt(f.Centre) : around.y;
+            // Over the highest ground of the circle it will fly, not only its centre.
+            float ground = around.y;
+            var world = IslandWorld.Current;
+            if (world != null)
+            {
+                ground = float.NegativeInfinity;
+                for (int i = 0; i < 16; i++)
+                {
+                    float ang = i * Mathf.PI / 8f;
+                    var p = f.Centre + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (f.Radius + 6f);
+                    ground = Mathf.Max(ground, world.GroundAt(p), world.GroundAt(f.Centre));
+                }
+            }
             f.Altitude = Mathf.Max(ground, 0f) + Range(45f, 85f);
+            foreach (var b in f.Birds) b.Y = float.NaN; // moved: start at the new height
         }
 
         // A crested head, a slim body and two long wings that pivot at the shoulder. Wingspan about 5 m.

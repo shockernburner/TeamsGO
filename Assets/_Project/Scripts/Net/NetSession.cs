@@ -817,12 +817,11 @@ namespace ProjectFossil.Net
                 Seconds = stats.TimeSurvived, Kills = stats.DinosKilled, Challenge = stats.Challenge, Seed = stats.Seed,
             };
             stats.BoardPlace = Leaderboard.Local.Record(run);
-            // Worldwide too, online only (offline is practice and stays on this computer). A wipe (nobody from the
-            // crew got out) costs points instead of adding them (Match/CareerScore).
+            // Worldwide too, online only (offline is practice and stays on this computer). The player banks what they
+            // earned, out or not; only the crew's board counts a wipe (Match/CareerScore).
             if (!_online || !Account.SignedIn) return;
             bool extracted = stats.Result == MatchResult.Extracted;
-            bool wiped = !extracted && stats.MatesAboard == 0 && !Teammates().Any(a => a.IsStanding);
-            OnlineLeaderboard.Submit(run, wiped);
+            OnlineLeaderboard.Submit(run);
             // The crew's match: solo, straight away (a crew of one); online co-op, the host gathers everyone's.
             if (_mode == Mode.Solo) OnlineLeaderboard.SubmitTeam(run, new List<int> { stats.Score }, extracted ? 1 : 0);
             else if (_mode == Mode.Joined && _net != null && _net.ClientManager.Started)

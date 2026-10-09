@@ -88,7 +88,6 @@ namespace ProjectFossil.Net
         {
             public bool Team;        // false: one player's run (submit_run); true: the crew's match (submit_team)
             public RunRecord Run;
-            public bool Wiped;
             public List<int> Scores; // team: each member's score
             public int Escaped;
         }
@@ -110,16 +109,16 @@ namespace ProjectFossil.Net
             PlayerPrefs.Save();
         }
 
-        // This player's finished online run. wiped: the whole crew died, which costs points instead of adding.
-        public static void Submit(RunRecord run, bool wiped)
+        // This player's finished online run: the score they earned is added, whether they got out or died.
+        public static void Submit(RunRecord run)
         {
             if (run == null) return;
-            if (!wiped && !ScoreCheck.IsPlausible(run.Score, run.Seconds, run.Kills, out string why))
+            if (!ScoreCheck.IsPlausible(run.Score, run.Seconds, run.Kills, out string why))
             {
                 Debug.Log($"[OnlineLeaderboard] Not sending this run: {why}");
                 return;
             }
-            Queue(new Pending { Run = run, Wiped = wiped });
+            Queue(new Pending { Run = run });
         }
 
         // The crew's match, from the host (or a solo player, a crew of one): each member's score and how many got out.
@@ -155,8 +154,7 @@ namespace ProjectFossil.Net
                     var reply = p.Team ? await SendTeam(p) : await SendRun(p);
                     if (reply != null && !reply.ok) Debug.Log($"[OnlineLeaderboard] The server refused a result: {reply.reason}");
                     else if (reply != null && !p.Team)
-                        LastResult = p.Wiped ? $"Crew wiped: {reply.delta} points. Your total: {reply.total:N0}"
-                                             : $"+{reply.delta:N0} points. Your total: {reply.total:N0}";
+                        LastResult = $"+{reply.delta:N0} points. Your total: {reply.total:N0}";
                     list.Items.RemoveAt(0);
                     SavePending(list);
                 }
@@ -176,7 +174,7 @@ namespace ProjectFossil.Net
             var args = new Dictionary<string, object>
             {
                 { "score", p.Run.Score }, { "seconds", p.Run.Seconds }, { "kills", p.Run.Kills }, { "seed", p.Run.Seed },
-                { "wiped", p.Wiped }, { "test", TestBoards }, { "player", p.Run.Player ?? "" }, { "crew", p.Run.Crew ?? "" },
+                { "test", TestBoards }, { "player", p.Run.Player ?? "" }, { "crew", p.Run.Crew ?? "" },
                 { "country", PlayerCountry },
             };
             string json = await CloudCodeService.Instance.CallEndpointAsync("RecordRun", args);

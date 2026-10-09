@@ -37,12 +37,11 @@ module.exports = async ({ params, context, logger }) => {
 
   const average = matches > 0 ? total / matches : 0;
   let delta = escaped > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) * bonus(escaped)) : -Math.round(average * WIPE_FRACTION);
-  delta = Math.max(delta, -total);
+  delta = Math.max(delta, -total) || 0; // never -0
   const meta = { crew: crew, matches: matches + 1, seed: seed, size: scores.length };
-  for (const board of [pre + "teams_total", pre + "teams_week"]) {
-    if (delta === 0) continue;
+  // Always written, even 0, so a crew that played an online match is on the board.
+  for (const board of [pre + "teams_total", pre + "teams_week"])
     await boards.addLeaderboardPlayerScore(context.projectId, board, key, { score: delta, metadata: meta });
-  }
   return { ok: true, delta: delta, total: total + delta };
 };
 
