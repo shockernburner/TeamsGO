@@ -20,8 +20,11 @@ page. It builds a player base and feedback without competing with the Steam laun
 - **No Steam inside.** Do not ship `steam_appid.txt` in an itch build. App 480 is Valve's test app, so players
   would show up as playing "Spacewar". Without it the game runs without Steam: Steam names, invites and Steam
   voice relay are off.
-- **Co-op on itch** is LAN (same Wi-Fi) or direct IP: the host forwards **UDP port 7770** on their router, or both
-  players join the same virtual LAN (Tailscale, ZeroTier or Radmin VPN, all free) and use that address.
+- **Accounts.** Solo practice works offline with no account. Play Online needs a free TETHER account (username and
+  password, through Unity Gaming Services); it gives online co-op, voice, teams and the online leaderboards.
+- **Co-op on itch** works over the internet with a **join code**: the host presses Host, shares the 6-character
+  code, and friends type it in. No port forwarding or VPN is needed (Unity Relay). Players on the same Wi-Fi can also
+  join by local address.
 - **Quit** closes the game and returns the player to the itch app (or desktop).
 
 ## Step by step
@@ -65,7 +68,7 @@ Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, surv
 > The dinosaurs never left. Humanity pushed them back to a ring of islands beyond the Cordon and called it peace.
 > On the islands, they changed. They learned our engines. Our lights. Our voices.
 >
-> You are a TETHER crew: one to four survivors dropped onto a lost island to salvage what the dead outposts left
+> You are a TETHER team: one to four survivors dropped onto a lost island to salvage what the dead outposts left
 > behind, then fire a flare and climb the helicopter ladder before the island takes you.
 >
 > **They can hear you.** Your real voice carries in the world. Whisper and a raptor walks past your hiding spot.
@@ -74,9 +77,9 @@ Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, surv
 > - A new island every match, generated from a seed: jungle, plains, swamp and volcanic ground, rivers and lakes.
 > - Ironjaw, an apex hunter that tracks your scent.
 > - An island that fights back: stampedes, packs, storms and the hunter sent at you as the clock runs down.
-> - Co-op for 1 to 4, proximity voice, revive your downed teammates.
+> - Co-op for 1 to 4 with a join code, proximity voice, revive your downed teammates.
 > - Solo with Easy, Medium and Hard; co-op plays it Hard.
-> - Scores, Survivor Rank and leaderboards for players and crews.
+> - Form or join a team, pick its emblem, and climb the Survivors and Teams leaderboards, worldwide or by country.
 >
 > Early alpha: expect rough edges. Tell us what breaks in the comments.
 >
@@ -84,8 +87,25 @@ Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, surv
 
 **Genre:** Survival. **Tags:** co-op, dinosaurs, survival, multiplayer, procedural-generation, horror, stealth,
 3d, first-person, extraction. **Made with:** Unity. **Inputs:** keyboard and mouse. **Multiplayer:** local
-network, online (direct IP), 1–4 players, voice chat. **Languages:** English. **Accessibility:** configurable
+network, online (join code), 1–4 players, voice chat. **Languages:** English. **Accessibility:** configurable
 controls are planned.
 
 **Cover image (630x500):** `Assets/_Project/Art/Brand/Resources/Brand/TetherPrimal.png` over a dark in-game
 screenshot. **Icon:** `Icon1024.png`.
+
+## Privacy note (put this at the bottom of the page)
+
+> **Your data.** Playing solo stores nothing online. If you create an account to play online, we store your username,
+> your chosen country, your team, and your match scores, so we can run co-op, teams and the
+> leaderboards. Your password is held by Unity's sign-in service; we never see it. Your username, team and scores are shown on the public leaderboards. Voice chat goes live between
+> players in your match and is not recorded. These services run on Unity Gaming Services (Unity Technologies). To have
+> your account and scores deleted, message us through this page.
+
+## Before each release
+
+1. Merge to main and pull on the Mac; build both platforms with `Build for itch`.
+2. Smoke test three islands (solo: drop, loot a stash, escape; one death) and one online co-op match on two computers
+   with a join code.
+3. Check the build has no `steam_appid.txt` and that the Mixkit sounds are in it (they live outside git on the Mac).
+4. Push with butler and a higher `--userversion`; post short patch notes on the itch page.
+
