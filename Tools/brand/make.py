@@ -1,37 +1,9 @@
-# Draws the TETHER, Primal and Vantward Games logos as SVG (TETHER's letters are plain shapes; Primal and
-# Vantward use Oswald, OFL, in fonts/). To regenerate the PNGs in Assets/_Project/Art/Brand/Resources/Brand:
+# Draws the HUSHCLAW logo, its tagline, the app icon and the Vantward Games logos as SVG (all text uses Oswald,
+# OFL, in fonts/). To regenerate the PNGs in Assets/_Project/Art/Brand/Resources/Brand:
 #   python3 make.py && cp fonts/*.woff2 svg/ && PW=$(npm root -g)/playwright node render.js   (writes png/)
 import os
 D = os.path.dirname(os.path.abspath(__file__))
 BONE, AMBER, RUST, INK = '#ECE4D2', '#E3A23B', '#B4532A', '#14110D'
-s, g, H = 46, 10, 220
-
-def T(x):  return [f'<rect x="{x}" y="0" width="160" height="{s}"/>', f'<rect x="{x+57}" y="{s+g}" width="{s}" height="{H-s-g}"/>']
-def E(x):  return [f'<rect x="{x}" y="0" width="{s}" height="{H}"/>', f'<rect x="{x+s+g}" y="0" width="{130-s-g}" height="{s}"/>',
-                   f'<rect x="{x+s+g}" y="{(H-s)/2}" width="{112-s-g}" height="{s}"/>', f'<rect x="{x+s+g}" y="{H-s}" width="{130-s-g}" height="{s}"/>']
-def Hh(x): return [f'<rect x="{x}" y="0" width="{s}" height="{H}"/>', f'<rect x="{x+150-s}" y="0" width="{s}" height="{H}"/>',
-                   f'<rect x="{x+s+g}" y="{(H-s)/2}" width="{150-2*s-2*g}" height="{s}"/>']
-def R(x):
-    a = x+s+g; b = 124
-    bowl = (f'<path fill-rule="evenodd" d="M{a} 0 H{x+88} A62 62 0 0 1 {x+88} {b} H{a} Z '
-            f'M{a} {s} H{x+88} A16 16 0 0 1 {x+88} {b-s} H{a} Z"/>')
-    leg = f'<polygon points="{x+62},{b+g} {x+110},{b+g} {x+152},{H} {x+104},{H}"/>'
-    return [f'<rect x="{x}" y="0" width="{s}" height="{H}"/>', bowl, leg]
-
-def tether_word(ox, oy, line=True):
-    parts, x, hooks = [], ox, []
-    for f, w, hk in [(T,160,[80]),(E,130,[23]),(T,160,[80]),(Hh,150,[23,127]),(E,130,[23]),(R,152,[23])]:
-        parts += f(x); hooks += [x+h for h in hk]; x += w + 30
-    out = [f'<g transform="translate(0,{oy})" fill="{BONE}">'] + parts + ['</g>']
-    if line:
-        y = oy - 44
-        out.append(f'<g fill="{AMBER}"><rect x="{ox-70}" y="{y}" width="{x-30-ox+140}" height="9" rx="4.5"/>')
-        for h in hooks: out.append(f'<rect x="{h-4}" y="{y+4}" width="8" height="{44-4}"/>')
-        out.append('</g>')
-        for cx in (ox-88, x-30+88):
-            out.append(f'<circle cx="{cx}" cy="{y+4.5}" r="18" fill="none" stroke="{AMBER}" stroke-width="9"/>')
-    return out, x - 30
-
 FONT = '''<style>@font-face{font-family:Osw;font-weight:700;src:url(oswald-latin-700-normal.woff2)}
 @font-face{font-family:Osw;font-weight:600;src:url(oswald-latin-600-normal.woff2)}
 @font-face{font-family:Osw;font-weight:500;src:url(oswald-latin-500-normal.woff2)}
@@ -70,14 +42,29 @@ def svg(w, h, body, bg=None):
     b = f'<rect width="{w}" height="{h}" fill="{bg}"/>' if bg else ''
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">{FONT}{b}{"".join(body)}</svg>'
 
+def hushclaw(cx, cy, size, idp='h'):
+    # HUSHCLAW in bone, cut by three claw slashes across the C, with a thin amber rule under it.
+    tw = size*4.9
+    out = [f'<defs><mask id="{idp}m" maskUnits="userSpaceOnUse" x="-5000" y="-5000" width="10000" height="10000">'
+           f'<rect x="-5000" y="-5000" width="10000" height="10000" fill="white"/>'] + claws(cx+size*0.31, cy-size*0.40, size/170) + ['</mask></defs>']
+    out.append(f'<text x="{cx}" y="{cy}" text-anchor="middle" font-family="Osw" font-weight="700" font-size="{size}" '
+               f'letter-spacing="{size*0.06}" textLength="{tw}" lengthAdjust="spacing" fill="{BONE}" mask="url(#{idp}m)">HUSHCLAW</text>')
+    out.append(f'<rect x="{cx-tw/2}" y="{cy+size*0.12}" width="{tw}" height="{max(4,size*0.045)}" rx="{max(2,size*0.02)}" fill="{AMBER}"/>')
+    return out
+
+def tagline(cx, cy, size, text='STAY QUIET. STAY CLOSE.', color=AMBER):
+    w = size*len(text)*0.62
+    out = [f'<text x="{cx}" y="{cy}" text-anchor="middle" font-family="Osw" font-weight="500" font-size="{size}" '
+           f'letter-spacing="{size*0.18}" textLength="{w}" lengthAdjust="spacing" fill="{color}">{text}</text>']
+    for sx in (-1, 1):
+        x_in, x_out = cx + sx*(w/2 + size*0.5), cx + sx*(w/2 + size*2.2)
+        out.append(f'<rect x="{min(x_in,x_out)}" y="{cy-size*0.38}" width="{abs(x_out-x_in)}" height="{max(3,size*0.06)}" fill="{color}"/>')
+    return out
+
 files = {}
-word, wx = tether_word(120, 100)
-files['Tether'] = svg(wx+120, 360, word)
-
-files['Primal'] = svg(1000, 220, primal(500, 150, 110))
-
-word2, wx2 = tether_word(120, 100)
-files['TetherPrimal'] = svg(wx2+120, 520, word2 + primal((wx2+120)/2, 450, 92, idp='q'))
+files['Hushclaw'] = svg(1300, 330, hushclaw(650, 250, 250))
+files['Tagline'] = svg(1000, 160, tagline(500, 110, 70))
+files['HushclawLogo'] = svg(1300, 470, hushclaw(650, 250, 250, idp='g') + tagline(650, 420, 62))
 
 vm = vmark(60, 40)
 vw = ['<g>'] + vm + ['</g>',
@@ -88,15 +75,13 @@ vw = ['<g>'] + vm + ['</g>',
 files['VantwardGames'] = svg(1230, 380, vw)
 files['VantwardMark'] = svg(380, 380, vmark(60, 40))
 
-# app icon: dark tile, one hanging stencil T from the tether line, claw slashes behind
-icon = [f'<defs><radialGradient id="gl" cx="50%" cy="42%" r="65%"><stop offset="0" stop-color="#3A2A18"/><stop offset="1" stop-color="{INK}"/></radialGradient></defs>',
+# app icon: dark tile, three amber claw slashes with a bone H behind them
+icon = [f'<defs><radialGradient id="gl" cx="50%" cy="42%" r="65%"><stop offset="0" stop-color="#3A2A18"/><stop offset="1" stop-color="{INK}"/></radialGradient>'
+        f'<mask id="im" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="white"/>'] + \
+       claws(512, 512, 3.0) + ['</mask></defs>',
         '<rect width="1024" height="1024" fill="url(#gl)"/>',
-        '<g opacity="0.16" transform="translate(0,0)">' + ''.join(c.replace('fill="black"', f'fill="{AMBER}"') for c in claws(560, 640, 3.4)) + '</g>',
-        f'<g transform="translate(232,330) scale(3.5)" fill="{BONE}">'] + T(0) + ['</g>',
-        f'<rect x="80" y="232" width="864" height="30" rx="15" fill="{AMBER}"/>',
-        f'<rect x="498" y="246" width="28" height="86" fill="{AMBER}"/>',
-        f'<circle cx="80" cy="247" r="44" fill="none" stroke="{AMBER}" stroke-width="26"/>',
-        f'<circle cx="944" cy="247" r="44" fill="none" stroke="{AMBER}" stroke-width="26"/>']
+        f'<text x="512" y="760" text-anchor="middle" font-family="Osw" font-weight="700" font-size="700" fill="{BONE}" mask="url(#im)">H</text>',
+        '<g transform="translate(26,-18)">' + ''.join(c.replace('fill="black"', f'fill="{AMBER}"') for c in claws(512, 512, 2.6)) + '</g>']
 files['Icon1024'] = svg(1024, 1024, icon)
 
 os.makedirs(os.path.join(D, 'svg'), exist_ok=True)

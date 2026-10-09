@@ -1,4 +1,4 @@
-# Releasing TETHER: Primal on itch.io (while Steam reviews)
+# Releasing Hushclaw on itch.io (while Steam reviews)
 
 ## Is it allowed?
 
@@ -20,7 +20,7 @@ page. It builds a player base and feedback without competing with the Steam laun
 - **No Steam inside.** Do not ship `steam_appid.txt` in an itch build. App 480 is Valve's test app, so players
   would show up as playing "Spacewar". Without it the game runs without Steam: Steam names, invites and Steam
   voice relay are off.
-- **Accounts.** Solo practice works offline with no account. Play Online needs a free TETHER account (username and
+- **Accounts.** Solo practice works offline with no account. Play Online needs a free Hushclaw account (username and
   password, through Unity Gaming Services); it gives online co-op, voice, teams and the online leaderboards.
 - **Co-op on itch** works over the internet with a **join code**: the host presses Host, shares the 6-character
   code, and friends type it in. No port forwarding or VPN is needed (Unity Relay). Players on the same Wi-Fi can also
@@ -31,9 +31,9 @@ page. It builds a player base and feedback without competing with the Steam laun
 
 1. **Make the builds** (on the Mac, in Unity):
    - `Project Fossil > Release > Build for itch (Windows + Mac)` gives `Builds/itch/windows/` and
-     `Builds/itch/mac/TETHER Primal.app`, both without `steam_appid.txt`.
+     `Builds/itch/mac/Hushclaw.app`, both without `steam_appid.txt`.
 2. **Create the itch page:** itch.io > Dashboard > Create new project.
-   - Title: TETHER: Primal. Project URL: `tether-primal`. Kind of project: Downloadable.
+   - Title: Hushclaw. Project URL: `hushclaw`. Kind of project: Downloadable.
    - Classification: Games. Release status: In development. Pricing: No payments (or Donate).
    - Visibility: **Draft** until everything is uploaded and checked.
 3. **Install butler** (itch's uploader): download from https://itchio.itch.io/butler, then in Terminal run
@@ -41,8 +41,8 @@ page. It builds a player base and feedback without competing with the Steam laun
 4. **Upload** (replace `vantward` with your itch username):
 
    ```
-   butler push "Builds/itch/windows" vantward/tether-primal:windows --userversion 0.1.0
-   butler push "Builds/itch/mac" vantward/tether-primal:mac --userversion 0.1.0
+   butler push "Builds/itch/windows" vantward/hushclaw:windows --userversion 0.1.0
+   butler push "Builds/itch/mac" vantward/hushclaw:mac --userversion 0.1.0
    ```
 
    Each later update: the same command with a higher `--userversion`. butler only uploads what changed.
@@ -52,7 +52,7 @@ page. It builds a player base and feedback without competing with the Steam laun
 ## Warnings players will see (put these in the description)
 
 - **Mac:** the app is not notarized yet, so macOS says it "can't be opened". Fix: open System Settings > Privacy &
-  Security, scroll down, press **Open Anyway** next to TETHER Primal. (Notarizing needs an Apple Developer
+  Security, scroll down, press **Open Anyway** next to Hushclaw. (Notarizing needs an Apple Developer
   account, US$99 a year; worth doing before Steam.)
 - **Windows:** SmartScreen may say "Windows protected your PC". Press **More info > Run anyway**.
 
@@ -90,7 +90,7 @@ Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, surv
 network, online (join code), 1–4 players, voice chat. **Languages:** English. **Accessibility:** configurable
 controls are planned.
 
-**Cover image (630x500):** `Assets/_Project/Art/Brand/Resources/Brand/TetherPrimal.png` over a dark in-game
+**Cover image (630x500):** `Assets/_Project/Art/Brand/Resources/Brand/HushclawLogo.png` over a dark in-game
 screenshot. **Icon:** `Icon1024.png`.
 
 ## Privacy note (put this at the bottom of the page)

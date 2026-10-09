@@ -1,6 +1,6 @@
 // Inputs: declared in this file's Unity import settings (the .meta), which is what deployment sends. The
 // module.exports.params at the bottom documents them; Unity would only read those in an initialised JS project.
-// TETHER: Primal — a team's finished online match, sent by its host, checked and added to the team's totals.
+// Hushclaw — a team's finished online match, sent by its host, checked and added to the team's totals.
 // The same rules as Match/CareerScore.TeamDelta: the players' scores times a bonus for how many got out
 // (1: x1.0, 2: x1.3, 3: x1.6, 4: x2.0); a wipe (nobody out) takes a quarter of the team's average match.
 // The team is the host's own (Teams.js), read on the server; its entry is keyed by the team's id.

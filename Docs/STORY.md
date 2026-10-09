@@ -1,4 +1,4 @@
-# TETHER: Primal — story and intro
+# Hushclaw — story and intro
 
 ## The world in one paragraph
 
@@ -30,7 +30,7 @@ The three crew rules, painted inside every helicopter door:
 - **The Threat Director** is the island itself turning on you. In team-vs-team (later), rival salvage outfits
   compete for the same island and fire **lure beacons** that draw threats onto each other's crews.
 - **Score and rank** are your crew's salvage record; leaderboards rank the best crews and survivors.
-- **Future TETHER games** use the same idea (a crew of four, tied together, getting out of a disaster): underwater
+- **Future games in this world** (TETHER stays the in-world salvage outfit) use the same idea (a crew of four, tied together, getting out of a disaster): underwater
   (Deep), wildfire (Blaze), crash site (Wreck), team racing (Rally).
 
 ## The intro sequence (about 60 seconds plus logos, skippable with any key)
@@ -52,7 +52,7 @@ long as its clip plus a short breath.
 | 8 | Helicopter sound grows, camera climbs. Music builds. | Now we send crews of four to bring back what was left. And get out before dark. | 8 s |
 | 9 | Hold on the island. | Stay quiet. Stay close. Leave no one. | 4.5 s |
 | 10 | Silence, then a breath. Spoken close to the mic, almost a whisper. | They can hear you. | 3.5 s |
-| 11 | Roar and a heavy music hit; TETHER slams in, the tether line draws across, PRIMAL fades in. | (logos only) | 4 s |
+| 11 | Roar and a heavy music hit; HUSHCLAW slams in and draws across, "Stay quiet. Stay close." fades in under it. | (logos only) | 4 s |
 | 12 | The logo eases up and the menu fades in over the island; the music settles into a quiet loop. | | |
 
 **Narrator direction:** one voice, low and calm, like someone telling a story at a campfire who has lived it. No
@@ -61,11 +61,11 @@ quieter, line 10 almost whispered.
 
 **Music:** original, built for the game: only a quiet background (a low drone and soft strings) under the narrator,
 changing chord with each line. It steps back under "They can hear you"; the moment that line ends, the roar plays and
-the TETHER logo appears, and the same background carries on into the menu. No drums, swells, bells or hits
+the HUSHCLAW logo appears, and the same background carries on into the menu. No drums, swells, bells or hits
 (Firdous, 2026-10-08).
 
 **Who sees it:** the whole intro plays the first time the game starts on a computer. After that the game opens on
-the TETHER: Primal logo and the menu. Settings has "Play intro" to watch it again, and any key skips it.
+the HUSHCLAW logo and the menu. Settings has "Play intro" to watch it again, and any key skips it.
 
 **Rules:** never show real place names, real companies, or any film franchise names.
 
