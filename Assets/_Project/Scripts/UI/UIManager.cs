@@ -56,6 +56,7 @@ namespace ProjectFossil.UI
         // After a successful extraction the victory banner holds the screen while the helicopter climbs away.
         public float victorySeconds = 5.5f;
         public float deathFadeSeconds = 2.5f;
+        private const float VictoryBlackSeconds = 0.8f;
         private float _endedAt = float.NegativeInfinity;
 
         // Auto-create alongside any MatchBootstrap so no scene edits are needed.
@@ -317,7 +318,10 @@ namespace ProjectFossil.UI
                 float since = Time.unscaledTime - _endedAt;
                 bool won = _match.Stats != null && _match.Stats.Result == MatchResult.Extracted;
                 float end = won ? victorySeconds : deathFadeSeconds;
-                DrawEndFade(Mathf.Clamp01(since / end), Mathf.Clamp01((since - (end - 1.5f)) / 1.5f));
+                // Escaping goes to black at once (the helicopter carrying a body up the ladder read as running in
+                // the sky); the banner and the take-off sound play on the black.
+                float black = won ? Mathf.Clamp01(since / VictoryBlackSeconds) : Mathf.Clamp01((since - (end - 1.5f)) / 1.5f);
+                DrawEndFade(Mathf.Clamp01(since / end), black);
                 if (since < end) { if (won) DrawVictory(since); }
                 else DrawResults(_match.Stats);
             }
@@ -685,13 +689,11 @@ namespace ProjectFossil.UI
             GUI.color = old;
         }
 
-        // "YOU MADE IT OUT": the moment the helicopter lifts away with you on the ladder.
+        // "YOU MADE IT OUT", on the black the escape fades to.
         private void DrawVictory(float t)
         {
             var old = GUI.color;
             float fadeIn = Mathf.Clamp01(t / 0.4f);
-            GUI.color = new Color(1f, 0.95f, 0.7f, 0.18f * (1f - Mathf.Clamp01(t / 1.2f))); // flash
-            GUI.DrawTexture(new Rect(0, 0, Ui.W, Ui.H), Texture2D.whiteTexture);
             GUI.color = new Color(1f, 1f, 1f, fadeIn);
 
             float scale = 1f + 0.25f * Mathf.Exp(-t * 4f) + 0.03f * Mathf.Sin(t * 6f);

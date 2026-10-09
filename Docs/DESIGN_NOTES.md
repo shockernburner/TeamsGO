@@ -944,3 +944,14 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   the arch's modelled moss; the yellow pole is the loot beacon (gone once the stash is searched); the small pots are
   the pack's broken pots.
 - **Hotbar:** slots draw a dark fill and a light frame, so empty ones read as slots over leaf litter.
+
+## 2026-10-09 — Ruin stash as a shrine; escape fades to black; escape fanfare
+
+- **Ruin stash:** the broken arch and fallen wall settled on slopes into loose steps of grey blocks that read as a
+  rendering glitch. The stash is now the chest between two standing columns with broken pots beside it, scaled so the
+  chest matches a supply cache (`CacheModelSetup`, Build Cache Models).
+- **Escape:** the picture goes to black within 0.8 s of the escape and "YOU MADE IT OUT!" shows on the black, so the
+  helicopter carrying the body up the ladder is never seen as running in the sky. While carried (controller off) the
+  body no longer plays the run cycle either.
+- **Escape sound:** `Victory` from the local sound library (mixkit-achievement-win-drums-555, Mixkit licence, not in
+  git; see Docs/ASSET_LICENSES.md); the synthesized fanfare plays where the file isn't present.
