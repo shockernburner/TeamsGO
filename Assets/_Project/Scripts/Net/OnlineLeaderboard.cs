@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ProjectFossil.Core;
 using ProjectFossil.Match;
 using Unity.Services.CloudCode;
 using Unity.Services.Leaderboards;
@@ -93,21 +94,21 @@ namespace ProjectFossil.Net
         }
         [Serializable] private class PendingList { public List<Pending> Items = new List<Pending>(); }
         private const string PendingKey = "ProjectFossil.PendingRuns";
-        private const int MaxPending = 50;
-        private static bool _flushing;
 
-        private static PendingList LoadPending()
-        {
-            try { return JsonUtility.FromJson<PendingList>(PlayerPrefs.GetString(PendingKey, "")) ?? new PendingList(); }
-            catch { return new PendingList(); }
-        }
-
-        private static void SavePending(PendingList list)
-        {
-            if (list.Items.Count > MaxPending) list.Items.RemoveRange(0, list.Items.Count - MaxPending);
-            PlayerPrefs.SetString(PendingKey, JsonUtility.ToJson(list));
-            PlayerPrefs.Save();
-        }
+        // Read again around every send (Core/SendQueue): a match end queues the player's run and, right after it,
+        // the crew's match. The crew's arrived while the run was being sent, and saving the list read before it
+        // dropped the crew's result, so the crew boards stayed empty.
+        private static readonly SendQueue<Pending> _queue = new SendQueue<Pending>(
+            () =>
+            {
+                try { return (JsonUtility.FromJson<PendingList>(PlayerPrefs.GetString(PendingKey, "")) ?? new PendingList()).Items; }
+                catch { return new List<Pending>(); }
+            },
+            items =>
+            {
+                PlayerPrefs.SetString(PendingKey, JsonUtility.ToJson(new PendingList { Items = items }));
+                PlayerPrefs.Save();
+            });
 
         // This player's finished online run: the score they earned is added, whether they got out or died.
         public static void Submit(RunRecord run)
@@ -130,9 +131,7 @@ namespace ProjectFossil.Net
 
         private static void Queue(Pending p)
         {
-            var list = LoadPending();
-            list.Items.Add(p);
-            SavePending(list);
+            _queue.Add(p);
             Flush();
         }
 
@@ -142,31 +141,24 @@ namespace ProjectFossil.Net
         // A result the server refuses is dropped (sending it again wouldn't change the answer).
         public static async void Flush()
         {
-            if (_flushing || !Account.SignedIn) return;
-            var list = LoadPending();
-            if (list.Items.Count == 0) return;
-            _flushing = true;
+            if (_queue.Sending || !Account.SignedIn || _queue.Count == 0) return;
             try
             {
-                while (list.Items.Count > 0)
+                await _queue.Drain(async p =>
                 {
-                    var p = list.Items[0];
                     var reply = p.Team ? await SendTeam(p) : await SendRun(p);
                     if (reply != null && !reply.ok) Debug.Log($"[OnlineLeaderboard] The server refused a result: {reply.reason}");
-                    else if (reply != null && !p.Team)
-                        LastResult = $"+{reply.delta:N0} points. Your total: {reply.total:N0}";
-                    list.Items.RemoveAt(0);
-                    SavePending(list);
-                }
+                    else if (reply != null && !p.Team) LastResult = $"+{reply.delta:N0} points. Your total: {reply.total:N0}";
+                    else if (reply != null) Debug.Log($"[OnlineLeaderboard] Crew result in: {reply.delta} points, crew total {reply.total:N0}.");
+                });
                 Status = "Your results are on the worldwide boards.";
                 _lastAttempt = DateTime.MinValue; // show them on the next look
             }
             catch (Exception e)
             {
-                Status = $"Offline: {list.Items.Count} result(s) will be sent when you're back online.";
+                Status = $"Offline: {_queue.Count} result(s) will be sent when you're back online.";
                 Debug.Log($"[OnlineLeaderboard] Sending failed: {e.Message}");
             }
-            finally { _flushing = false; }
         }
 
         private static async Task<Reply> SendRun(Pending p)
