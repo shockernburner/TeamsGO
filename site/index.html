@@ -7,44 +7,84 @@
 <meta name="description" content="Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, survive, get out together.">
 <meta property="og:title" content="Hushclaw">
 <meta property="og:description" content="Co-op dinosaur survival where the dinosaurs can hear you.">
-<meta property="og:image" content="https://hushclaw.games/logo.png">
+<meta property="og:image" content="https://hushclaw.games/img/cover.jpg">
 <meta property="og:url" content="https://hushclaw.games/">
-<link rel="icon" href="icon.png">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="favicon.png">
+<style>
+  :root { --ink: #ece4d3; --amber: #e3a33b; --dark: #14100c; --panel: #1f1912; --muted: #b9ad97; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--dark); color: var(--ink);
+               font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  a { color: var(--amber); }
+  .hero { position: relative; min-height: 92vh; display: flex; flex-direction: column; justify-content: flex-end;
+          align-items: center; text-align: center; padding: 0 16px 9vh;
+          background: linear-gradient(to bottom, rgba(20,16,12,.35), rgba(20,16,12,.55) 55%, var(--dark)), url(img/hero.jpg) center 30% / cover; }
+  .hero img.logo { width: min(640px, 88vw); height: auto; margin-bottom: 28px; }
+  .buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .btn { display: inline-block; padding: 14px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; }
+  .btn.primary { background: var(--amber); color: var(--dark); }
+  .btn.ghost { border: 2px solid var(--ink); color: var(--ink); }
+  .btn.soon { border: 2px dashed var(--muted); color: var(--muted); cursor: default; }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 16px 24px; }
+  h2 { color: var(--amber); letter-spacing: .08em; text-transform: uppercase; font-size: 18px; margin: 48px 0 12px; }
+  .lead { font-size: 20px; color: var(--ink); }
+  ul.features { padding-left: 20px; }
+  ul.features li { margin: 6px 0; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .shots img { width: 100%; height: auto; border-radius: 6px; display: block; }
+  .note { background: var(--panel); border-left: 3px solid var(--amber); padding: 14px 18px; border-radius: 4px; color: var(--muted); }
+  footer { max-width: 980px; margin: 0 auto; padding: 32px 16px 48px; color: var(--muted); font-size: 14px;
+           display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-top: 1px solid #2c241b; }
+  footer img { width: 28px; height: 28px; vertical-align: middle; border-radius: 6px; margin-right: 8px; }
+</style>
 </head>
 <body>
-<main>
-  <header class="hero">
-    <img class="logo" src="logo.png" alt="HUSHCLAW. Stay quiet. Stay close.">
-    <p class="lead">Co-op dinosaur survival where the dinosaurs can hear you.<br>Drop in, salvage, survive, get out together.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://firdousmahmood.itch.io/hushclaw">Play the free alpha on itch.io</a>
-      <span class="btn ghost" aria-disabled="true">Steam page coming soon</span>
-    </div>
-    <p class="small">Windows and macOS. 1 to 4 players.</p>
-  </header>
+<header class="hero">
+  <img class="logo" src="logo.png" alt="Hushclaw: stay quiet, stay close">
+  <div class="buttons">
+    <a class="btn primary" href="https://firdousmahmood.itch.io/hushclaw">Play the free alpha on itch.io</a>
+    <span class="btn soon" title="Coming soon">Wishlist on Steam (soon)</span>
+  </div>
+</header>
 
-  <section>
-    <p>In some parallel universe, the dinosaurs never died out. Humanity pushed them back to a ring of islands beyond
-    the Cordon and called it peace. On the islands, they changed. They learned our engines. Our lights. Our voices.</p>
-    <p>You are a TETHER team: one to four survivors dropped onto a lost island to salvage what the dead outposts left
-    behind, then fire a flare and climb the helicopter ladder before the island takes you.</p>
-    <h2>They can hear you</h2>
-    <p>Your real voice carries in the world. Whisper and a raptor walks past your hiding spot. Talk too loud and
-    something turns its head. Shout to pull a hunter off a teammate.</p>
-    <ul>
-      <li>A new island every match: jungle, plains, swamp and volcanic ground, rivers and lakes.</li>
-      <li>An apex hunter that tracks your scent, and an island that fights back with stampedes, packs and storms.</li>
-      <li>Co-op for 1 to 4 with a join code, proximity voice chat, and revives for downed teammates.</li>
-      <li>Form or join a team and climb the Survivors and Teams leaderboards, worldwide or by country.</li>
-    </ul>
-    <p class="tag">Stay quiet. Stay close. Leave no one.</p>
-  </section>
+<main>
+  <p class="lead">Co-op dinosaur survival where the dinosaurs can hear you. Drop in, salvage, survive, get out together.</p>
+
+  <h2>The story</h2>
+  <p>In some parallel universe, the dinosaurs never died out. Humanity pushed them back to a ring of islands beyond
+     the Cordon and called it peace. On the islands, they changed. They learned our engines. Our lights. Our voices.</p>
+  <p>You are a TETHER salvage team: one to four survivors dropped onto a lost island to recover what the dead outposts
+     left behind, then fire a flare and climb the helicopter ladder before the island takes you.</p>
+
+  <h2>They can hear you</h2>
+  <p>Your real voice carries in the world. Whisper and a raptor walks past your hiding spot. Talk too loud and
+     something turns its head. Shout to pull a hunter off a teammate.</p>
+  <ul class="features">
+    <li>A new island every match, generated from a seed: jungle, plains, swamp and volcanic ground, rivers and lakes.</li>
+    <li>Ironjaw, an apex hunter that tracks your scent.</li>
+    <li>An island that fights back: stampedes, packs, storms, and the hunter sent at you as the clock runs down.</li>
+    <li>Co-op for 1 to 4 with a join code, proximity voice, and reviving downed teammates.</li>
+    <li>Form or join a team, pick its emblem, and climb the Survivors and Teams leaderboards, worldwide or by country.</li>
+  </ul>
+
+  <h2>Screenshots</h2>
+  <div class="shots">
+    <img src="img/shot-helicopter.jpg" alt="The rescue helicopter hovering over the extraction pad" loading="lazy">
+    <img src="img/shot-stash.jpg" alt="A ruin stash: a chest between two stone columns" loading="lazy">
+    <img src="img/shot-island.jpg" alt="A survivor at the edge of the forest" loading="lazy">
+    <img src="img/shot-herd.jpg" alt="Crestbacks on the shore" loading="lazy">
+  </div>
+
+  <h2>Early alpha</h2>
+  <p class="note">Hushclaw is in early development. Windows and macOS. Expect rough edges, and tell us what breaks on the
+     itch.io page. On macOS the app isn't notarized yet: if it says it can't be opened, go to System Settings &gt;
+     Privacy &amp; Security and press <b>Open Anyway</b>. On Windows, SmartScreen may ask you to press
+     <b>More info &gt; Run anyway</b>.</p>
 </main>
+
 <footer>
-  <span>&copy; 2026 Vantward Games</span>
-  <a href="privacy.html">Privacy</a>
-  <a href="mailto:support@hushclaw.games">support@hushclaw.games</a>
+  <span><img src="icon.png" alt="">Hushclaw &copy; 2026 Vantward Games</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp;&middot;&nbsp; <a href="mailto:support@hushclaw.games">support@hushclaw.games</a></span>
 </footer>
 </body>
 </html>
