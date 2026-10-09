@@ -17,6 +17,7 @@ namespace ProjectFossil.Editor
         [MenuItem("Project Fossil/Art/Build Cache Models")]
         public static void Run()
         {
+            FixColours();
             var chest = Piece("Ruins_Chest");
             if (chest == null) { Debug.LogWarning($"[CacheModelSetup] Ruin pieces missing under {Ruins}."); return; }
 
@@ -80,6 +81,52 @@ namespace ProjectFossil.Editor
             def.height = height;
             def.faceHeadForward = false;
             EditorUtility.SetDirty(def);
+        }
+
+        // The OBJ importer read each .mtl colour (Kd) as linear and showed it brightened: the taupe stone came out
+        // near white, the brown chest and terracotta pots pale grey, and with the default gloss the stash looked
+        // unpainted. Each material is replaced by one of our own with the pack's colour as authored, matte.
+        [MenuItem("Project Fossil/Art/Fix Ruin Colours")]
+        public static void FixColours()
+        {
+            string folder = Ruins + "/Materials";
+            EnsureFolder(folder);
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            foreach (var mtl in System.IO.Directory.GetFiles(Ruins, "*.mtl"))
+            {
+                string obj = System.IO.Path.ChangeExtension(mtl, ".obj").Replace('\\', '/');
+                var importer = AssetImporter.GetAtPath(obj) as ModelImporter;
+                if (importer == null) continue;
+                string name = null; Color kd = Color.white; string tex = null;
+                void Flush()
+                {
+                    if (name == null) return;
+                    string path = $"{folder}/{name}.mat";
+                    var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+                    if (mat == null) { mat = new Material(lit); AssetDatabase.CreateAsset(mat, path); }
+                    mat.SetColor("_BaseColor", kd);
+                    mat.SetFloat("_Smoothness", 0.12f);
+                    if (tex != null) mat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>($"{Ruins}/{tex}"));
+                    EditorUtility.SetDirty(mat);
+                    importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), name), mat);
+                }
+                foreach (var raw in System.IO.File.ReadAllLines(mtl))
+                {
+                    var line = raw.Trim();
+                    if (line.StartsWith("newmtl ")) { Flush(); name = line.Substring(7).Trim(); kd = Color.white; tex = null; }
+                    else if (line.StartsWith("Kd "))
+                    {
+                        var v = line.Substring(3).Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+                        var ci = System.Globalization.CultureInfo.InvariantCulture;
+                        kd = new Color(float.Parse(v[0], ci), float.Parse(v[1], ci), float.Parse(v[2], ci));
+                    }
+                    else if (line.StartsWith("map_Kd ")) tex = line.Substring(7).Trim();
+                }
+                Flush();
+                importer.SaveAndReimport();
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("[CacheModelSetup] Ruin pieces use their authored colours (matte).");
         }
 
         private static GameObject Piece(string name) => AssetDatabase.LoadAssetAtPath<GameObject>($"{Ruins}/{name}.obj");

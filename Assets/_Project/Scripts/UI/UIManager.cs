@@ -383,12 +383,24 @@ namespace ProjectFossil.UI
             {
                 var r = new Rect(x + i * (slot + 4f), y, slot, slot);
                 string label = "";
-                if (i < inventory.Stacks.Count)
+                bool filled = i < inventory.Stacks.Count;
+                if (filled)
                 {
                     var s = inventory.Stacks[i];
                     label = s.Amount > 1 ? $"{s.Item.displayName}\nx{s.Amount}" : s.Item.displayName;
                 }
-                GUI.Box(r, label, _slot);
+                // A dark fill and a light frame, so empty slots read as slots on any ground (the skin's faint box
+                // all but vanished over leaf litter).
+                var keep = GUI.color;
+                GUI.color = new Color(0f, 0f, 0f, filled ? 0.6f : 0.4f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                GUI.color = new Color(1f, 1f, 1f, filled ? 0.75f : 0.4f);
+                GUI.DrawTexture(new Rect(r.x, r.y, r.width, 1f), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(r.x, r.yMax - 1f, r.width, 1f), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(r.x, r.y, 1f, r.height), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(r.xMax - 1f, r.y, 1f, r.height), Texture2D.whiteTexture);
+                GUI.color = keep;
+                GUI.Label(r, label, _slot);
             }
         }
 
@@ -811,6 +823,7 @@ namespace ProjectFossil.UI
             _center = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleCenter };
             _box    = new GUIStyle(GUI.skin.box)   { alignment = TextAnchor.MiddleCenter, wordWrap = true, fontSize = 13 };
             _slot   = new GUIStyle(_box)           { fontSize = 11, padding = new RectOffset(2, 2, 2, 2) };
+            _slot.normal.background = null; // the slot draws its own fill and frame
             _panel  = new GUIStyle(GUI.skin.box)   { padding = new RectOffset(8, 8, 6, 6) };
             _small  = new GUIStyle(GUI.skin.label) { fontSize = 12, margin = new RectOffset(0, 0, 1, 1) };
             _hint   = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter };

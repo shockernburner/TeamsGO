@@ -930,3 +930,17 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   over the ground right below. `FlightHeightTests` flies 36 flocks for 40 s over six game-sized islands.
 - **Never below the ground:** if a frame ever leaves the player under the ground surface (more than 0.3 m), they're
   put back on top (`PlayerController.KeepAboveGround`).
+
+## 2026-10-09 — Crew boards fill; ruin stash colours; clearer hotbar
+
+- **Crew boards empty after a solo extraction:** a match end queues the player's run and, right after it, the crew's
+  match. The crew's was added while the run was still being sent, and the sender then saved the waiting list it had
+  read before, dropping the crew's result. `Core/SendQueue` reads the stored list again around every send, so
+  anything queued meanwhile stays and goes too. `SendQueueTests`.
+- **"Unrendered" ruin stash:** the OBJ importer read the Quaternius ruins' `.mtl` colours as linear and brightened
+  them (taupe stone 0.44 became 0.69, the brown chest and terracotta pots near white), and with the default gloss
+  the stash looked unpainted. `Project Fossil > Art > Fix Ruin Colours` (also run by Build Cache Models) makes matte
+  materials under `Ruins/Materials` with each colour as authored and remaps the models to them. The green strips are
+  the arch's modelled moss; the yellow pole is the loot beacon (gone once the stash is searched); the small pots are
+  the pack's broken pots.
+- **Hotbar:** slots draw a dark fill and a light frame, so empty ones read as slots over leaf litter.
