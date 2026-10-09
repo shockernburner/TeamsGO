@@ -458,7 +458,7 @@ namespace ProjectFossil.UI
             GUILayout.Label(Headline(stats.Result), _big);
             GUILayout.Label($"SCORE {stats.Score}" + (stats.NewBest ? "   NEW BEST!" : $"   (best {stats.BestScore})"), _big);
             if (stats.BoardPlace > 0 || !string.IsNullOrEmpty(stats.Crew))
-                GUILayout.Label((string.IsNullOrEmpty(stats.Crew) ? "" : $"Crew: {stats.Crew}") +
+                GUILayout.Label((string.IsNullOrEmpty(stats.Crew) ? "" : $"Team: {stats.Crew}") +
                                 (stats.BoardPlace > 0 ? $"    #{stats.BoardPlace} on this computer's leaderboard" : ""), _small);
             GUILayout.Space(6);
             GUILayout.Label($"Survived {FormatTime(stats.TimeSurvived)}: {stats.SurvivalPoints}");

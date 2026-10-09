@@ -60,8 +60,13 @@ namespace ProjectFossil.Net
         private VoiceChat _voice;
         // What teammates see over this player's head and in team messages.
         public string PlayerName { get; private set; }
-        // The crew this player's runs go on the leaderboard under. Joiners play under the host's.
+        // Offline practice: the team name this computer's runs go under (Leaderboard.Local). Online, the team is the
+        // player's real one (Teams), and joiners play under the host's.
         public string CrewName { get; private set; }
+
+        // The team name a match is played under: online, the player's team (none if they have no team); offline,
+        // the practice name.
+        private string MatchTeam => _online ? (Teams.Mine != null ? Teams.Mine.name : "") : CrewName;
         private string _hostCrew; // joined: the host's crew name
         public bool IsOnline => _mode == Mode.Hosting || _mode == Mode.Joined || _mode == Mode.StartingHost || _mode == Mode.Joining;
 
@@ -808,7 +813,7 @@ namespace ProjectFossil.Net
         private void OnMatchEnded(MatchStats stats)
         {
             if (stats == null) return;
-            string crew = _mode == Mode.Joined && !string.IsNullOrEmpty(_hostCrew) ? _hostCrew : CrewName;
+            string crew = _mode == Mode.Joined ? (_hostCrew ?? "") : MatchTeam;
             int size = _mode == Mode.Hosting ? _avatars.Count : _mode == Mode.Joined ? NetAvatar.All.Count : 1;
             stats.Crew = crew;
             var run = new RunRecord
@@ -823,7 +828,8 @@ namespace ProjectFossil.Net
             bool extracted = stats.Result == MatchResult.Extracted;
             OnlineLeaderboard.Submit(run);
             // The crew's match: solo, straight away (a crew of one); online co-op, the host gathers everyone's.
-            if (_mode == Mode.Solo) OnlineLeaderboard.SubmitTeam(run, new List<int> { stats.Score }, extracted ? 1 : 0);
+            // Only a player in a team has a team match to send; the server counts it for their own team.
+            if (_mode == Mode.Solo) { if (Teams.Mine != null) OnlineLeaderboard.SubmitTeam(run, new List<int> { stats.Score }, extracted ? 1 : 0); }
             else if (_mode == Mode.Joined && _net != null && _net.ClientManager.Started)
                 _net.ClientManager.Broadcast(new RunResultMessage { Seed = stats.Seed, Score = stats.Score, Extracted = extracted });
             else if (_mode == Mode.Hosting)
@@ -854,6 +860,7 @@ namespace ProjectFossil.Net
         private void TrySubmitCrew(bool now)
         {
             if (_crewRun == null) return;
+            if (Teams.Mine == null) { _crewRun = null; _crewResults.Clear(); return; } // the host has no team
             int expected = Mathf.Max(1, _avatars.Count);
             if (!now && _crewResults.Count < expected && Time.unscaledTime < _crewWaitUntil) return;
             var scores = new List<int>();
@@ -887,7 +894,7 @@ namespace ProjectFossil.Net
         {
             var c = WorldConditions.Current;
             return new IslandMessage { Seed = seed, Elapsed = elapsed, Time = (byte)c.Time, Weather = (byte)c.Weather, Wind = c.WindDegrees,
-                                       Crew = Instance != null ? Instance.CrewName : null,
+                                       Crew = Instance != null ? Instance.MatchTeam : null,
                                        Voice = Instance != null ? Instance._joinCode : null };
         }
 
@@ -976,7 +983,14 @@ namespace ProjectFossil.Net
             }
             if (_showBoard)
             {
-                if (LeaderboardPanel.Draw(new Rect(Ui.W * 0.5f - 260, area.y, 520, area.height), PlayerName, CrewName)) _showBoard = false;
+                if (LeaderboardPanel.Draw(new Rect(Ui.W * 0.5f - 260, area.y, 520, area.height),
+                                          Account.SignedIn ? Account.Username : PlayerName,
+                                          Teams.Mine != null ? Teams.Mine.name : CrewName)) _showBoard = false;
+                return;
+            }
+            if (_showTeams)
+            {
+                if (TeamsPanel.Draw(new Rect(Ui.W * 0.5f - 270, area.y, 540, area.height))) _showTeams = false;
                 return;
             }
             GUILayout.BeginArea(area, GUI.skin.box);
@@ -1060,7 +1074,7 @@ namespace ProjectFossil.Net
         {
             if (!Account.SignedIn) { _page = Page.SignIn; return; }
             GUILayout.Label($"ONLINE  -  {Account.Username}", _title);
-            DrawCrewName();
+            DrawTeamRow();
             DrawCountry();
             DrawConditionsChoice();
             GUILayout.Space(6);
@@ -1130,10 +1144,29 @@ namespace ProjectFossil.Net
             GUILayout.EndHorizontal();
         }
 
+        // Online: the player's team (with its emblem), and the way to the Teams page to find, join, create or leave.
+        private bool _showTeams;
+        private void DrawTeamRow()
+        {
+            Teams.EnsureKnown();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Team:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            if (Teams.Mine != null)
+            {
+                var badge = GUILayoutUtility.GetRect(28, 28, GUILayout.Width(28), GUILayout.Height(28));
+                TeamEmblem.Draw(badge, Teams.Mine.avatar);
+                GUILayout.Label(Teams.Mine.name, _label, GUILayout.Height(30));
+            }
+            else GUILayout.Label(Teams.Known ? "none yet" : "...", _label, GUILayout.Height(30));
+            if (GUILayout.Button(Teams.Mine != null ? "Teams" : "Find or create", GUILayout.Width(120), GUILayout.Height(30))) _showTeams = true;
+            GUILayout.EndHorizontal();
+        }
+
+        // Offline practice: a team name for this computer's leaderboard.
         private void DrawCrewName()
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Crew name:", _label, GUILayout.Width(90), GUILayout.Height(30));
+            GUILayout.Label("Team name:", _label, GUILayout.Width(90), GUILayout.Height(30));
             CrewName = GUILayout.TextField(CrewName ?? "", MaxCrew, _field, GUILayout.Height(30));
             if (GUILayout.Button("New", GUILayout.Width(44), GUILayout.Height(30))) CrewName = CrewNames.Random(new System.Random());
             GUILayout.EndHorizontal();

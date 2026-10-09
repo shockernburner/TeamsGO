@@ -4,14 +4,14 @@ using UnityEngine;
 
 namespace ProjectFossil.Net
 {
-    // The start menu's leaderboard. Survivors (each player's points, added up over every online match) or Crews
-    // (each crew's points with the escape bonus), shown All time, This week or for the player's country, worldwide
+    // The start menu's leaderboard. Survivors (each player's points, added up over every online match) or Teams
+    // (each team's points with the escape bonus), shown All time, This week or for the player's country, worldwide
     // (OnlineLeaderboard); or This computer, the best single runs played here, offline included (Leaderboard.Local).
     public static class LeaderboardPanel
     {
         private const int Shown = 10;
         private enum Scope { AllTime, Week, Country, Local }
-        private static int _tab;                    // 0 survivors, 1 crews
+        private static int _tab;                    // 0 survivors, 1 teams
         private static Scope _scope = Scope.AllTime;
         private static GUIStyle _title, _head, _row, _mine, _small;
 
@@ -24,16 +24,15 @@ namespace ProjectFossil.Net
             GUILayout.Label("LEADERBOARD", _title);
             GUILayout.BeginHorizontal();
             if (GUILayout.Toggle(_tab == 0, "Survivors", GUI.skin.button, GUILayout.Height(30))) _tab = 0;
-            if (GUILayout.Toggle(_tab == 1, "Crews", GUI.skin.button, GUILayout.Height(30))) _tab = 1;
+            if (GUILayout.Toggle(_tab == 1, "Teams", GUI.skin.button, GUILayout.Height(30))) _tab = 1;
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             ScopeButton(Scope.AllTime, "All time");
             ScopeButton(Scope.Week, "This week");
-            if (_tab == 0) ScopeButton(Scope.Country, OnlineLeaderboard.PlayerCountry == Country.Unknown ? "My country"
-                                                      : OnlineLeaderboard.CountryName(OnlineLeaderboard.PlayerCountry));
+            ScopeButton(Scope.Country, OnlineLeaderboard.PlayerCountry == Country.Unknown ? "My country"
+                                       : OnlineLeaderboard.CountryName(OnlineLeaderboard.PlayerCountry));
             ScopeButton(Scope.Local, "This computer");
             GUILayout.EndHorizontal();
-            if (_tab == 1 && _scope == Scope.Country) _scope = Scope.AllTime;
             GUILayout.Space(6);
 
             if (_scope == Scope.Local) DrawLocal(player, crew);
@@ -58,7 +57,8 @@ namespace ProjectFossil.Net
         {
             OnlineLeaderboard.Refresh(); // at most every 20 seconds
             var board = _tab == 1
-                ? (_scope == Scope.Week ? OnlineLeaderboard.Board.CrewsWeek : OnlineLeaderboard.Board.Crews)
+                ? (_scope == Scope.Week ? OnlineLeaderboard.Board.TeamsWeek
+                 : _scope == Scope.Country ? OnlineLeaderboard.Board.TeamsCountry : OnlineLeaderboard.Board.Teams)
                 : _scope == Scope.Week ? OnlineLeaderboard.Board.SurvivorsWeek
                 : _scope == Scope.Country ? OnlineLeaderboard.Board.SurvivorsCountry
                 : OnlineLeaderboard.Board.Survivors;
@@ -66,8 +66,8 @@ namespace ProjectFossil.Net
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("#", _head, GUILayout.Width(34));
-            GUILayout.Label(_tab == 0 ? "Survivor" : "Crew", _head, GUILayout.Width(170));
-            GUILayout.Label(_tab == 0 ? "Crew" : "", _head, GUILayout.Width(150));
+            GUILayout.Label(_tab == 0 ? "Survivor" : "Team", _head, GUILayout.Width(170));
+            GUILayout.Label(_tab == 0 ? "Team" : "Members", _head, GUILayout.Width(150));
             GUILayout.Label("Points", _head);
             GUILayout.EndHorizontal();
             if (rows.Count == 0)
@@ -81,8 +81,13 @@ namespace ProjectFossil.Net
                 var style = (_tab == 0 ? Same(r.Name, player) : Same(r.Crew, crew)) ? _mine : _row;
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(r.Rank.ToString(), style, GUILayout.Width(34));
-                GUILayout.Label(r.Name, style, GUILayout.Width(170));
-                GUILayout.Label(_tab == 0 ? r.Crew : "", style, GUILayout.Width(150));
+                if (_tab == 1)
+                {
+                    var badge = GUILayoutUtility.GetRect(20, 20, GUILayout.Width(20), GUILayout.Height(20));
+                    TeamEmblem.Draw(badge, r.Avatar);
+                }
+                GUILayout.Label(r.Name, style, GUILayout.Width(_tab == 1 ? 150 : 170));
+                GUILayout.Label(_tab == 0 ? r.Crew : (r.Members > 0 ? r.Members.ToString() : ""), style, GUILayout.Width(150));
                 GUILayout.Label(r.Score.ToString("N0"), style);
                 GUILayout.EndHorizontal();
             }
@@ -95,8 +100,8 @@ namespace ProjectFossil.Net
             var rows = _tab == 0 ? board.TopSurvivors(Shown) : board.TopCrews(Shown);
             GUILayout.BeginHorizontal();
             GUILayout.Label("#", _head, GUILayout.Width(28));
-            GUILayout.Label(_tab == 0 ? "Survivor" : "Crew", _head, GUILayout.Width(_tab == 0 ? 130 : 170));
-            GUILayout.Label(_tab == 0 ? "Crew" : "Best run by", _head, GUILayout.Width(_tab == 0 ? 150 : 110));
+            GUILayout.Label(_tab == 0 ? "Survivor" : "Team", _head, GUILayout.Width(_tab == 0 ? 130 : 170));
+            GUILayout.Label(_tab == 0 ? "Team" : "Best run by", _head, GUILayout.Width(_tab == 0 ? 150 : 110));
             GUILayout.Label("Score", _head, GUILayout.Width(70));
             GUILayout.Label("Result", _head);
             GUILayout.EndHorizontal();
@@ -124,7 +129,7 @@ namespace ProjectFossil.Net
         {
             string how = r.Result == MatchResult.Extracted ? "Got out" : r.Result == MatchResult.Died ? "Fell" : "Stranded";
             int m = Mathf.FloorToInt(r.Seconds / 60f), s = Mathf.FloorToInt(r.Seconds % 60f);
-            string crew = r.CrewSize > 1 ? $", crew of {r.CrewSize}" : "";
+            string crew = r.CrewSize > 1 ? $", team of {r.CrewSize}" : "";
             return $"{how}  {m}:{s:00}{crew}";
         }
 

@@ -17,7 +17,7 @@ namespace ProjectFossil.Net
         public static string Random(System.Random rng)
         {
             string a = First[rng.Next(First.Length)], b = Second[rng.Next(Second.Length)];
-            return a == b ? a + " Crew" : $"{a} {b}";
+            return a == b ? a + " Team" : $"{a} {b}";
         }
     }
 }
