@@ -108,14 +108,22 @@ namespace ProjectFossil.Net
                 GUILayout.Label($"{t.Members}/{Teams.MaxMembers}", _row, GUILayout.Width(40), GUILayout.Height(30));
                 GUILayout.Label(t.Points.ToString("N0"), _row, GUILayout.Width(70), GUILayout.Height(30));
                 bool mine = Teams.Mine != null && Teams.Mine.id == t.Id;
+                // No members: points a crew earned before teams existed, with nobody to join. Founding a team of
+                // that name claims them.
+                bool unclaimed = t.Members <= 0 && !mine;
                 GUI.enabled = !Teams.Busy && !mine && t.Members < Teams.MaxMembers;
-                if (GUILayout.Button(mine ? "Yours" : t.Members >= Teams.MaxMembers ? "Full" : "Join", GUILayout.Width(60), GUILayout.Height(28)))
-                    Teams.Join(t.Id, () => _tab = Tab.Mine);
+                if (GUILayout.Button(mine ? "Yours" : unclaimed ? "Claim" : t.Members >= Teams.MaxMembers ? "Full" : "Join",
+                                     GUILayout.Width(60), GUILayout.Height(28)))
+                {
+                    if (unclaimed) { _newName = t.Name; _tab = Tab.Create; }
+                    else Teams.Join(t.Id, () => _tab = Tab.Mine);
+                }
                 GUI.enabled = !Teams.Busy;
                 GUILayout.EndHorizontal();
             }
             GUILayout.EndScrollView();
             if (Teams.Mine != null) GUILayout.Label($"Joining another team leaves {Teams.Mine.name}.", _small);
+            GUILayout.Label("Claim: an old crew's points with no team yet. Create a team of that name to take them over.", _small);
         }
 
         private static void ScopeButton(Teams.Scope s, string label)
