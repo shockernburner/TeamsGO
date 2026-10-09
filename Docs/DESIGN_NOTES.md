@@ -992,3 +992,11 @@ The scoring rules (`Match/CareerScore`, `ScoreCheck`, `Country`) are now live fo
   `persistentDataPath` per product name, so on a computer that ran the old name the local-only data (best score,
   survivor rank, this computer's leaderboard, saved sign-in) starts fresh. Online accounts, teams and boards are on the
   server and are unaffected.
+
+## 2026-10-09 — hushclaw.games website
+
+- Firdous bought hushclaw.games (Hostinger, WHOIS privacy on). The site is plain HTML in `site/` (landing page,
+  privacy policy, style), published to GitHub Pages by `.github/workflows/site.yml` whenever `site/` changes on main.
+  `site/CNAME` holds the domain. Repo Settings > Pages must use "GitHub Actions" as the source, and the domain's DNS
+  points at GitHub Pages.
+- The privacy page is the one Steam and the itch page link to; deletion requests go to support@hushclaw.games.
