@@ -99,7 +99,7 @@ screenshot. **Icon:** `Icon1024.png`.
 > your chosen country, your team, and your match scores, so we can run co-op, teams and the
 > leaderboards. Your password is held by Unity's sign-in service; we never see it. Your username, team and scores are shown on the public leaderboards. Voice chat goes live between
 > players in your match and is not recorded. These services run on Unity Gaming Services (Unity Technologies). To have
-> your account and scores deleted, message us through this page.
+> your account and scores deleted, email support@hushclaw.games. Full policy: https://hushclaw.games/privacy.html
 
 ## Before each release
 
